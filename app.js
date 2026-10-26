@@ -135,7 +135,7 @@ function updateThemeIcon(theme) {
 }
 
 // -------------------------------------------------------------
-// Navigation Tabs
+// Navigation Tabs & Mobile Drawer
 // -------------------------------------------------------------
 function initNavigation() {
   const tabBtns = document.querySelectorAll(".nav-tab-btn");
@@ -150,6 +150,60 @@ function initNavigation() {
   if (neonPill) {
     neonPill.addEventListener("click", () => switchTab("neon-sync"));
   }
+
+  initMobileNav();
+}
+
+function initMobileNav() {
+  const toggleBtn = document.getElementById("btn-mobile-menu-toggle");
+  const closeBtn = document.getElementById("btn-close-mobile-nav");
+  const backdrop = document.getElementById("mobile-nav-backdrop");
+  const drawer = document.getElementById("mobile-nav-drawer");
+  const chipBtn = document.getElementById("mobile-current-tab-chip");
+  const mobileNewEntryBtn = document.getElementById("btn-open-new-entry-mobile");
+  const drawerNewEntryBtn = document.getElementById("btn-drawer-new-entry");
+
+  function openDrawer() {
+    if (drawer) drawer.classList.add("open");
+    if (backdrop) backdrop.classList.add("open");
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeDrawer() {
+    if (drawer) drawer.classList.remove("open");
+    if (backdrop) backdrop.classList.remove("open");
+    document.body.style.overflow = "";
+  }
+
+  if (toggleBtn) toggleBtn.addEventListener("click", openDrawer);
+  if (closeBtn) closeBtn.addEventListener("click", closeDrawer);
+  if (backdrop) backdrop.addEventListener("click", closeDrawer);
+  if (chipBtn) chipBtn.addEventListener("click", openDrawer);
+
+  document.querySelectorAll(".mobile-nav-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const targetTab = item.getAttribute("data-tab");
+      if (targetTab) {
+        switchTab(targetTab);
+        closeDrawer();
+      }
+    });
+  });
+
+  if (mobileNewEntryBtn) {
+    mobileNewEntryBtn.addEventListener("click", () => {
+      const mainBtn = document.getElementById("btn-open-new-entry");
+      if (mainBtn) mainBtn.click();
+    });
+  }
+
+  if (drawerNewEntryBtn) {
+    drawerNewEntryBtn.addEventListener("click", () => {
+      closeDrawer();
+      const mainBtn = document.getElementById("btn-open-new-entry");
+      if (mainBtn) mainBtn.click();
+    });
+  }
 }
 
 function switchTab(tabId) {
@@ -162,6 +216,26 @@ function switchTab(tabId) {
   document.querySelectorAll(".nav-tab-btn").forEach(b => {
     b.classList.toggle("active", b.getAttribute("data-tab") === tabId);
   });
+
+  document.querySelectorAll(".mobile-nav-item").forEach(item => {
+    item.classList.toggle("active", item.getAttribute("data-tab") === tabId);
+  });
+
+  const tabTitles = {
+    "dashboard": "⚡ Dashboard",
+    "master-inventory": "📦 Master Inventory",
+    "receiving-log": "📥 Receiving Log",
+    "dispatch-log": "📤 Dispatch Log",
+    "final-style": "📋 Daily Sheet",
+    "work-distribution": "📑 Work Distribution",
+    "payment-sheet": "💰 Payment Sheet",
+    "contractors": "👥 Contractors Hub",
+    "neon-sync": "☁️ Neon Cloud"
+  };
+  const activeTabNameEl = document.getElementById("mobile-active-tab-name");
+  if (activeTabNameEl) {
+    activeTabNameEl.textContent = tabTitles[tabId] || tabId;
+  }
 
   document.querySelectorAll(".tab-view").forEach(view => {
     view.classList.remove("active");
@@ -252,21 +326,26 @@ function renderKPIs() {
   document.getElementById("kpi-total-balance-hemb").textContent = totalBalHemb.toLocaleString();
   document.getElementById("kpi-total-balance-stock").textContent = totalBalStock.toLocaleString();
 
-  // Navigation Badges
-  const badgeMaster = document.getElementById("badge-master-count");
-  if (badgeMaster) badgeMaster.textContent = master.length;
+  // Navigation Badges (Desktop & Mobile Drawer Sync)
+  const setBadgeText = (id, count) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = count;
+  };
 
-  const badgeRec = document.getElementById("badge-rec-count");
-  if (badgeRec) badgeRec.textContent = recLogs.length;
+  setBadgeText("badge-master-count", master.length);
+  setBadgeText("badge-master-count-mobile", master.length);
 
-  const badgeDis = document.getElementById("badge-dis-count");
-  if (badgeDis) badgeDis.textContent = disLogs.length;
+  setBadgeText("badge-rec-count", recLogs.length);
+  setBadgeText("badge-rec-count-mobile", recLogs.length);
 
-  const badgeFinal = document.getElementById("badge-final-count");
-  if (badgeFinal) badgeFinal.textContent = window.db.getFinalStyles().length;
+  setBadgeText("badge-dis-count", disLogs.length);
+  setBadgeText("badge-dis-count-mobile", disLogs.length);
 
-  const badgePayment = document.getElementById("badge-payment-count");
-  if (badgePayment) badgePayment.textContent = window.db.getPaymentSheets().length;
+  setBadgeText("badge-final-count", window.db.getFinalStyles().length);
+  setBadgeText("badge-final-count-mobile", window.db.getFinalStyles().length);
+
+  setBadgeText("badge-payment-count", window.db.getPaymentSheets().length);
+  setBadgeText("badge-payment-count-mobile", window.db.getPaymentSheets().length);
 }
 
 // =============================================================
@@ -3952,17 +4031,26 @@ function updateHeaderUserProfile(user) {
   const roleEl = document.getElementById("header-user-role");
   const mgmtBtn = document.getElementById("btn-open-user-mgmt");
 
+  // Mobile Drawer Profile Elements
+  const mobileDrawerAvatar = document.getElementById("mobile-drawer-avatar");
+  const mobileDrawerName = document.getElementById("mobile-drawer-username");
+  const mobileDrawerRole = document.getElementById("mobile-drawer-role");
+
   if (avatarEl) {
     const names = (user.full_name || user.username || "U").trim().split(" ");
     let initials = names[0].charAt(0).toUpperCase();
     if (names.length > 1) initials += names[names.length - 1].charAt(0).toUpperCase();
     avatarEl.textContent = initials;
+    if (mobileDrawerAvatar) mobileDrawerAvatar.textContent = initials;
   }
 
   if (nameEl) nameEl.textContent = user.full_name || user.username;
+  if (mobileDrawerName) mobileDrawerName.textContent = user.full_name || user.username;
+
   if (roleEl) {
     const roleCapitalized = (user.role || "User").charAt(0).toUpperCase() + (user.role || "User").slice(1);
     roleEl.textContent = roleCapitalized;
+    if (mobileDrawerRole) mobileDrawerRole.textContent = roleCapitalized;
   }
 
   if (mgmtBtn) {
@@ -3975,6 +4063,7 @@ function applyUserPermissions(user) {
   if (!user) return;
 
   const tabButtons = document.querySelectorAll(".nav-tab-btn");
+  const mobileNavItems = document.querySelectorAll(".mobile-nav-item");
   let firstVisibleTab = null;
   let currentActiveAllowed = false;
 
@@ -3991,6 +4080,15 @@ function applyUserPermissions(user) {
 
     if (btn.classList.contains("active")) {
       currentActiveAllowed = isAllowed;
+    }
+  });
+
+  mobileNavItems.forEach(item => {
+    const dataTab = item.getAttribute("data-tab");
+    if (dataTab) {
+      const permKey = dataTab.replace(/-/g, "_");
+      const isAllowed = window.db.canUserAccessTab(permKey, user);
+      item.style.display = isAllowed ? "" : "none";
     }
   });
 
@@ -6520,9 +6618,11 @@ function renderWorkDistribution() {
   const elAvgRate = document.getElementById("kpi-dist-avg-rate");
   if (elAvgRate) elAvgRate.textContent = `Rs. ${avgRate.toLocaleString()}`;
 
-  // Update Nav Badge
+  // Update Nav Badge (Desktop & Mobile Drawer)
   const distBadge = document.getElementById("badge-dist-count");
   if (distBadge) distBadge.textContent = allEntries.length.toString();
+  const distBadgeMob = document.getElementById("badge-dist-count-mobile");
+  if (distBadgeMob) distBadgeMob.textContent = allEntries.length.toString();
 
   // 2. Render 6 Base Contractors Breakdown Bar
   renderDistributionContractorChips(periodEntries);

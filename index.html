@@ -82,6 +82,13 @@
     <!-- Top Row: Brand & System Actions -->
     <div class="header-top-bar">
       <div class="brand-wrapper">
+        <!-- Mobile 3-Line Hamburger Menu Toggle Button -->
+        <button type="button" class="btn-mobile-menu-toggle" id="btn-mobile-menu-toggle" aria-label="Open Navigation Menu" title="Open Menu">
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+          <span class="hamburger-line"></span>
+        </button>
+
         <div class="brand-icon">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round">
@@ -244,7 +251,128 @@
         </nav>
       </div>
     </div>
+
+    <!-- Mobile Sub-Bar: Live Active Tab Name & Compact + New Style Button -->
+    <div class="mobile-sub-bar" id="mobile-sub-bar">
+      <div class="mobile-active-tab-chip" id="mobile-current-tab-chip" title="Tap to switch tab">
+        <span class="active-dot"></span>
+        <span id="mobile-active-tab-name">⚡ Dashboard</span>
+        <span class="chip-caret">▾</span>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm btn-new-entry-mobile" id="btn-open-new-entry-mobile" title="New Style Entry">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>+ New Style</span>
+      </button>
+    </div>
   </header>
+
+  <!-- ============================================================== -->
+  <!-- MOBILE NAVIGATION DRAWER & BACKDROP                           -->
+  <!-- ============================================================== -->
+  <div id="mobile-nav-backdrop" class="mobile-nav-backdrop"></div>
+  <aside id="mobile-nav-drawer" class="mobile-nav-drawer" aria-label="Mobile Navigation Menu">
+    <div class="mobile-drawer-header">
+      <div class="mobile-drawer-brand">
+        <div class="brand-icon">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+        </div>
+        <div>
+          <h3 class="mobile-drawer-title">CraftFlow</h3>
+          <span class="brand-badge">Navigation</span>
+        </div>
+      </div>
+      <button type="button" id="btn-close-mobile-nav" class="mobile-drawer-close" aria-label="Close Navigation Menu" title="Close Menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+          stroke-linecap="round" stroke-linejoin="round">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </div>
+
+    <div class="mobile-drawer-quick-action">
+      <button type="button" class="btn btn-primary btn-block" id="btn-drawer-new-entry">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+        <span>+ New Style Entry</span>
+      </button>
+    </div>
+
+    <div class="mobile-drawer-section-label">SWITCH MODULE / TAB</div>
+
+    <nav class="mobile-nav-list" id="mobile-nav-list">
+      <button type="button" class="mobile-nav-item active" data-tab="dashboard">
+        <span class="nav-item-icon">📊</span>
+        <span class="nav-item-text">Dashboard</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="master-inventory">
+        <span class="nav-item-icon">📦</span>
+        <span class="nav-item-text">Master Inventory</span>
+        <span class="badge-pill mobile-badge" id="badge-master-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="receiving-log">
+        <span class="nav-item-icon">📥</span>
+        <span class="nav-item-text">Receiving Log</span>
+        <span class="badge-pill mobile-badge" id="badge-rec-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="dispatch-log">
+        <span class="nav-item-icon">📤</span>
+        <span class="nav-item-text">Dispatch Log</span>
+        <span class="badge-pill mobile-badge" id="badge-dis-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="final-style">
+        <span class="nav-item-icon">📋</span>
+        <span class="nav-item-text">Daily Sheet</span>
+        <span class="badge-pill mobile-badge" id="badge-final-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="work-distribution" id="mobile-nav-btn-work-distribution">
+        <span class="nav-item-icon">📑</span>
+        <span class="nav-item-text">Work Distribution</span>
+        <span class="badge-pill mobile-badge" id="badge-dist-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="payment-sheet" id="mobile-nav-btn-payment-sheet">
+        <span class="nav-item-icon">💰</span>
+        <span class="nav-item-text">Payment Sheet</span>
+        <span class="badge-pill mobile-badge" id="badge-payment-count-mobile">0</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="contractors">
+        <span class="nav-item-icon">👥</span>
+        <span class="nav-item-text">Contractors Hub</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="neon-sync">
+        <span class="nav-item-icon">☁️</span>
+        <span class="nav-item-text">Neon Cloud Sync</span>
+      </button>
+    </nav>
+
+    <div class="mobile-drawer-footer">
+      <div class="mobile-user-card">
+        <div class="user-avatar-badge" id="mobile-drawer-avatar">AG</div>
+        <div class="mobile-user-info">
+          <div class="mobile-user-name" id="mobile-drawer-username">Amir Ghouri</div>
+          <div class="mobile-user-role" id="mobile-drawer-role">Admin</div>
+        </div>
+      </div>
+    </div>
+  </aside>
 
   <!-- ============================================================== -->
   <!-- TAB 0: EXECUTIVE DASHBOARD & REAL-TIME OPERATIONS CENTER        -->
@@ -873,7 +1001,7 @@
 
     <!-- Report Header Banner -->
     <div class="report-header-banner">
-      <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
+      <div class="report-header-left">
         <div>
           <h2 style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">Daily Running Style Status Sheet
           </h2>
@@ -888,7 +1016,7 @@
         </div>
       </div>
 
-      <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+      <div class="report-header-actions">
         <button class="btn btn-secondary btn-sm" id="btn-auto-populate-active"
           title="Add all active styles with pending H-Emb balance to this sheet">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
