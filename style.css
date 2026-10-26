@@ -606,7 +606,6 @@ body {
 /* Views & Content Sections */
 .tab-view {
   display: none;
-  animation: fadeIn 0.25s ease-out;
   /* Page-level padding so content never sticks to screen edges */
   padding: 1.35rem 2.25rem;
   max-width: 1540px;
@@ -1097,6 +1096,16 @@ select.app-select option {
   font-size: 0.8rem;
 }
 
+/* High-performance scroll optimization: virtual rendering on scroll for massive tables */
+.master-table tbody tr,
+.final-style-table tbody tr,
+.distribution-table tbody tr,
+.table-rate-approval tbody tr,
+.table-card table tbody tr {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 38px;
+}
+
 .master-table tfoot td,
 .master-table tfoot th {
   padding: 0.35rem 0.5rem;
@@ -1394,15 +1403,23 @@ select.app-select option {
 }
 
 /* Modals */
+body.modal-open {
+  overflow: hidden !important;
+  touch-action: none !important;
+  overscroll-behavior: none !important;
+}
+
 .modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
-  background: rgba(0, 0, 0, 0.7);
+  height: 100dvh;
+  background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(4px);
-  z-index: 100;
+  z-index: 1000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1410,6 +1427,8 @@ select.app-select option {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
+  overscroll-behavior: contain !important;
+  touch-action: none !important;
 }
 
 .modal-backdrop.open {
@@ -1424,10 +1443,14 @@ select.app-select option {
   width: 100%;
   max-width: 680px;
   max-height: 90vh;
-  overflow-y: auto;
+  max-height: 90dvh;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
   box-shadow: var(--shadow-lg);
   transform: translateY(10px) scale(0.98);
   transition: transform 0.2s ease;
+  overscroll-behavior: contain !important;
 }
 
 .modal-backdrop.open .modal-card {
@@ -1440,6 +1463,7 @@ select.app-select option {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-shrink: 0;
 }
 
 .modal-header h2 {
@@ -1449,6 +1473,11 @@ select.app-select option {
 
 .modal-body {
   padding: 1.5rem;
+  flex: 1 1 auto;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
 }
 
 .modal-footer {
@@ -1458,6 +1487,7 @@ select.app-select option {
   align-items: center;
   justify-content: flex-end;
   gap: 0.75rem;
+  flex-shrink: 0;
 }
 
 /* Form Layout */
@@ -2608,6 +2638,31 @@ select.app-select option {
   .badge-tag {
     font-size: 0.65rem !important;
     padding: 1px 5px !important;
+  }
+
+  /* Mobile Modals - Touch Isolation & Never Freeze */
+  .modal-backdrop {
+    padding: 0.5rem !important;
+    overscroll-behavior: contain !important;
+    touch-action: none !important;
+  }
+  .modal-card {
+    max-height: 94dvh !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+  }
+  .modal-header {
+    padding: 0.85rem 1rem !important;
+  }
+  .modal-body {
+    padding: 1rem !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    touch-action: pan-y !important;
+  }
+  .modal-footer {
+    padding: 0.75rem 1rem !important;
   }
 
   /* Daily Sheet View on Mobile - Exact Responsiveness & No Date Overflow */

@@ -206,6 +206,58 @@ function initMobileNav() {
   }
 }
 
+// -------------------------------------------------------------
+// View State & Lazy Rendering Manager (Zero Lag & Instant Tab Switch)
+// -------------------------------------------------------------
+const dirtyViews = new Set([
+  "dashboard",
+  "master-inventory",
+  "receiving-log",
+  "dispatch-log",
+  "final-style",
+  "contractors",
+  "work-distribution",
+  "payment-sheet"
+]);
+
+function markViewsDirty(tabId = null) {
+  if (tabId) {
+    dirtyViews.add(tabId);
+  } else {
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet"].forEach(t => dirtyViews.add(t));
+  }
+}
+
+function getActiveTabId() {
+  const activeView = document.querySelector(".tab-view.active");
+  if (activeView && activeView.id) {
+    return activeView.id.replace("-view", "");
+  }
+  return "dashboard";
+}
+
+function renderTargetView(tabId) {
+  try {
+    if (tabId === "dashboard") renderDashboardView();
+    else if (tabId === "master-inventory") renderMasterInventory();
+    else if (tabId === "receiving-log") renderReceivingLog();
+    else if (tabId === "dispatch-log") renderDispatchLog();
+    else if (tabId === "final-style") renderFinalStyleSheet();
+    else if (tabId === "contractors") renderContractorsView();
+    else if (tabId === "work-distribution") {
+      populateDistributionPeriods();
+      renderWorkDistribution();
+    }
+    else if (tabId === "payment-sheet") {
+      populateRateApprovalPeriods();
+      renderPaymentSheet();
+    }
+    dirtyViews.delete(tabId);
+  } catch (err) {
+    console.warn("Target view render error:", tabId, err);
+  }
+}
+
 function switchTab(tabId) {
   const permKey = tabId.replace(/-/g, '_');
   if (!window.db.canUserAccessTab(permKey)) {
@@ -237,6 +289,7 @@ function switchTab(tabId) {
     activeTabNameEl.textContent = tabTitles[tabId] || tabId;
   }
 
+  // 1. Instantly switch visibility in DOM (0ms response, zero white screen)
   document.querySelectorAll(".tab-view").forEach(view => {
     view.classList.remove("active");
   });
@@ -246,47 +299,40 @@ function switchTab(tabId) {
     activeView.classList.add("active");
   }
 
-  // Refresh relevant views on switch
-  try {
-    if (tabId === "dashboard") renderDashboardView();
-    if (tabId === "master-inventory") renderMasterInventory();
-    if (tabId === "receiving-log") renderReceivingLog();
-    if (tabId === "dispatch-log") renderDispatchLog();
-    if (tabId === "final-style") renderFinalStyleSheet();
-    if (tabId === "contractors") renderContractorsView();
-    if (tabId === "work-distribution") {
-      populateDistributionPeriods();
-      renderWorkDistribution();
-    }
-    if (tabId === "payment-sheet") {
-      populateRateApprovalPeriods();
-      renderPaymentSheet();
-    }
-  } catch (err) {
-    console.warn("Tab view refresh notice:", tabId, err);
+  // 2. Render target view only if dirty (first visit or after data modification)
+  if (dirtyViews.has(tabId)) {
+    requestAnimationFrame(() => {
+      renderTargetView(tabId);
+    });
   }
 }
 
 // -------------------------------------------------------------
 // Master Render Orchestrator
 // -------------------------------------------------------------
-function renderAll() {
+function renderAll(forceAll = false) {
   if (window.db && typeof window.db.cleanOrphanMasterRecords === "function") {
     try { window.db.cleanOrphanMasterRecords(); } catch (e) { console.warn(e); }
   }
-  try { renderDashboardView(); } catch (e) { console.error("renderDashboardView error:", e); }
+
+  // Lightweight global updates: KPIs, Dropdowns and Permissions
   try { renderKPIs(); } catch (e) { console.error("renderKPIs error:", e); }
-  try { renderMasterInventory(); } catch (e) { console.error("renderMasterInventory error:", e); }
-  try { renderReceivingLog(); } catch (e) { console.error("renderReceivingLog error:", e); }
-  try { renderDispatchLog(); } catch (e) { console.error("renderDispatchLog error:", e); }
-  try { renderFinalStyleSheet(); } catch (e) { console.error("renderFinalStyleSheet error:", e); }
-  try { renderContractorsView(); } catch (e) { console.error("renderContractorsView error:", e); }
-  try { populateDistributionPeriods(); } catch (e) { console.error("populateDistributionPeriods error:", e); }
-  try { renderWorkDistribution(); } catch (e) { console.error("renderWorkDistribution error:", e); }
-  try { populateRateApprovalPeriods(); } catch (e) { console.error("populateRateApprovalPeriods error:", e); }
-  try { renderPaymentSheet(); } catch (e) { console.error("renderPaymentSheet error:", e); }
   try { populateDropdowns(); } catch (e) { console.error("populateDropdowns error:", e); }
   try { renderNavigation(); } catch (e) { console.error("renderNavigation error:", e); }
+
+  // Mark all tabs dirty so inactive tabs don't re-render until opened
+  markViewsDirty();
+
+  const currentTab = getActiveTabId();
+
+  if (forceAll) {
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet"].forEach(t => {
+      renderTargetView(t);
+    });
+  } else {
+    // Render only the active tab immediately
+    renderTargetView(currentTab);
+  }
 }
 
 function renderNavigation() {
@@ -1009,10 +1055,9 @@ function renderMasterInventory() {
     const balHembClass = item.balance_from_hemb > 0 ? "balance-highlight-pink" : "balance-zero-green";
     const totalBalClass = item.total_balance > 0 ? "balance-highlight-pink" : "balance-zero-green";
 
-    const assignedCont = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (item.contractor_name && item.contractor_name !== "Unassigned" && item.contractor_name !== "-")
       ? item.contractor_name
-      : (assignedCont ? assignedCont.contractor_name : "Unassigned");
+      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "Unassigned");
 
     return `
       <tr>
@@ -1311,10 +1356,9 @@ function renderReceivingLog() {
     sumCut += (item.cut_qty || 0);
     sumRec += (item.received_qty || 0);
 
-    const assignedCont = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (item.contractor_name && item.contractor_name !== "-")
       ? item.contractor_name
-      : (assignedCont ? assignedCont.contractor_name : "-");
+      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
 
     return `
       <tr>
@@ -1456,10 +1500,9 @@ function renderDispatchLog() {
     else if (rLower.includes("inline")) remarkBadge = `<span class="badge-tag inline">INLINE</span> `;
     else if (rLower.includes("issue") || rLower.includes("m-na")) remarkBadge = `<span class="badge-tag issue">ISSUE</span> `;
 
-    const assignedCont = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (item.contractor_name && item.contractor_name !== "-")
       ? item.contractor_name
-      : (assignedCont ? assignedCont.contractor_name : "-");
+      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
 
     return `
       <tr>
@@ -1666,10 +1709,9 @@ function renderFinalStyleSheet() {
       remarkBadge = `<span class="badge-tag alter" style="margin-right: 4px;">ALTER</span>`;
     }
 
-    const assignedCont = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (item.contractor_name && item.contractor_name !== "-")
       ? item.contractor_name
-      : (assignedCont ? assignedCont.contractor_name : "-");
+      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
 
     return `
       <tr>
@@ -3454,6 +3496,8 @@ function openModal(id) {
   const modal = document.getElementById(id);
   if (modal) {
     modal.classList.add("open");
+    document.body.classList.add("modal-open");
+    document.body.style.overflow = "hidden";
     if (!modal.dataset.backdropBound) {
       modal.dataset.backdropBound = "true";
       modal.addEventListener("click", (e) => {
@@ -3468,14 +3512,24 @@ function openModal(id) {
 function closeModal(id) {
   const modal = document.getElementById(id);
   if (modal) modal.classList.remove("open");
+  const openModals = document.querySelectorAll(".modal-backdrop.open");
+  if (!openModals || openModals.length === 0) {
+    document.body.classList.remove("modal-open");
+    document.body.style.overflow = "";
+  }
 }
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     const openModals = document.querySelectorAll(".modal-backdrop.open");
     openModals.forEach(m => m.classList.remove("open"));
+    document.body.classList.remove("modal-open");
+    document.body.style.overflow = "";
   }
 });
+
+window.openModal = openModal;
+window.closeModal = closeModal;
 
 function openSchemaModal() {
   const codeBlock = document.getElementById("schema-code-block");

@@ -66,6 +66,7 @@ class DatabaseService {
     } else {
       this._memCache = {};
     }
+    this._styleContractorCache = {};
   }
 
   // Remove old v1 dummy data if present in user's browser
@@ -1160,7 +1161,9 @@ class DatabaseService {
       masterList.unshift(item);
     }
 
-    this.saveMasterInventory(masterList);
+    if (!hints || !hints.skipSave) {
+      this.saveMasterInventory(masterList);
+    }
     if (hints && hints.syncToCloud) {
       this.syncMasterRecordToNeon(item);
     }
@@ -1238,8 +1241,11 @@ class DatabaseService {
 
     pairs.forEach(pair => {
       const [styleCode, category] = pair.split(":::");
-      this.recalculateMasterForStyleAndCategory(styleCode, category);
+      this.recalculateMasterForStyleAndCategory(styleCode, category, { skipSave: true });
     });
+
+    // Save once to localStorage and memory cache at the end of the batch
+    this.saveMasterInventory(this.getMasterInventory());
 
     return this.getMasterInventory();
   }
@@ -1801,8 +1807,7 @@ class DatabaseService {
       const cleanStyle = (item.style_code || "").trim().toLowerCase();
       const cleanCat = (item.working || item.category || "").trim().toLowerCase();
       if (cleanStyle) {
-        const rawMaster = localStorage.getItem(DB_KEYS.MASTER_INVENTORY);
-        const masterList = rawMaster ? JSON.parse(rawMaster || "[]") : [];
+        const masterList = this.getMasterInventory();
         let m = null;
         if (cleanCat) {
           m = masterList.find(x => 
@@ -2333,6 +2338,14 @@ class DatabaseService {
     const cleanCode = styleCode.trim().toLowerCase();
     const cleanCat = (category || "").trim().toLowerCase();
 
+    if (!this._styleContractorCache) this._styleContractorCache = {};
+    const cacheKey = `${cleanCode}:::${cleanCat}`;
+    if (this._styleContractorCache[cacheKey] !== undefined) {
+      return this._styleContractorCache[cacheKey];
+    }
+
+    let result = null;
+
     // 1. Check Work Distribution (prefer matching active period or latest entry)
     const distList = this.getWorkDistribution();
     let distMatch = null;
@@ -2357,7 +2370,7 @@ class DatabaseService {
     }
 
     if (distMatch && distMatch.contractor_name) {
-      return {
+      result = {
         contractor_name: distMatch.contractor_name,
         rate: distMatch.rate || 0,
         item: distMatch.item || "SHIRT",
@@ -2366,6 +2379,8 @@ class DatabaseService {
         period: distMatch.period || "",
         source: "work_distribution"
       };
+      this._styleContractorCache[cacheKey] = result;
+      return result;
     }
 
     // 2. Check Master Inventory
@@ -2382,7 +2397,7 @@ class DatabaseService {
     }
 
     if (masterMatch && masterMatch.contractor_name && masterMatch.contractor_name !== "Unassigned" && masterMatch.contractor_name !== "-") {
-      return {
+      result = {
         contractor_name: masterMatch.contractor_name,
         rate: 0,
         item: masterMatch.category || "SHIRT",
@@ -2391,6 +2406,8 @@ class DatabaseService {
         period: "",
         source: "master_inventory"
       };
+      this._styleContractorCache[cacheKey] = result;
+      return result;
     }
 
     // 3. Check Payment Sheet
@@ -2404,7 +2421,7 @@ class DatabaseService {
       }
     }
     if (payMatch && payMatch.contractor_name && payMatch.contractor_name !== "-") {
-      return {
+      result = {
         contractor_name: payMatch.contractor_name,
         rate: payMatch.rate_per_pc || 0,
         item: payMatch.category || payMatch.working || "SHIRT",
@@ -2413,8 +2430,11 @@ class DatabaseService {
         period: payMatch.period || "",
         source: "payment_sheet"
       };
+      this._styleContractorCache[cacheKey] = result;
+      return result;
     }
 
+    this._styleContractorCache[cacheKey] = null;
     return null;
   }
 
