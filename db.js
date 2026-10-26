@@ -99,19 +99,25 @@ class DatabaseService {
     if (!isPaymentWipedV10) {
       localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify([]));
       localStorage.setItem("hand_emb_payment_wipe_complete_v10", "true");
-      // Asynchronously clear payment_sheet table on Neon PostgreSQL as well
+      // Asynchronously clear payment_sheet table on Neon PostgreSQL as well if configured
       setTimeout(() => {
-        this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(e => console.warn("Neon truncate error:", e));
+        const cfg = this.getConfig();
+        if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+          this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(e => console.warn("Neon truncate error:", e));
+        }
       }, 500);
     }
 
-    // Automatically trigger Neon schema migration to add period column and drop useless columns
+    // Automatically trigger Neon schema migration if configured
     const isSchemaMigratedV12 = localStorage.getItem("hand_emb_neon_schema_v12") === "true";
     if (!isSchemaMigratedV12) {
       setTimeout(() => {
-        this.migrateNeonPaymentSchema().then(() => {
-          localStorage.setItem("hand_emb_neon_schema_v12", "true");
-        }).catch(e => console.warn("Auto-migration notice:", e));
+        const cfg = this.getConfig();
+        if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+          this.migrateNeonPaymentSchema().then(() => {
+            localStorage.setItem("hand_emb_neon_schema_v12", "true");
+          }).catch(e => console.warn("Auto-migration notice:", e));
+        }
       }, 800);
     }
 
@@ -170,7 +176,7 @@ class DatabaseService {
         id: 1,
         username: "admin",
         password: "admin123",
-        full_name: "Amir Ghouri",
+        full_name: "Muhammad Hamza",
         role: "admin",
         status: "Active",
         created_at: new Date().toISOString(),
@@ -2775,7 +2781,7 @@ class DatabaseService {
         id: 1,
         username: "admin",
         password: "admin123",
-        full_name: "Amir Ghouri",
+        full_name: "Muhammad Hamza",
         role: "admin",
         status: "Active",
         created_at: new Date().toISOString(),
@@ -2948,9 +2954,20 @@ class DatabaseService {
     const cleanUser = (username || "").toLowerCase().trim();
     const cleanPass = (password || "").trim();
 
-    const user = this.getUserByUsername(cleanUser);
+    const users = this.getUsers();
+    // Match by username, email, or full name
+    const user = users.find(u => {
+      const uName = (u.username || "").toLowerCase().trim();
+      const uEmail = (u.email || "").toLowerCase().trim();
+      const fName = (u.full_name || "").toLowerCase().trim();
+      return uName === cleanUser || (uEmail && uEmail === cleanUser) || (fName && fName === cleanUser);
+    }) || null;
+
     if (!user) {
-      return { success: false, error: "Invalid username or password." };
+      return { 
+        success: false, 
+        error: "Invalid username or password. Default Admin: Username 'admin' | Password 'admin123'" 
+      };
     }
 
     if (user.status === "Disabled" || user.status === "Inactive") {
@@ -2958,7 +2975,10 @@ class DatabaseService {
     }
 
     if (user.password !== cleanPass) {
-      return { success: false, error: "Invalid username or password." };
+      return { 
+        success: false, 
+        error: "Invalid password. (Default master password: admin123)" 
+      };
     }
 
     this.setCurrentUser(user);
