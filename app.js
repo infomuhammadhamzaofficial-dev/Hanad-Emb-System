@@ -3840,20 +3840,6 @@ function initAuthSystem() {
     }, 60);
   }
 
-  // Quick Auto-Fill Credentials Handler
-  const quickFillBtn = document.getElementById("btn-quick-fill-creds");
-  if (quickFillBtn) {
-    quickFillBtn.addEventListener("click", () => {
-      const uInp = document.getElementById("login-username");
-      if (uInp) uInp.value = "admin";
-      if (passInput) passInput.value = "onedrive";
-      if (errorAlert) {
-        errorAlert.style.display = "none";
-        errorAlert.textContent = "";
-      }
-    });
-  }
-
   // Handle Login Submission
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {

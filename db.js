@@ -17,14 +17,16 @@ const DB_KEYS = {
   RATE_APPROVAL_PERIODS: "hand_emb_rate_approval_periods_v1",
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
   DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1"
+};
+
 // ====================================================================
 // PERMANENT NEON CLOUD DATABASE CONFIGURATION
 // Yeh configuration har naye computer aur Vercel par automatically connect rehti hai!
 // ====================================================================
 const DEFAULT_NEON_CONFIG = {
-  neonConnectionString: "postgresql://neondb_owner:YOUR_ACTUAL_PASSWORD@ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
-  neonEndpointUrl: "",
-  neonApiKey: "",
+  neonConnectionString: "postgresql://neondb_owner:npg_3VrA8eOUXuDq@ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require",
+  neonEndpointUrl: "https://ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/sql",
+  neonApiKey: "npg_3VrA8eOUXuDq",
   autoSync: true
 };
 
@@ -172,42 +174,7 @@ class DatabaseService {
       localStorage.setItem(DB_KEYS.REPORT_DATE, today);
     }
     if (!localStorage.getItem(DB_KEYS.CONFIG)) {
-      localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify({
-        neonConnectionString: "",
-        neonEndpointUrl: "",
-        neonApiKey: "",
-        autoSync: false,
-        lastSyncTime: null
-      }));
-    }
-    if (!localStorage.getItem(DB_KEYS.USERS)) {
-      const defaultAdmin = [{
-        id: 1,
-        username: "admin",
-        password: "onedrive",
-        full_name: "Muhammad Hamza",
-        role: "admin",
-        status: "Active",
-        created_at: new Date().toISOString(),
-        permissions: {
-          tabs: {
-            master_inventory: true,
-            receiving_log: true,
-            dispatch_log: true,
-            final_style: true,
-            work_distribution: true,
-            payment_sheet: true,
-            contractors: true,
-            neon_sync: true
-          },
-          actions: {
-            can_create: true,
-            can_edit: true,
-            can_delete: true
-          }
-        }
-      }];
-      localStorage.setItem(DB_KEYS.USERS, JSON.stringify(defaultAdmin));
+      localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify(DEFAULT_NEON_CONFIG));
     }
 
     // Automatically rebuild multi-challan master records from existing logs
@@ -2794,36 +2761,7 @@ class DatabaseService {
   // USER AUTHENTICATION & ACCESS CONTROL (RBAC)
   // -------------------------------------------------------------
   getUsers() {
-    const data = JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
-    if (data.length === 0) {
-      const defaultAdmin = [{
-        id: 1,
-        username: "admin",
-        password: "onedrive",
-        full_name: "Muhammad Hamza",
-        role: "admin",
-        status: "Active",
-        created_at: new Date().toISOString(),
-        permissions: {
-          tabs: {
-            master_inventory: true,
-            receiving_log: true,
-            dispatch_log: true,
-            final_style: true,
-            contractors: true,
-            neon_sync: true
-          },
-          actions: {
-            can_create: true,
-            can_edit: true,
-            can_delete: true
-          }
-        }
-      }];
-      localStorage.setItem(DB_KEYS.USERS, JSON.stringify(defaultAdmin));
-      return defaultAdmin;
-    }
-    return data;
+    return JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
   }
 
   saveUsers(list) {
@@ -2973,116 +2911,77 @@ class DatabaseService {
     const cleanUser = (username || "").toLowerCase().trim();
     const cleanPass = (password || "").trim();
 
-    // 1. Direct Master Login Bypass:
-    // Allows 'admin', 'hamza', or 'muhammad hamza' with 'onedrive', 'admin123', or 'admin'
-    const isAdminUser = (cleanUser === "admin" || cleanUser === "hamza" || cleanUser === "muhammad hamza");
-    const isMasterPass = (cleanPass === "onedrive" || cleanPass === "admin123" || cleanPass === "admin");
-
-    if (isAdminUser && isMasterPass) {
-      let adminAccount = this.getUserByUsername("admin") || {
-        id: 1,
-        username: "admin",
-        password: cleanPass,
-        full_name: "Muhammad Hamza",
-        role: "admin",
-        status: "Active",
-        permissions: {
-          tabs: {
-            master_inventory: true,
-            receiving_log: true,
-            dispatch_log: true,
-            final_style: true,
-            work_distribution: true,
-            payment_sheet: true,
-            contractors: true,
-            neon_sync: true
-          },
-          actions: {
-            can_create: true,
-            can_edit: true,
-            can_delete: true
-          }
-        }
-      };
-      this.setCurrentUser(adminAccount);
-      return { success: true, user: adminAccount };
+    if (!cleanUser || !cleanPass) {
+      return { success: false, error: "Please enter both username and password." };
     }
 
-    // 2. Check local users
-    const users = this.getUsers();
-    let user = users.find(u => {
-      const uName = (u.username || "").toLowerCase().trim();
-      const uEmail = (u.email || "").toLowerCase().trim();
-      const fName = (u.full_name || "").toLowerCase().trim();
-      return uName === cleanUser || (uEmail && uEmail === cleanUser) || (fName && fName === cleanUser);
-    }) || null;
+    let user = null;
+    let queryError = null;
 
-    // 3. If not found locally, check Neon Cloud database if configured
-    if (!user) {
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        try {
-          const neonRes = await this.executeNeonQuery(
-            "SELECT * FROM app_users WHERE LOWER(username) = $1 OR LOWER(full_name) = $1 LIMIT 1;",
-            [cleanUser]
-          );
-          if (neonRes && neonRes.rows && neonRes.rows.length > 0) {
-            const dbU = neonRes.rows[0];
-            user = {
-              id: dbU.id,
-              username: dbU.username,
-              password: dbU.password,
-              full_name: dbU.full_name || dbU.username,
-              role: dbU.role || "Operator",
-              status: dbU.status || "Active",
-              permissions: typeof dbU.permissions === "string" ? JSON.parse(dbU.permissions) : (dbU.permissions || {})
-            };
-            const localList = this.getUsers().filter(u => u.username !== user.username);
-            localList.push(user);
-            this.saveUsers(localList);
-          }
-        } catch (neonErr) {
-          console.warn("Neon user lookup notice:", neonErr);
+    // 1. Direct authentication against Neon PostgreSQL app_users table
+    try {
+      const neonRes = await this.executeNeonQuery(
+        "SELECT * FROM app_users WHERE LOWER(TRIM(username)) = $1 OR LOWER(TRIM(full_name)) = $1 LIMIT 1;",
+        [cleanUser]
+      );
+      if (neonRes && neonRes.rows && neonRes.rows.length > 0) {
+        const dbU = neonRes.rows[0];
+        let perms = dbU.permissions;
+        if (typeof perms === "string") {
+          try { perms = JSON.parse(perms); } catch (e) { perms = {}; }
         }
-      }
-    }
-
-    // 4. Fallback: If still not found but using master password, auto-create
-    if (!user) {
-      if (isMasterPass) {
         user = {
-          id: Date.now(),
-          username: cleanUser,
-          password: cleanPass,
-          full_name: cleanUser.toUpperCase(),
-          role: "admin",
-          status: "Active",
-          permissions: {
-            tabs: { master_inventory: true, receiving_log: true, dispatch_log: true, final_style: true, work_distribution: true, payment_sheet: true, contractors: true, neon_sync: true },
-            actions: { can_create: true, can_edit: true, can_delete: true }
-          }
+          id: dbU.id,
+          username: dbU.username,
+          password: dbU.password,
+          full_name: dbU.full_name || dbU.username,
+          role: dbU.role || "Operator",
+          status: dbU.status || "Active",
+          permissions: perms || {}
         };
-        const localList = this.getUsers();
+
+        // Cache authenticated user into local users list
+        const localList = (JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]")).filter(
+          u => (u.username || "").toLowerCase().trim() !== (user.username || "").toLowerCase().trim()
+        );
         localList.push(user);
-        this.saveUsers(localList);
-        this.setCurrentUser(user);
-        return { success: true, user: user };
+        localStorage.setItem(DB_KEYS.USERS, JSON.stringify(localList));
       }
+    } catch (neonErr) {
+      console.warn("Neon authentication query notice:", neonErr);
+      queryError = neonErr.message;
+    }
+
+    // 2. Offline Fallback: If Neon query failed due to network issues, check cached users
+    if (!user && queryError) {
+      const cachedUsers = JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
+      user = cachedUsers.find(u => {
+        const uName = (u.username || "").toLowerCase().trim();
+        const fName = (u.full_name || "").toLowerCase().trim();
+        return uName === cleanUser || fName === cleanUser;
+      }) || null;
+    }
+
+    // 3. User verification
+    if (!user) {
       return { 
         success: false, 
-        error: "Invalid username or password. (Master Password: 'onedrive' ya 'admin123')" 
+        error: "Invalid username or password." 
       };
     }
 
     if (user.status === "Disabled" || user.status === "Inactive") {
-      return { success: false, error: "This user account is currently disabled. Please contact Admin." };
-    }
-
-    // Allow account password OR master password
-    if (user.password !== cleanPass && !isMasterPass) {
       return { 
         success: false, 
-        error: "Invalid password. (Master password: 'onedrive' ya 'admin123')" 
+        error: "This user account is currently disabled. Please contact Admin." 
+      };
+    }
+
+    // 4. Strict password verification against Neon database
+    if (user.password !== cleanPass) {
+      return { 
+        success: false, 
+        error: "Invalid username or password." 
       };
     }
 

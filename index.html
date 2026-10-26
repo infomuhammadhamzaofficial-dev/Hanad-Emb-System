@@ -38,18 +38,18 @@
         <div id="auth-error-alert" class="auth-alert" style="display: none;"></div>
 
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label for="login-username" style="margin-bottom: 0.45rem;">Username or Email:</label>
+          <label for="login-username" style="margin-bottom: 0.45rem;">Username:</label>
           <div class="input-icon-wrapper">
-            <input type="text" class="app-input" id="login-username" required
-              placeholder="Enter username (Default: admin)" autocomplete="off" autofocus value="">
+            <input type="text" class="app-input" id="login-username" required placeholder="Enter username"
+              autocomplete="off" autofocus value="">
           </div>
         </div>
 
         <div class="form-group" style="margin-bottom: 1.25rem;">
           <label for="login-password" style="margin-bottom: 0.45rem;">Password:</label>
           <div class="input-icon-wrapper password-input-wrapper">
-            <input type="password" class="app-input" id="login-password" required
-              placeholder="Enter password (e.g. onedrive or admin123)" autocomplete="new-password" value="">
+            <input type="password" class="app-input" id="login-password" required placeholder="Enter password"
+              autocomplete="new-password" value="">
             <button type="button" id="btn-toggle-login-pass" class="password-toggle-btn"
               aria-label="Toggle password visibility" title="Show password">
               <svg class="eye-icon eye-open" width="19" height="19" viewBox="0 0 24 24" fill="none"
@@ -73,20 +73,6 @@
           style="padding: 0.75rem; font-weight: 700; width: 100%;">
           🔐 Sign In to Workspace
         </button>
-
-        <!-- Quick Credentials Hint & Auto-Fill Button -->
-        <div
-          style="margin-top: 1.1rem; padding: 0.75rem 0.9rem; border-radius: 8px; background: rgba(16, 185, 129, 0.08); border: 1px dashed rgba(16, 185, 129, 0.35); text-align: center;">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.3rem;">Default Master Login
-            Credentials:</div>
-          <div style="font-size: 0.82rem; font-family: monospace; color: #10b981; font-weight: 600;">
-            Username: <strong>admin</strong> &nbsp;|&nbsp; Password: <strong>onedrive</strong>
-          </div>
-          <button type="button" id="btn-quick-fill-creds"
-            style="background: rgba(16, 185, 129, 0.18); border: 1px solid rgba(16, 185, 129, 0.4); border-radius: 6px; color: #10b981; font-size: 0.76rem; font-weight: 700; padding: 0.35rem 0.85rem; margin-top: 0.45rem; cursor: pointer; transition: all 0.2s ease;">
-            ⚡ Click to Auto-Fill Credentials (onedrive)
-          </button>
-        </div>
       </form>
     </div>
   </div>
@@ -1639,7 +1625,8 @@
             <li>In your <strong>Neon Console</strong> modal, click <strong>"Show password"</strong> (bottom-left) so the
               asterisks (<code>****</code>) reveal your actual password!</li>
             <li>Click <strong>"Copy snippet"</strong> to copy the full string:
-              <code>postgresql://neondb_owner:...@ep-...aws.neon.tech/neondb...</code></li>
+              <code>postgresql://neondb_owner:...@ep-...aws.neon.tech/neondb...</code>
+            </li>
             <li>Paste it into the box below and click <strong>"Save Neon Settings"</strong> & then <strong>"Test Neon
                 Connection"</strong>.</li>
           </ol>
