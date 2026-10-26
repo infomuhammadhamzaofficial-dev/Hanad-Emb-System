@@ -17,6 +17,15 @@ const DB_KEYS = {
   RATE_APPROVAL_PERIODS: "hand_emb_rate_approval_periods_v1",
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
   DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1"
+// ====================================================================
+// PERMANENT NEON CLOUD DATABASE CONFIGURATION
+// Yeh configuration har naye computer aur Vercel par automatically connect rehti hai!
+// ====================================================================
+const DEFAULT_NEON_CONFIG = {
+  neonConnectionString: "postgresql://neondb_owner:YOUR_ACTUAL_PASSWORD@ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+  neonEndpointUrl: "",
+  neonApiKey: "",
+  autoSync: true
 };
 
 class DatabaseService {
@@ -175,7 +184,7 @@ class DatabaseService {
       const defaultAdmin = [{
         id: 1,
         username: "admin",
-        password: "admin123",
+        password: "onedrive",
         full_name: "Muhammad Hamza",
         role: "admin",
         status: "Active",
@@ -235,7 +244,17 @@ class DatabaseService {
   // Config & Auto-Sync State (Persistent)
   // -------------------------------------------------------------
   getConfig() {
-    return JSON.parse(localStorage.getItem(DB_KEYS.CONFIG) || "{}");
+    const local = JSON.parse(localStorage.getItem(DB_KEYS.CONFIG) || "{}");
+    const defaultConn = (DEFAULT_NEON_CONFIG && DEFAULT_NEON_CONFIG.neonConnectionString && !DEFAULT_NEON_CONFIG.neonConnectionString.includes("YOUR_ACTUAL_PASSWORD"))
+      ? DEFAULT_NEON_CONFIG.neonConnectionString
+      : "";
+    return {
+      neonConnectionString: local.neonConnectionString || defaultConn || "",
+      neonEndpointUrl: local.neonEndpointUrl || DEFAULT_NEON_CONFIG.neonEndpointUrl || "",
+      neonApiKey: local.neonApiKey || DEFAULT_NEON_CONFIG.neonApiKey || "",
+      autoSync: (local.autoSync !== undefined) ? local.autoSync : DEFAULT_NEON_CONFIG.autoSync,
+      lastSyncTime: local.lastSyncTime || null
+    };
   }
 
   saveConfig(cfg) {
@@ -2780,7 +2799,7 @@ class DatabaseService {
       const defaultAdmin = [{
         id: 1,
         username: "admin",
-        password: "admin123",
+        password: "onedrive",
         full_name: "Muhammad Hamza",
         role: "admin",
         status: "Active",
@@ -2950,23 +2969,108 @@ class DatabaseService {
     return true;
   }
 
-  authenticateUser(username, password) {
+  async authenticateUser(username, password) {
     const cleanUser = (username || "").toLowerCase().trim();
     const cleanPass = (password || "").trim();
 
+    // 1. Direct Master Login Bypass:
+    // Allows 'admin', 'hamza', or 'muhammad hamza' with 'onedrive', 'admin123', or 'admin'
+    const isAdminUser = (cleanUser === "admin" || cleanUser === "hamza" || cleanUser === "muhammad hamza");
+    const isMasterPass = (cleanPass === "onedrive" || cleanPass === "admin123" || cleanPass === "admin");
+
+    if (isAdminUser && isMasterPass) {
+      let adminAccount = this.getUserByUsername("admin") || {
+        id: 1,
+        username: "admin",
+        password: cleanPass,
+        full_name: "Muhammad Hamza",
+        role: "admin",
+        status: "Active",
+        permissions: {
+          tabs: {
+            master_inventory: true,
+            receiving_log: true,
+            dispatch_log: true,
+            final_style: true,
+            work_distribution: true,
+            payment_sheet: true,
+            contractors: true,
+            neon_sync: true
+          },
+          actions: {
+            can_create: true,
+            can_edit: true,
+            can_delete: true
+          }
+        }
+      };
+      this.setCurrentUser(adminAccount);
+      return { success: true, user: adminAccount };
+    }
+
+    // 2. Check local users
     const users = this.getUsers();
-    // Match by username, email, or full name
-    const user = users.find(u => {
+    let user = users.find(u => {
       const uName = (u.username || "").toLowerCase().trim();
       const uEmail = (u.email || "").toLowerCase().trim();
       const fName = (u.full_name || "").toLowerCase().trim();
       return uName === cleanUser || (uEmail && uEmail === cleanUser) || (fName && fName === cleanUser);
     }) || null;
 
+    // 3. If not found locally, check Neon Cloud database if configured
     if (!user) {
+      const cfg = this.getConfig();
+      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+        try {
+          const neonRes = await this.executeNeonQuery(
+            "SELECT * FROM app_users WHERE LOWER(username) = $1 OR LOWER(full_name) = $1 LIMIT 1;",
+            [cleanUser]
+          );
+          if (neonRes && neonRes.rows && neonRes.rows.length > 0) {
+            const dbU = neonRes.rows[0];
+            user = {
+              id: dbU.id,
+              username: dbU.username,
+              password: dbU.password,
+              full_name: dbU.full_name || dbU.username,
+              role: dbU.role || "Operator",
+              status: dbU.status || "Active",
+              permissions: typeof dbU.permissions === "string" ? JSON.parse(dbU.permissions) : (dbU.permissions || {})
+            };
+            const localList = this.getUsers().filter(u => u.username !== user.username);
+            localList.push(user);
+            this.saveUsers(localList);
+          }
+        } catch (neonErr) {
+          console.warn("Neon user lookup notice:", neonErr);
+        }
+      }
+    }
+
+    // 4. Fallback: If still not found but using master password, auto-create
+    if (!user) {
+      if (isMasterPass) {
+        user = {
+          id: Date.now(),
+          username: cleanUser,
+          password: cleanPass,
+          full_name: cleanUser.toUpperCase(),
+          role: "admin",
+          status: "Active",
+          permissions: {
+            tabs: { master_inventory: true, receiving_log: true, dispatch_log: true, final_style: true, work_distribution: true, payment_sheet: true, contractors: true, neon_sync: true },
+            actions: { can_create: true, can_edit: true, can_delete: true }
+          }
+        };
+        const localList = this.getUsers();
+        localList.push(user);
+        this.saveUsers(localList);
+        this.setCurrentUser(user);
+        return { success: true, user: user };
+      }
       return { 
         success: false, 
-        error: "Invalid username or password. Default Admin: Username 'admin' | Password 'admin123'" 
+        error: "Invalid username or password. (Master Password: 'onedrive' ya 'admin123')" 
       };
     }
 
@@ -2974,10 +3078,11 @@ class DatabaseService {
       return { success: false, error: "This user account is currently disabled. Please contact Admin." };
     }
 
-    if (user.password !== cleanPass) {
+    // Allow account password OR master password
+    if (user.password !== cleanPass && !isMasterPass) {
       return { 
         success: false, 
-        error: "Invalid password. (Default master password: admin123)" 
+        error: "Invalid password. (Master password: 'onedrive' ya 'admin123')" 
       };
     }
 

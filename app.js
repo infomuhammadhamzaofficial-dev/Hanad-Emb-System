@@ -3846,7 +3846,7 @@ function initAuthSystem() {
     quickFillBtn.addEventListener("click", () => {
       const uInp = document.getElementById("login-username");
       if (uInp) uInp.value = "admin";
-      if (passInput) passInput.value = "admin123";
+      if (passInput) passInput.value = "onedrive";
       if (errorAlert) {
         errorAlert.style.display = "none";
         errorAlert.textContent = "";
@@ -3856,7 +3856,7 @@ function initAuthSystem() {
 
   // Handle Login Submission
   if (loginForm) {
-    loginForm.addEventListener("submit", (e) => {
+    loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const usernameInput = document.getElementById("login-username");
       const username = usernameInput ? usernameInput.value.trim() : "";
@@ -3881,7 +3881,12 @@ function initAuthSystem() {
         submitBtn.textContent = "Verifying...";
       }
 
-      const result = window.db.authenticateUser(username, password);
+      let result;
+      try {
+        result = await window.db.authenticateUser(username, password);
+      } catch (authErr) {
+        result = { success: false, error: authErr.message || "Authentication error." };
+      }
 
       if (submitBtn) {
         submitBtn.disabled = false;
