@@ -297,6 +297,9 @@ function switchTab(tabId) {
   const activeView = document.getElementById(`${tabId}-view`);
   if (activeView) {
     activeView.classList.add("active");
+    // MOBILE FIX: Scroll to top on every tab switch so content is always visible
+    // without this, mobile keeps previous tab's scroll position causing blank screen
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   // 2. Render target view only if dirty (first visit or after data modification)

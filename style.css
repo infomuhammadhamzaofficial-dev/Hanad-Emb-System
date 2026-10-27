@@ -172,9 +172,12 @@ body {
   color: var(--text-main);
   line-height: 1.5;
   min-height: 100vh;
+  min-height: 100dvh; /* Mobile browser address-bar-aware viewport height */
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  /* Prevent content jumping on mobile when address bar hides/shows */
+  overscroll-behavior-y: none;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -537,7 +540,7 @@ body {
 /* KPI Banner */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(210px, 100%), 1fr));
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -612,10 +615,20 @@ body {
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
+  /* GPU compositing: prevents mobile reflow on tab switch */
+  contain: layout style;
+  content-visibility: auto;
 }
 
 .tab-view.active {
   display: block;
+  /* Animate only opacity for tab switch - avoids layout thrash on mobile */
+  animation: tabFadeIn 0.18s ease-out both;
+}
+
+@keyframes tabFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes fadeIn {
@@ -1019,6 +1032,8 @@ select.app-select option {
 .table-responsive {
   width: 100%;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* Smooth momentum scroll on iOS */
+  overscroll-behavior-x: contain;   /* Stop horizontal scroll leaking to body */
 }
 
 .master-table,
@@ -1766,14 +1781,19 @@ body.modal-open {
   top: 0;
   left: 0;
   width: 100vw;
+  width: 100dvw;
   height: 100vh;
+  height: 100dvh; /* Fix: mobile address-bar-aware full height */
   background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.18) 0%, rgba(10, 15, 29, 0.97) 60%, #060912 100%);
   backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   z-index: 9999;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 1.5rem;
+  overscroll-behavior: none;
+  touch-action: none;
 }
 
 .auth-card {
@@ -2075,6 +2095,8 @@ body.modal-open {
   top: 0;
   left: 0;
   bottom: 0;
+  /* Use dvh so drawer fills screen even when address bar is visible */
+  height: 100dvh;
   width: min(85vw, 320px);
   background: var(--bg-card);
   border-right: 1.5px solid var(--border-color);
@@ -2082,10 +2104,14 @@ body.modal-open {
   display: flex;
   flex-direction: column;
   transform: translateX(-100%);
+  /* Use GPU compositor layer for smooth slide */
+  will-change: transform;
   transition: transform 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 10px 0 35px rgba(0, 0, 0, 0.45);
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .mobile-nav-drawer.open {
@@ -2446,6 +2472,15 @@ body.modal-open {
     background: var(--bg-card) !important;
     border-bottom: 1px solid var(--border-color) !important;
     gap: 0.5rem !important;
+    /* Prevent sub-bar from being a stacking context that causes repaint */
+    isolation: isolate;
+  }
+
+  /* Give tab views breathing room so sticky header + sub-bar don't cover content */
+  .tab-view {
+    padding: 0.9rem 0.85rem !important;
+    /* Safe area inset for notched phones */
+    padding-bottom: calc(0.9rem + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .mobile-active-tab-chip {
@@ -5130,4 +5165,132 @@ body.modal-open {
   .dash-two-col-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* ======================================================================
+   📱 MOBILE PERFORMANCE MASTER BLOCK
+   Fixes: lagging, frozen scroll, disappearing content, tab-switch glitches
+   Applied on all touch devices (≤ 767px)
+   ====================================================================== */
+@media (max-width: 767px) {
+
+  /* --- 1. Scroll Performance: Promote scrollable containers to GPU layer --- */
+  body {
+    /* Prevent iOS rubber-band scroll causing layout jumps */
+    overscroll-behavior: none;
+  }
+
+  /* --- 2. Sticky Header: Use dvh-aware height so it never overlaps content --- */
+  .app-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    /* Promote header to own compositing layer for smooth scroll */
+    will-change: transform;
+    /* Reduce blur intensity on mobile (backdrop-filter is GPU-heavy) */
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  /* --- 3. Cards: Remove hover transforms that trigger repaints on touch --- */
+  .kpi-card:hover,
+  .dash-kpi-card:hover,
+  .table-card:hover,
+  .view-toolbar:hover,
+  .master-toolbar-panel:hover {
+    transform: none !important;
+  }
+
+  /* --- 4. KPI Grid: Safe minmax so cards never overflow 360px phones --- */
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
+  }
+
+  /* --- 5. Table: Ensure horizontal scroll never triggers body scroll --- */
+  .table-card {
+    overflow: hidden;
+    /* Contain table reflows within card boundary */
+    contain: layout paint;
+  }
+
+  .table-responsive {
+    overflow-x: auto !important;
+    overflow-y: visible !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-x: contain !important;
+    /* Min-width ensures tables don't collapse to unreadable widths */
+    min-width: 0;
+  }
+
+  /* --- 6. Filter/Toolbar rows: Stack vertically, no horizontal overflow --- */
+  .master-filter-row,
+  .view-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .master-filter-row .search-box {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  .filter-group {
+    flex-wrap: wrap !important;
+    width: 100% !important;
+  }
+
+  .filter-group .app-select {
+    flex: 1 1 calc(50% - 0.5rem) !important;
+    min-width: 0 !important;
+  }
+
+  /* --- 7. Animations: Disable heavy animations on mobile for performance --- */
+  .kpi-card,
+  .dash-kpi-card,
+  .btn-action-dock,
+  .btn-new-entry {
+    transition: none !important;
+  }
+
+  /* Keep only opacity transitions (GPU-only, zero layout cost) */
+  .nav-tab-btn,
+  .mobile-nav-item,
+  .btn {
+    transition: opacity 0.15s ease, background-color 0.15s ease !important;
+  }
+
+  /* --- 8. Toast: Adjust position for mobile safe areas --- */
+  .toast-container {
+    bottom: calc(1rem + env(safe-area-inset-bottom, 0px)) !important;
+    right: 0.75rem !important;
+    left: 0.75rem !important;
+    width: auto !important;
+  }
+
+  .toast {
+    width: 100% !important;
+    font-size: 0.8rem !important;
+  }
+}
+
+/* --- 9. Ultra-small phones (360px and below) --- */
+@media (max-width: 380px) {
+  .kpi-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.45rem !important;
+  }
+
+  .master-actions-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .tab-view {
+    padding: 0.65rem 0.55rem !important;
+  }
+}
+
+/* --- 10. Prevent 300ms tap delay on all interactive elements (mobile) --- */
+a, button, [role="button"], input, select, textarea, label {
+  touch-action: manipulation;
 }
