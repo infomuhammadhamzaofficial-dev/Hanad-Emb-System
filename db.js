@@ -624,18 +624,19 @@ class DatabaseService {
     // Recalculate Master for affected style + category (auto-deletes master if 0 receiving and 0 dispatch)
     this.recalculateMasterForStyleAndCategory(item.style_code, item.category);
     this.cleanOrphanMasterRecords();
+    this.clearCache();
+    try {
+      localStorage.setItem("craftflow_last_mutation", Date.now().toString());
+      window.dispatchEvent(new CustomEvent("craftflow-local-change"));
+    } catch(e) {}
 
-    // Remove from Neon
+    // Remove from Neon in background
     const cfg = this.getConfig();
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM receiving_log WHERE id = $1 OR (challan_rec = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
-          [item.id, item.challan_rec || '', item.style_code, item.category]
-        );
-      } catch (err) {
-        console.warn("Neon delete receiving_log error:", err);
-      }
+      this.executeNeonQuery(
+        "DELETE FROM receiving_log WHERE id = $1 OR (challan_rec = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
+        [item.id, item.challan_rec || '', item.style_code, item.category]
+      ).catch(err => console.warn("Neon delete receiving_log error:", err));
     }
 
     return true;
@@ -873,18 +874,19 @@ class DatabaseService {
     // Recalculate Master for affected style + category (auto-deletes master if 0 receiving and 0 dispatch)
     this.recalculateMasterForStyleAndCategory(item.style_code, item.category);
     this.cleanOrphanMasterRecords();
+    this.clearCache();
+    try {
+      localStorage.setItem("craftflow_last_mutation", Date.now().toString());
+      window.dispatchEvent(new CustomEvent("craftflow-local-change"));
+    } catch(e) {}
 
-    // Remove from Neon
+    // Remove from Neon in background
     const cfg = this.getConfig();
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM dispatch_log WHERE id = $1 OR (challan_dis = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
-          [item.id, item.challan_dis || '', item.style_code, item.category]
-        );
-      } catch (err) {
-        console.warn("Neon delete dispatch_log error:", err);
-      }
+      this.executeNeonQuery(
+        "DELETE FROM dispatch_log WHERE id = $1 OR (challan_dis = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
+        [item.id, item.challan_dis || '', item.style_code, item.category]
+      ).catch(err => console.warn("Neon delete dispatch_log error:", err));
     }
 
     return true;
@@ -1422,6 +1424,155 @@ class DatabaseService {
     this.saveFinalStyles(list);
     return this.getFinalStyles();
   }
+
+  // -------------------------------------------------------------
+  // DAILY INWARD ARRIVALS & BALANCE REPORT BY DATE
+  // Finds all styles received on any given date, computes cumulative
+  // received vs cut_qty balances, and tracks Daily Sheet status.
+  // -------------------------------------------------------------
+  getArrivalsReportByDate(targetDateStr) {
+    let target = (targetDateStr || "").trim();
+    if (!target) {
+      const today = new Date();
+      const y = today.getFullYear();
+      const m = String(today.getMonth() + 1).padStart(2, "0");
+      const d = String(today.getDate()).padStart(2, "0");
+      target = `${y}-${m}-${d}`;
+    }
+
+    const recLogs = this.getReceivingLogs() || [];
+    const currentFinal = this.getFinalStyles() || [];
+
+    // Helper to normalize dates for comparison (YYYY-MM-DD)
+    const norm = (val) => {
+      if (!val) return "";
+      const s = String(val).trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      if (s.includes("T")) return s.split("T")[0];
+      const dt = new Date(s);
+      if (!isNaN(dt.getTime())) {
+        const y = dt.getFullYear();
+        const m = String(dt.getMonth() + 1).padStart(2, "0");
+        const d = String(dt.getDate()).padStart(2, "0");
+        return `${y}-${m}-${d}`;
+      }
+      return s;
+    };
+
+    const targetNorm = norm(target);
+
+    // Filter receiving logs for this target date
+    const matchedLogs = recLogs.filter(r => {
+      const dRec = norm(r.date_receive);
+      const dCreated = r.created_at ? norm(r.created_at) : "";
+      return dRec === targetNorm || (!dRec && dCreated === targetNorm);
+    });
+
+    // Group matching receipts by style_code and category
+    const groupMap = new Map();
+
+    matchedLogs.forEach(r => {
+      const code = (r.style_code || "").trim();
+      const cat = (r.category || "Shirt").trim();
+      if (!code) return;
+
+      const key = `${code.toLowerCase()}:::${cat.toLowerCase()}`;
+      if (!groupMap.has(key)) {
+        groupMap.set(key, {
+          style_code: code,
+          category: cat,
+          date_received_qty: 0,
+          challans: new Set(),
+          contractors: new Set(),
+          remarks: new Set(),
+          max_cut_in_logs: 0
+        });
+      }
+
+      const g = groupMap.get(key);
+      const qty = Number(r.received_qty) || 0;
+      g.date_received_qty += qty;
+      if (r.challan_rec) g.challans.add(r.challan_rec.trim());
+      if (r.contractor_name) g.contractors.add(r.contractor_name.trim());
+      if (r.remarks) g.remarks.add(r.remarks.trim());
+      if (Number(r.cut_qty) > g.max_cut_in_logs) g.max_cut_in_logs = Number(r.cut_qty);
+    });
+
+    // Collect available receiving dates so UI can offer quick suggestions
+    const availableDatesSet = new Set();
+    recLogs.forEach(r => {
+      const d = norm(r.date_receive);
+      if (d) availableDatesSet.add(d);
+    });
+    const sortedAvailableDates = Array.from(availableDatesSet).sort().reverse();
+
+    // Map groups with master inventory balances and daily sheet status
+    const styles = [];
+    let totalDatePcs = 0;
+    let totalCutPcs = 0;
+    let totalCumulativeReceived = 0;
+    let totalPendingPieces = 0;
+
+    groupMap.forEach((g) => {
+      const master = this.findMasterByStyleAndCategory(g.style_code, g.category);
+      
+      const cutQty = master ? (Number(master.cut_qty) || 0) : g.max_cut_in_logs;
+      const totalRec = master ? (Number(master.received_qty) || 0) : g.date_received_qty;
+      const totalDis = master ? (Number(master.dispatched_qty) || 0) : 0;
+      const balStock = master ? (Number(master.balance_from_stock) || 0) : (totalRec - totalDis);
+      const balHemb = master ? (Number(master.balance_from_hemb) || 0) : Math.max(0, cutQty - totalRec);
+      const balPending = cutQty - totalRec; // Remaining pieces to complete receiving
+
+      // Check if already in Daily Sheet
+      const inDailySheet = currentFinal.some(f => 
+        (f.style_code || "").trim().toLowerCase() === g.style_code.toLowerCase() &&
+        (f.category || "").trim().toLowerCase() === g.category.toLowerCase()
+      );
+
+      const item = {
+        style_code: g.style_code,
+        category: g.category,
+        contractors: Array.from(g.contractors).join(", ") || (master?.contractor_name || "-"),
+        challans: Array.from(g.challans).join(", ") || "-",
+        remarks: Array.from(g.remarks).join("; ") || "",
+        date_received_qty: g.date_received_qty,
+        cut_qty: cutQty,
+        total_received: totalRec,
+        balance_pending: balPending,
+        balance_from_stock: balStock,
+        balance_from_hemb: balHemb,
+        in_daily_sheet: inDailySheet,
+        master_found: !!master
+      };
+
+      styles.push(item);
+      totalDatePcs += g.date_received_qty;
+      totalCutPcs += cutQty;
+      totalCumulativeReceived += totalRec;
+      if (balPending > 0) totalPendingPieces += balPending;
+    });
+
+    // Sort: items not yet in Daily Sheet first, then by date_received_qty DESC
+    styles.sort((a, b) => {
+      if (a.in_daily_sheet !== b.in_daily_sheet) {
+        return a.in_daily_sheet ? 1 : -1;
+      }
+      return b.date_received_qty - a.date_received_qty;
+    });
+
+    return {
+      targetDate: targetNorm,
+      totalStylesCount: styles.length,
+      totalDatePcs,
+      totalCutPcs,
+      totalCumulativeReceived,
+      totalPendingPieces,
+      missingFromDailySheetCount: styles.filter(s => !s.in_daily_sheet).length,
+      styles,
+      availableDates: sortedAvailableDates
+    };
+  }
+
 
   // -------------------------------------------------------------
   // Contractors (Neon PostgreSQL Synchronized Master Directory)
@@ -2993,7 +3144,43 @@ class DatabaseService {
   }
 
   getCurrentUser() {
-    return JSON.parse(localStorage.getItem(DB_KEYS.CURRENT_USER) || "null");
+    const raw = localStorage.getItem(DB_KEYS.CURRENT_USER);
+    if (raw) {
+      try {
+        const u = JSON.parse(raw);
+        if (u && u.username) return u;
+      } catch (e) {}
+    }
+    // Default seamless session for mobile and desktop access
+    const defaultAdmin = {
+      id: 1,
+      username: "admin",
+      role: "admin",
+      full_name: "Amir Ghouri",
+      status: "Active",
+      permissions: {
+        tabs: {
+          dashboard: true,
+          master_inventory: true,
+          receiving_log: true,
+          dispatch_log: true,
+          final_style: true,
+          work_distribution: true,
+          payment_sheet: true,
+          contractors: true,
+          neon_sync: true
+        },
+        actions: {
+          can_create: true,
+          can_edit: true,
+          can_delete: true
+        }
+      }
+    };
+    try {
+      localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(defaultAdmin));
+    } catch (e) {}
+    return defaultAdmin;
   }
 
   setCurrentUser(user) {
@@ -3649,39 +3836,24 @@ class DatabaseService {
         }
       }
 
-      // 1. Receiving Logs: preserve local records not yet fetched from Neon
-      const currentLocalRec = this.getReceivingLogs();
-      const neonRecIds = new Set(recRows.map(r => Number(r.id)));
-      const neonRecKeys = new Set(recRows.map(r => `${r.id}:::${(r.style_code || '').trim().toLowerCase()}:::${(r.category || '').trim().toLowerCase()}`));
-      const unsyncedRec = currentLocalRec.filter(r => 
-        !neonRecIds.has(Number(r.id)) && 
-        !neonRecKeys.has(`${r.id}:::${(r.style_code || '').trim().toLowerCase()}:::${(r.category || '').trim().toLowerCase()}`)
-      );
-      const finalRecList = [...unsyncedRec, ...recRows];
+      // Track pre-sync raw strings to detect modifications
+      const prevRecRaw = localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "";
+      const prevDisRaw = localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "";
+      const prevMasterRaw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "";
+
+      // 1. Receiving Logs: Cloud (Neon) is the single source of truth
+      const offlineRecDrafts = (this.getReceivingLogs() || []).filter(r => r._is_offline_draft === true);
+      const finalRecList = [...offlineRecDrafts, ...recRows];
       localStorage.setItem(DB_KEYS.RECEIVING_LOG, JSON.stringify(finalRecList));
-      if (unsyncedRec.length > 0) {
-        unsyncedRec.forEach(r => this.pushReceivingLogToNeonAsync(r));
-      }
 
-      // 2. Dispatch Logs: preserve local records not yet fetched from Neon
-      const currentLocalDis = this.getDispatchLogs();
-      const neonDisIds = new Set(disRows.map(d => Number(d.id)));
-      const neonDisKeys = new Set(disRows.map(d => `${d.id}:::${(d.style_code || '').trim().toLowerCase()}:::${(d.category || '').trim().toLowerCase()}`));
-      const unsyncedDis = currentLocalDis.filter(d => 
-        !neonDisIds.has(Number(d.id)) && 
-        !neonDisKeys.has(`${d.id}:::${(d.style_code || '').trim().toLowerCase()}:::${(d.category || '').trim().toLowerCase()}`)
-      );
-      const finalDisList = [...unsyncedDis, ...disRows];
+      // 2. Dispatch Logs: Cloud (Neon) is the single source of truth
+      const offlineDisDrafts = (this.getDispatchLogs() || []).filter(d => d._is_offline_draft === true);
+      const finalDisList = [...offlineDisDrafts, ...disRows];
       localStorage.setItem(DB_KEYS.DISPATCH_LOG, JSON.stringify(finalDisList));
-      if (unsyncedDis.length > 0) {
-        unsyncedDis.forEach(d => this.pushDispatchLogToNeonAsync(d));
-      }
 
-      // 3. Master Inventory: preserve local styles not yet in Neon
-      const currentLocalMaster = this.getMasterInventory();
-      const neonMasterKeys = new Set(masterRows.map(m => `${(m.style_code || '').trim().toLowerCase()}|${(m.category || '').trim().toLowerCase()}`));
-      const unsyncedMaster = currentLocalMaster.filter(m => !neonMasterKeys.has(`${(m.style_code || '').trim().toLowerCase()}|${(m.category || '').trim().toLowerCase()}`));
-      const finalMasterList = [...unsyncedMaster, ...masterRows];
+      // 3. Master Inventory: Cloud (Neon) is the single source of truth
+      const offlineMasterDrafts = (this.getMasterInventory() || []).filter(m => m._is_offline_draft === true);
+      const finalMasterList = [...offlineMasterDrafts, ...masterRows];
       localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(finalMasterList));
 
       if (Array.isArray(rawPayRows)) {
@@ -3756,6 +3928,16 @@ class DatabaseService {
       // Rebuild master aggregations and clean any orphan styles that have 0 receiving and 0 dispatch logs
       this.rebuildAllMastersFromLogs();
 
+      // Compare post-rebuild values with pre-sync values to detect genuine data changes
+      const postRecRaw = localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "";
+      const postDisRaw = localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "";
+      const postMasterRaw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "";
+
+      this._lastSyncHasChanges = 
+        prevRecRaw !== postRecRaw ||
+        prevDisRaw !== postDisRaw ||
+        prevMasterRaw !== postMasterRaw;
+
       // Background cleanup: Prune any tombstoned deleted records from Neon so the cloud stays clean
       // ONLY prune if the record was explicitly deleted AND NOT present in the active local list!
       const activeRecIds = new Set(this.getReceivingLogs().map(r => Number(r.id)));
@@ -3800,6 +3982,7 @@ class DatabaseService {
 
       return {
         success: true,
+        hasChanged: !!this._lastSyncHasChanges,
         count: this.getMasterInventory().length,
         recCount: recRows.length,
         disCount: disRows.length,

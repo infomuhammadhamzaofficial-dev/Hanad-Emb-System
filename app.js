@@ -28,6 +28,8 @@ function initApp() {
   try { initModalHandlers(); } catch (e) { console.error("Modal Handlers init error:", e); }
   try { initPaymentModalHandlers(); } catch (e) { console.error("Payment Modal Handlers init error:", e); }
   try { initPrintStudio(); } catch (e) { console.error("Print Studio init error:", e); }
+  try { initFormKeyboardNavigation(); } catch (e) { console.error("Keyboard nav init error:", e); }
+  try { initDailyArrivalsTracker(); } catch (e) { console.error("Arrivals Tracker init error:", e); }
 
   // 3. If a valid session exists, apply permissions and render
   try {
@@ -40,17 +42,26 @@ function initApp() {
       }
       applyUserPermissions(currentUser);
       renderAll();
-    }
-  } catch (e) {
-    console.error("Session restoration error:", e);
-  }
+      checkNeonStatus();
+      startLiveNeonConnection();
 
-  // 4. Always restore and activate Neon connection on startup/refresh
-  try {
-    checkNeonStatus();
-    startLiveNeonConnection();
-  } catch (e) {
-    console.error("Neon startup connection error:", e);
+      // Real-time cross-tab & background change listener
+      window.addEventListener("storage", (e) => {
+        if (e.key === "craftflow_last_mutation" || 
+            e.key === "hand_emb_receiving_log_v2" || 
+            e.key === "hand_emb_dispatch_log_v2" || 
+            e.key === "hand_emb_master_inventory_v2") {
+          if (window.db && typeof window.db.clearCache === "function") window.db.clearCache();
+          renderAll();
+        }
+      });
+      window.addEventListener("craftflow-local-change", () => {
+        if (window.db && typeof window.db.clearCache === "function") window.db.clearCache();
+        renderAll();
+      });
+    }
+  } catch (e) { 
+    console.error("Session restoration error:", e);
   }
 }
 
@@ -1794,6 +1805,7 @@ function renderFinalStyleSheet() {
   }
 
   renderContractorSummarySidebar();
+  updateDailySheetArrivalsBanner();
 }
 
 function updateFinalStyleRemark(sNo, val) {
@@ -1847,8 +1859,419 @@ function renderContractorSummarySidebar() {
   `).join("");
 }
 
+// ==============================================================
+// DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر کنٹرولر)
+// ==============================================================
+let _currentArrivalsDate = "";
+let _arrivalsFilterQuery = "";
+
+function initDailyArrivalsTracker() {
+  const modalDateInput = document.getElementById("arrivals-modal-date");
+  const modalSearchInput = document.getElementById("arrivals-modal-search");
+  const reportDatePicker = document.getElementById("report-date-picker");
+
+  // Set default date to reportDatePicker value or today
+  const todayStr = new Date().toISOString().slice(0, 10);
+  _currentArrivalsDate = reportDatePicker?.value || todayStr;
+  if (modalDateInput) modalDateInput.value = _currentArrivalsDate;
+
+  // Open modal buttons
+  document.getElementById("btn-open-daily-arrivals")?.addEventListener("click", () => {
+    openDailyArrivalsModal();
+  });
+  document.getElementById("btn-banner-open-arrivals")?.addEventListener("click", () => {
+    openDailyArrivalsModal();
+  });
+  document.getElementById("btn-rec-open-arrivals")?.addEventListener("click", () => {
+    openDailyArrivalsModal();
+  });
+  document.getElementById("dash-act-daily-arrivals")?.addEventListener("click", () => {
+    openDailyArrivalsModal();
+  });
+
+  // Date input change in modal
+  modalDateInput?.addEventListener("change", (e) => {
+    _currentArrivalsDate = e.target.value;
+    renderDailyArrivalsModal();
+    updateDailySheetArrivalsBanner();
+  });
+
+  // Search input in modal
+  modalSearchInput?.addEventListener("input", (e) => {
+    _arrivalsFilterQuery = e.target.value.trim().toLowerCase();
+    renderDailyArrivalsModal();
+  });
+
+  // Quick date shortcuts in modal
+  document.getElementById("btn-arrivals-quick-today")?.addEventListener("click", () => {
+    const today = new Date().toISOString().slice(0, 10);
+    _currentArrivalsDate = today;
+    if (modalDateInput) modalDateInput.value = today;
+    renderDailyArrivalsModal();
+    updateDailySheetArrivalsBanner();
+  });
+
+  document.getElementById("btn-arrivals-quick-yesterday")?.addEventListener("click", () => {
+    const yest = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    _currentArrivalsDate = yest;
+    if (modalDateInput) modalDateInput.value = yest;
+    renderDailyArrivalsModal();
+    updateDailySheetArrivalsBanner();
+  });
+
+  document.getElementById("btn-arrivals-quick-latest")?.addEventListener("click", () => {
+    const rep = window.db.getArrivalsReportByDate("");
+    if (rep && rep.availableDates && rep.availableDates.length > 0) {
+      _currentArrivalsDate = rep.availableDates[0];
+      if (modalDateInput) modalDateInput.value = _currentArrivalsDate;
+      renderDailyArrivalsModal();
+      updateDailySheetArrivalsBanner();
+      showToast(`Aakhri aamad ki tarikh: ${_currentArrivalsDate}`);
+    } else {
+      showToast("No receiving dates recorded yet.", "info");
+    }
+  });
+
+  // Bulk add to Daily Sheet from modal
+  document.getElementById("btn-arrivals-bulk-add")?.addEventListener("click", () => {
+    addIncomingArrivalsToDailySheet(true);
+  });
+
+  // One-click add all from Daily Sheet banner
+  document.getElementById("btn-banner-auto-add-arrivals")?.addEventListener("click", () => {
+    addIncomingArrivalsToDailySheet(true);
+  });
+
+  // "Daily Sheet Par Jayein" in modal footer
+  document.getElementById("btn-arrivals-go-to-sheet")?.addEventListener("click", () => {
+    closeModal("modal-daily-arrivals");
+    switchTab("final-style");
+  });
+
+  // When the Daily Sheet date picker changes, synchronize arrivals banner
+  reportDatePicker?.addEventListener("change", (e) => {
+    if (e.target.value) {
+      _currentArrivalsDate = e.target.value;
+      if (modalDateInput) modalDateInput.value = _currentArrivalsDate;
+      updateDailySheetArrivalsBanner();
+    }
+  });
+
+  // Initial banner update
+  updateDailySheetArrivalsBanner();
+}
+
+function openDailyArrivalsModal() {
+  const reportDatePicker = document.getElementById("report-date-picker");
+  const modalDateInput = document.getElementById("arrivals-modal-date");
+  if (reportDatePicker && reportDatePicker.value) {
+    _currentArrivalsDate = reportDatePicker.value;
+  } else if (!_currentArrivalsDate) {
+    _currentArrivalsDate = new Date().toISOString().slice(0, 10);
+  }
+
+  if (modalDateInput) modalDateInput.value = _currentArrivalsDate;
+  openModal("modal-daily-arrivals");
+  renderDailyArrivalsModal();
+}
+
+function renderDailyArrivalsModal() {
+  const rep = window.db.getArrivalsReportByDate(_currentArrivalsDate);
+  const kpiContainer = document.getElementById("arrivals-kpi-container");
+  const tbody = document.getElementById("tbody-daily-arrivals");
+  const tfoot = document.getElementById("tfoot-daily-arrivals");
+  const badgeCount = document.getElementById("badge-incoming-arrivals-count");
+
+  if (badgeCount) {
+    badgeCount.textContent = rep.totalStylesCount;
+  }
+
+  // 1. Render KPI Summary Cards
+  if (kpiContainer) {
+    kpiContainer.innerHTML = `
+      <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Styles on Date</span>
+          <div class="dash-kpi-icon amber" style="width: 28px; height: 28px; font-size: 0.9rem;">🏷️</div>
+        </div>
+        <div class="dash-kpi-num text-amber" style="font-size: 1.45rem;">${rep.totalStylesCount}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-pill amber">${rep.missingFromDailySheetCount} Not in Sheet</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Received on Date</span>
+          <div class="dash-kpi-icon emerald" style="width: 28px; height: 28px; font-size: 0.9rem;">📥</div>
+        </div>
+        <div class="dash-kpi-num text-emerald" style="font-size: 1.45rem;">${rep.totalDatePcs.toLocaleString()}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-pill emerald">Pieces Inward</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Cumulative Received</span>
+          <div class="dash-kpi-icon cyan" style="width: 28px; height: 28px; font-size: 0.9rem;">📊</div>
+        </div>
+        <div class="dash-kpi-num" style="font-size: 1.45rem;">${rep.totalCumulativeReceived.toLocaleString()}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-hint">Total: ${rep.totalCutPcs.toLocaleString()} Cut</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi-card highlight-rose" style="padding: 0.85rem; border: 1px solid rgba(244, 63, 94, 0.3); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Remaining Baqi Pcs</span>
+          <div class="dash-kpi-icon rose" style="width: 28px; height: 28px; font-size: 0.9rem;">⏳</div>
+        </div>
+        <div class="dash-kpi-num text-rose" style="font-size: 1.45rem;">${rep.totalPendingPieces.toLocaleString()}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-pill rose">Pending Inward</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // Filter list by search query if any
+  let displayList = rep.styles;
+  if (_arrivalsFilterQuery) {
+    displayList = displayList.filter(s => 
+      s.style_code.toLowerCase().includes(_arrivalsFilterQuery) ||
+      s.category.toLowerCase().includes(_arrivalsFilterQuery) ||
+      s.contractors.toLowerCase().includes(_arrivalsFilterQuery) ||
+      s.challans.toLowerCase().includes(_arrivalsFilterQuery)
+    );
+  }
+
+  // 2. Render Table Body
+  if (!tbody) return;
+
+  if (displayList.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+          <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
+          <strong style="font-size: 0.95rem; color: var(--text-main);">Is Tarikh (${rep.targetDate}) par koi Receiving Entry nahi mili.</strong>
+          <p style="margin: 0.5rem 0 1rem 0; font-size: 0.8rem;">
+            Aap upar se date change kar saktay hain ya 'Aakhri Aamad (Latest)' dabayein.
+          </p>
+          ${rep.availableDates.length > 0 ? `
+            <div style="display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;">
+              <span style="font-size: 0.78rem; align-self: center; color: var(--text-muted);">Available Dates:</span>
+              ${rep.availableDates.slice(0, 6).map(d => `
+                <button type="button" class="btn btn-secondary btn-xs" onclick="selectArrivalsDate('${d}')">${d}</button>
+              `).join("")}
+            </div>
+          ` : ''}
+        </td>
+      </tr>
+    `;
+    if (tfoot) tfoot.innerHTML = "";
+    return;
+  }
+
+  let sumDatePcs = 0;
+  let sumCut = 0;
+  let sumRec = 0;
+  let sumPending = 0;
+
+  tbody.innerHTML = displayList.map((item, idx) => {
+    sumDatePcs += item.date_received_qty;
+    sumCut += item.cut_qty;
+    sumRec += item.total_received;
+    if (item.balance_pending > 0) sumPending += item.balance_pending;
+
+    let pendingBadge = "";
+    if (item.balance_pending > 0) {
+      pendingBadge = `<span class="badge-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 800; font-family: var(--font-mono); font-size: 0.82rem;">${item.balance_pending.toLocaleString()} Baqi</span>`;
+    } else if (item.balance_pending === 0) {
+      pendingBadge = `<span class="badge-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 700; font-size: 0.78rem;">✓ Complete (0)</span>`;
+    } else {
+      pendingBadge = `<span class="badge-tag" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.35); font-weight: 700; font-size: 0.78rem;">+${Math.abs(item.balance_pending)} Excess</span>`;
+    }
+
+    let statusCol = "";
+    if (item.in_daily_sheet) {
+      statusCol = `
+        <span style="color: #10b981; font-size: 0.8rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 4px 8px; background: rgba(16, 185, 129, 0.1); border-radius: var(--radius-sm); border: 1px solid rgba(16, 185, 129, 0.3);">
+          ✓ In Daily Sheet
+        </span>
+      `;
+    } else {
+      statusCol = `
+        <button type="button" class="btn btn-warning btn-xs btn-add-incoming-to-sheet" 
+          data-style="${escapeHtml(item.style_code)}" 
+          data-cat="${escapeHtml(item.category)}" 
+          data-rec="${item.date_received_qty}"
+          style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; padding: 4px 10px; width: 100%;">
+          + Add to Daily Sheet
+        </button>
+      `;
+    }
+
+    return `
+      <tr>
+        <td style="text-align: center; color: var(--text-muted); font-size: 0.8rem;">${idx + 1}</td>
+        <td>
+          <div style="font-weight: 800; color: var(--primary); font-family: var(--font-mono); font-size: 0.9rem;">
+            ${escapeHtml(item.style_code)}
+          </div>
+        </td>
+        <td>
+          <span class="badge-tag category-badge ${item.category ? item.category.toLowerCase() : ''}" style="font-size: 0.75rem;">
+            ${escapeHtml(item.category)}
+          </span>
+        </td>
+        <td>
+          <div style="font-size: 0.825rem; font-weight: 600; color: var(--text-main);">
+            ${escapeHtml(item.contractors)}
+          </div>
+          <div style="font-size: 0.725rem; color: var(--text-muted); font-family: var(--font-mono);">
+            CH: ${escapeHtml(item.challans)}
+          </div>
+        </td>
+        <td style="text-align: right; background: rgba(245, 158, 11, 0.08);">
+          <span style="font-family: var(--font-mono); font-weight: 800; font-size: 0.95rem; color: #f59e0b;">
+            +${item.date_received_qty.toLocaleString()}
+          </span>
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">
+          ${item.cut_qty ? item.cut_qty.toLocaleString() : '-'}
+        </td>
+        <td style="text-align: right; background: rgba(16, 185, 129, 0.05); font-family: var(--font-mono); font-weight: 700; color: #10b981;">
+          ${item.total_received.toLocaleString()}
+        </td>
+        <td style="text-align: right; background: rgba(239, 68, 68, 0.05);">
+          ${pendingBadge}
+        </td>
+        <td style="text-align: center;">
+          ${statusCol}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // 3. Render Totals in tfoot
+  if (tfoot) {
+    tfoot.innerHTML = `
+      <tr>
+        <td colspan="4" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">
+          Total Incoming (${displayList.length} Styles):
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); color: #f59e0b; font-size: 0.95rem;">
+          +${sumDatePcs.toLocaleString()}
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono);">
+          ${sumCut.toLocaleString()}
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); color: #10b981;">
+          ${sumRec.toLocaleString()}
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); color: #ef4444;">
+          ${sumPending.toLocaleString()} Baqi
+        </td>
+        <td style="text-align: center;">
+          <button type="button" class="btn btn-secondary btn-xs" onclick="addIncomingArrivalsToDailySheet(true)" style="font-weight: 700;">
+            + Add All Missing
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+
+  // 4. Attach click listeners for individual '+ Add to Daily Sheet' buttons
+  tbody.querySelectorAll(".btn-add-incoming-to-sheet").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const code = e.currentTarget.getAttribute("data-style");
+      const cat = e.currentTarget.getAttribute("data-cat");
+      const rec = e.currentTarget.getAttribute("data-rec");
+      
+      const remark = `Rec: ${rec} pcs on ${_currentArrivalsDate}`;
+      window.db.addFinalStyle(code, cat, remark);
+      renderFinalStyleSheet();
+      renderDailyArrivalsModal();
+      updateDailySheetArrivalsBanner();
+      showToast(`✓ Added ${code} (${cat}) to Daily Sheet!`);
+    });
+  });
+}
+
+function selectArrivalsDate(dateStr) {
+  _currentArrivalsDate = dateStr;
+  const modalDateInput = document.getElementById("arrivals-modal-date");
+  if (modalDateInput) modalDateInput.value = dateStr;
+  renderDailyArrivalsModal();
+  updateDailySheetArrivalsBanner();
+}
+
+function addIncomingArrivalsToDailySheet(showFeedback = true) {
+  const rep = window.db.getArrivalsReportByDate(_currentArrivalsDate);
+  const missing = rep.styles.filter(s => !s.in_daily_sheet);
+
+  if (missing.length === 0) {
+    if (showFeedback) showToast("Tamam aane wale styles pehle se Daily Sheet mein mojood hain!", "info");
+    return;
+  }
+
+  let count = 0;
+  missing.forEach(s => {
+    const remark = `Rec: ${s.date_received_qty} pcs on ${_currentArrivalsDate}`;
+    window.db.addFinalStyle(s.style_code, s.category, remark);
+    count++;
+  });
+
+  renderFinalStyleSheet();
+  renderDailyArrivalsModal();
+  updateDailySheetArrivalsBanner();
+
+  if (showFeedback) {
+    showToast(`✓ ${count} naye styles Daily Sheet mein shaamil kar diye gaye!`);
+  }
+}
+
+function updateDailySheetArrivalsBanner() {
+  const reportDatePicker = document.getElementById("report-date-picker");
+  const targetDate = reportDatePicker?.value || _currentArrivalsDate || new Date().toISOString().slice(0, 10);
+  
+  const rep = window.db.getArrivalsReportByDate(targetDate);
+  const badgeCount = document.getElementById("badge-incoming-arrivals-count");
+  const summaryText = document.getElementById("sheet-arrivals-summary-text");
+  const banner = document.getElementById("daily-sheet-arrivals-banner");
+
+  if (badgeCount) {
+    badgeCount.textContent = rep.totalStylesCount;
+  }
+
+  if (summaryText) {
+    if (rep.totalStylesCount === 0) {
+      summaryText.innerHTML = `Is date (${targetDate}) par koi inward receiving entry nahi hai.`;
+    } else {
+      summaryText.innerHTML = `
+        <strong>${rep.totalStylesCount} styles aaye hain</strong> (Total <strong>${rep.totalDatePcs.toLocaleString()} pcs</strong>). 
+        ${rep.missingFromDailySheetCount > 0 
+          ? `<span style="color: #fbbf24; font-weight: 700;">${rep.missingFromDailySheetCount} styles Daily Sheet mein missing hain.</span>` 
+          : `<span style="color: #34d399; font-weight: 700;">✓ Tamam styles Daily Sheet mein mojood hain.</span>`}
+      `;
+    }
+  }
+
+  if (banner) {
+    banner.style.display = "flex";
+  }
+}
+
+// Global window bindings for inline HTML onclick handlers
+window.openDailyArrivalsModal = openDailyArrivalsModal;
+window.selectArrivalsDate = selectArrivalsDate;
+window.addIncomingArrivalsToDailySheet = addIncomingArrivalsToDailySheet;
+window.updateDailySheetArrivalsBanner = updateDailySheetArrivalsBanner;
+
 // -------------------------------------------------------------
 // TAB 5: CONTRACTORS DIRECTORY VIEW
+
 // -------------------------------------------------------------
 // TAB 5: CONTRACTORS WORKLOAD & DIRECTORY VIEW
 // -------------------------------------------------------------
@@ -2351,19 +2774,22 @@ window.lastUserActionTime = 0;
 
 function getDataSignature() {
   try {
-    const m = (window.db.getMasterInventory() || []).length;
-    const r = (window.db.getReceivingLogs() || []).length;
-    const d = (window.db.getDispatchLogs() || []).length;
-    const p = (window.db.getPaymentSheets() || []).length;
-    const w = (window.db.getWorkDistribution() || []).length;
-    const c = (window.db.getContractors() || []).length;
-    const del = localStorage.getItem("hand_emb_deleted_records_v1") || "";
-    const mFirst = (window.db.getMasterInventory() || [])[0]?.id || "";
-    const rFirst = (window.db.getReceivingLogs() || [])[0]?.id || "";
-    const dFirst = (window.db.getDispatchLogs() || [])[0]?.id || "";
-    return `${m}_${r}_${d}_${p}_${w}_${c}_${del}_${mFirst}_${rFirst}_${dFirst}`;
+    const rawR = localStorage.getItem("hand_emb_receiving_log_v2") || "";
+    const rawD = localStorage.getItem("hand_emb_dispatch_log_v2") || "";
+    const rawM = localStorage.getItem("hand_emb_master_inventory_v2") || "";
+    const rawP = localStorage.getItem("hand_emb_payment_sheet_v2") || "";
+    const rawW = localStorage.getItem("hand_emb_work_distribution_v1") || "";
+    const rawC = localStorage.getItem("hand_emb_contractors_v2") || "";
+
+    const str = `${rawR}#${rawD}#${rawM}#${rawP.length}#${rawW.length}#${rawC.length}`;
+    let hash = 0x811c9dc5;
+    for (let i = 0; i < str.length; i += 7) {
+      hash ^= str.charCodeAt(i);
+      hash = Math.imul(hash, 0x01000193);
+    }
+    return `${str.length}:${hash >>> 0}`;
   } catch (e) {
-    return "";
+    return Date.now().toString();
   }
 }
 
@@ -2390,22 +2816,22 @@ function startLiveNeonConnection() {
   // 1. Initial immediate background sync on startup / refresh
   syncLiveFromNeon(true);
 
-  // 2. Continuous real-time polling every 90 seconds (lightweight, zero PC lag, pauses when tab hidden)
+  // 2. Background polling every 30 seconds (optimized for zero UI jitter on PC)
   if (cfg.autoSync !== false) {
     liveSyncTimer = setInterval(() => {
-      if (document.hidden) return; // Zero background CPU/network load when tab is minimized
+      if (document.hidden) return; // Zero background CPU load when tab is minimized
       const currentCfg = window.db.getConfig();
       if (currentCfg.autoSync !== false && (currentCfg.neonConnectionString || currentCfg.neonEndpointUrl)) {
         syncLiveFromNeon(true);
       }
-    }, 90000);
+    }, 30000);
   }
 }
 
-// 3. Gentle sync whenever user switches back to this tab (throttled to 30s)
+// 3. Instant background sync whenever user switches back to this window (throttled to 15s)
 let lastWindowFocusSync = 0;
 window.addEventListener("focus", () => {
-  if (Date.now() - lastWindowFocusSync < 30000) return;
+  if (Date.now() - lastWindowFocusSync < 15000) return;
   lastWindowFocusSync = Date.now();
   const currentCfg = window.db.getConfig();
   if (currentCfg.autoSync !== false && (currentCfg.neonConnectionString || currentCfg.neonEndpointUrl)) {
@@ -2416,16 +2842,17 @@ window.addEventListener("focus", () => {
 async function syncLiveFromNeon(isBackground = true) {
   if (isLiveSyncing) return;
 
-  // Don't disturb user if they are currently typing in an open modal or active input/select
+  // Don't disturb user if a modal form or any input/select/textarea is actively focused
   const activeModal = document.querySelector(".modal-backdrop.open");
-  const isInputActive = document.activeElement && 
-    (document.activeElement.tagName === "INPUT" || 
-     document.activeElement.tagName === "SELECT" || 
-     document.activeElement.tagName === "TEXTAREA");
+  const isInputActive = document.activeElement && (
+    document.activeElement.tagName === "INPUT" ||
+    document.activeElement.tagName === "SELECT" ||
+    document.activeElement.tagName === "TEXTAREA"
+  );
   if ((activeModal || isInputActive) && isBackground) return;
 
-  // Pause background sync for 10 seconds if user just performed an action (deleted/edited/added data)
-  if (isBackground && window.lastUserActionTime && (Date.now() - window.lastUserActionTime < 10000)) {
+  // Pause background sync for 5 seconds if user just performed an action locally
+  if (isBackground && window.lastUserActionTime && (Date.now() - window.lastUserActionTime < 5000)) {
     return;
   }
 
@@ -2439,10 +2866,9 @@ async function syncLiveFromNeon(isBackground = true) {
     const label = document.getElementById("neon-status-label");
 
     if (res && res.success) {
-      // ONLY re-render DOM if data actually changed AND user is not actively typing
-      const currentlyTyping = document.activeElement && 
-        (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA");
-      if ((!isBackground || preSig !== postSig) && !currentlyTyping) {
+      // Re-render if cloud data has changed or signature differs
+      const dataChanged = res.hasChanged || (preSig !== postSig);
+      if (!isBackground || dataChanged) {
         renderAll();
       }
 
@@ -2507,9 +2933,16 @@ async function checkNeonStatus(forcedOnlineState) {
 // -------------------------------------------------------------
 // Populating Dynamic Select Elements & Autocomplete Lists
 // -------------------------------------------------------------
+let _dropdownsSigCache = "";
 function populateDropdowns() {
   const contractors = window.db.getContractors();
   const master = window.db.getMasterInventory();
+
+  const currentSig = `${contractors.length}:${master.length}:${master[0]?.id || 0}:${master[0]?.style_code || ""}`;
+  if (_dropdownsSigCache === currentSig) {
+    return;
+  }
+  _dropdownsSigCache = currentSig;
 
   // Contractor Filters across views
   const filterConts = [
@@ -2639,6 +3072,139 @@ function initModalHandlers() {
     if (el) {
       el.addEventListener("input", debouncedEditLogPreview);
       el.addEventListener("change", () => updateEditLogModalPreview());
+    }
+  });
+}
+
+// -------------------------------------------------------------
+// ULTRA-FAST EXCEL-STYLE FORM KEYBOARD NAVIGATION (Zero Glitch / Zero Reflow)
+// -------------------------------------------------------------
+function initFormKeyboardNavigation() {
+  document.addEventListener("keydown", (e) => {
+    // Only handle navigation keys
+    const key = e.key;
+    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Enter") {
+      return;
+    }
+
+    const el = e.target;
+    if (!el || (el.tagName !== "INPUT" && el.tagName !== "SELECT" && el.tagName !== "TEXTAREA" && el.tagName !== "BUTTON")) {
+      return;
+    }
+
+    // Ignore Ctrl/Alt/Meta shortcuts
+    if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    // Only active inside forms or modals
+    const form = el.closest("form") || el.closest(".modal-card") || el.closest(".modal-body");
+    if (!form) return;
+
+    let shouldMove = false;
+    let direction = 1; // 1 = next, -1 = prev
+
+    const isInput = el.tagName === "INPUT";
+    const isNumber = isInput && el.type === "number";
+    const isText = isInput && (el.type === "text" || !el.type);
+    const isSelect = el.tagName === "SELECT";
+    const isTextArea = el.tagName === "TEXTAREA";
+    const isButton = el.tagName === "BUTTON";
+
+    if (key === "Enter") {
+      if (isTextArea && !e.shiftKey) return;
+      if (el.type === "submit" || (isButton && el.type !== "button")) return;
+      e.preventDefault();
+      direction = 1;
+      shouldMove = true;
+    } else if (key === "ArrowDown") {
+      if (isTextArea) {
+        if (el.selectionEnd === el.value.length) {
+          e.preventDefault();
+          direction = 1;
+          shouldMove = true;
+        }
+      } else {
+        e.preventDefault();
+        direction = 1;
+        shouldMove = true;
+      }
+    } else if (key === "ArrowUp") {
+      if (isTextArea) {
+        if (el.selectionStart === 0) {
+          e.preventDefault();
+          direction = -1;
+          shouldMove = true;
+        }
+      } else {
+        e.preventDefault();
+        direction = -1;
+        shouldMove = true;
+      }
+    } else if (key === "ArrowRight") {
+      if (isNumber || isSelect || isButton || el.type === "checkbox" || el.type === "radio") {
+        e.preventDefault();
+        direction = 1;
+        shouldMove = true;
+      } else if (isText) {
+        try {
+          if (el.selectionEnd === (el.value ? el.value.length : 0)) {
+            e.preventDefault();
+            direction = 1;
+            shouldMove = true;
+          }
+        } catch(err) {
+          e.preventDefault();
+          direction = 1;
+          shouldMove = true;
+        }
+      }
+    } else if (key === "ArrowLeft") {
+      if (isNumber || isSelect || isButton || el.type === "checkbox" || el.type === "radio") {
+        e.preventDefault();
+        direction = -1;
+        shouldMove = true;
+      } else if (isText) {
+        try {
+          if (el.selectionStart === 0 && el.selectionEnd === 0) {
+            e.preventDefault();
+            direction = -1;
+            shouldMove = true;
+          }
+        } catch(err) {
+          e.preventDefault();
+          direction = -1;
+          shouldMove = true;
+        }
+      }
+    }
+
+    if (!shouldMove) return;
+
+    // Ultra-fast query without forced synchronous layout reflow (NO window.getComputedStyle)
+    const elements = form.querySelectorAll(
+      'input:not([type="hidden"]):not([disabled]):not([readonly]), select:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), button:not([disabled]):not([tabindex="-1"])'
+    );
+    const focusable = [];
+    for (let i = 0; i < elements.length; i++) {
+      const it = elements[i];
+      if (it.offsetParent !== null) focusable.push(it);
+    }
+
+    if (focusable.length <= 1) return;
+    const currentIndex = focusable.indexOf(el);
+    if (currentIndex === -1) return;
+
+    const nextIndex = (currentIndex + direction + focusable.length) % focusable.length;
+    const targetEl = focusable[nextIndex];
+    if (targetEl) {
+      targetEl.focus();
+      if (targetEl.tagName === "INPUT" && targetEl.type !== "checkbox" && targetEl.type !== "radio") {
+        // Fast async select to eliminate input stutter
+        requestAnimationFrame(() => {
+          if (document.activeElement === targetEl && typeof targetEl.select === "function") {
+            try { targetEl.select(); } catch(e) {}
+          }
+        });
+      }
     }
   });
 }
@@ -3849,101 +4415,18 @@ function resetInactivityTimer() {
 }
 
 function checkAndTriggerInactivityLogout() {
-  if (!window.db || !window.db.getCurrentUser()) return;
-
-  let storedActivity = lastUserActivity;
-  try {
-    const s = parseInt(localStorage.getItem("craftflow_last_activity"), 10);
-    if (s && !isNaN(s)) storedActivity = Math.max(storedActivity, s);
-  } catch (e) {}
-
-  const elapsed = Date.now() - storedActivity;
-  if (elapsed >= INACTIVITY_TIMEOUT_MS) {
-    performInactivityAutoLogout();
-  } else {
-    // Re-arm timer for remaining time
-    const remaining = Math.max(1000, INACTIVITY_TIMEOUT_MS - elapsed);
-    inactivityTimer = setTimeout(checkAndTriggerInactivityLogout, remaining);
-  }
+  // Disabled: Keep user permanently logged in on mobile and desktop without disruptive logouts
+  return;
 }
 
 function performInactivityAutoLogout() {
-  if (!window.db || !window.db.getCurrentUser()) return;
-
-  stopInactivityTimer();
-
-  // Close all open modals
-  document.querySelectorAll(".modal-backdrop.open").forEach(m => m.classList.remove("open"));
-
-  // Log user out from database / local storage session
-  window.db.logoutUser();
-
-  // Show login screen overlay
-  const overlay = document.getElementById("auth-screen-overlay");
-  if (overlay) overlay.style.display = "flex";
-
-  const passInput = document.getElementById("login-password");
-  if (passInput) {
-    passInput.value = "";
-    passInput.setAttribute("type", "password");
-  }
-
-  const togglePassBtn = document.getElementById("btn-toggle-login-pass");
-  if (togglePassBtn) {
-    const eyeOpen = togglePassBtn.querySelector(".eye-open");
-    const eyeClosed = togglePassBtn.querySelector(".eye-closed");
-    if (eyeOpen) eyeOpen.style.display = "block";
-    if (eyeClosed) eyeClosed.style.display = "none";
-  }
-
-  // Display timeout warning on the login screen
-  const errorAlert = document.getElementById("auth-error-alert");
-  if (errorAlert) {
-    errorAlert.style.display = "block";
-    errorAlert.style.background = "rgba(245, 158, 11, 0.15)";
-    errorAlert.style.border = "1.5px solid #f59e0b";
-    errorAlert.style.color = "#fbbf24";
-    errorAlert.innerHTML = `⏱️ <strong>Session Expired (Auto-Logout)</strong><br><span style="font-size: 0.8rem; opacity: 0.9;">5 minute tak koi activity na honay ki wajah say software automatically logout ho gaya hai. Dobara login karein.</span>`;
-  }
-
-  const userInput = document.getElementById("login-username");
-  //const passInput = document.getElementById("login-password");
-  if (userInput) {
-    userInput.value = "";
-    userInput.focus();
-  }
-  const passEl = document.getElementById("login-password");
-  if (passEl) passEl.value = "";
-
-  showToast("⏱️ Inactivity Timeout: 5 minutes idle — logged out automatically.", "warning");
+  // Disabled: Permanent login state
+  return;
 }
 
 function initInactivityTimer() {
-  lastUserActivity = Date.now();
-  try {
-    localStorage.setItem("craftflow_last_activity", String(lastUserActivity));
-  } catch (e) {}
-
-  if (!activityListenersAttached) {
-    const events = ["mousedown", "keydown", "scroll", "touchstart", "click"];
-    events.forEach(evt => {
-      window.addEventListener(evt, recordUserActivity, { passive: true });
-    });
-
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") {
-        checkAndTriggerInactivityLogout();
-      }
-    });
-
-    window.addEventListener("focus", () => {
-      checkAndTriggerInactivityLogout();
-    });
-
-    activityListenersAttached = true;
-  }
-
-  resetInactivityTimer();
+  // Inactivity tracking disabled for seamless 24/7 mobile access
+  return;
 }
 
 function stopInactivityTimer() {

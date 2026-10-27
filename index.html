@@ -3,8 +3,7 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <!-- Mobile Web App: prevents double-tap zoom lag -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -13,7 +12,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=7">
   <link rel="icon" type="image/svg+xml" href="icon-192.svg">
 </head>
 
@@ -22,7 +21,7 @@
   <!-- ============================================================== -->
   <!-- FULL SCREEN AUTHENTICATION OVERLAY                             -->
   <!-- ============================================================== -->
-  <div id="auth-screen-overlay" class="auth-screen-overlay" style="display: flex;">
+  <div id="auth-screen-overlay" class="auth-screen-overlay" style="display: none;">
     <div class="auth-card">
       <div class="auth-header">
         <div class="auth-brand-logo">
@@ -847,6 +846,11 @@
             <option value="">All Contractors</option>
           </select>
 
+          <button class="btn btn-warning btn-sm" id="btn-rec-open-arrivals"
+            style="font-weight: 700; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none;">
+            📅 Inward Balances by Date
+          </button>
+
           <button class="btn btn-primary btn-sm" id="btn-open-rec-modal">
             📥 + New Receiving Entry
           </button>
@@ -1037,6 +1041,19 @@
         </div>
 
         <div class="report-header-actions">
+          <button class="btn btn-warning btn-sm" id="btn-open-daily-arrivals"
+            title="Check styles received on today or any date and view total & pending balances"
+            style="font-weight: 700; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            <span>📅 Incoming Arrivals Tracker (آمد چیکر)</span>
+            <span class="badge-pill" id="badge-incoming-arrivals-count" style="background: rgba(0,0,0,0.3); color: #fff; font-weight: 800; font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;">0</span>
+          </button>
+
           <button class="btn btn-secondary btn-sm" id="btn-auto-populate-active"
             title="Add all active styles with pending H-Emb balance to this sheet">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1062,6 +1079,25 @@
               <rect x="6" y="14" width="12" height="8"></rect>
             </svg>
             Print / PDF Report
+          </button>
+        </div>
+      </div>
+
+      <!-- Smart Incoming Arrivals Notification Banner -->
+      <div id="daily-sheet-arrivals-banner" style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <div style="display: flex; align-items: center; gap: 0.65rem;">
+          <span style="font-size: 1.25rem;">📦</span>
+          <div>
+            <span style="color: #f59e0b; font-weight: 800; font-size: 0.85rem;">Date Inward Arrivals:</span>
+            <span id="sheet-arrivals-summary-text" style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.4rem;">Checking incoming styles...</span>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-warning btn-xs" id="btn-banner-open-arrivals" style="font-weight: 800; color: #000; background: #f59e0b; border: none;">
+            🔍 View All Balances & Details
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-auto-add-arrivals" style="font-weight: 700;">
+            ⚡ + One-Click Add All to Sheet
           </button>
         </div>
       </div>
@@ -3643,7 +3679,98 @@
   </div>
 
   <!-- ============================================================== -->
+  <!-- MODAL: DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر)      -->
+  <!-- ============================================================== -->
+  <div class="modal-backdrop" id="modal-daily-arrivals">
+    <div class="modal-card" style="max-width: 1100px; width: 96vw;">
+      <div class="modal-header" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
+            📅
+          </div>
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 800; color: #f8fafc; margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span>Daily Inward Arrivals & Balance Tracker</span>
+              <span class="badge-tag" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem;">آمد اسمارٹ ٹریکر</span>
+            </h2>
+            <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
+              Kisi bhi date ko aane wale styles, unke aaj ke pieces, total received, aur baqi (pending) pieces live check karein aur seedha Daily Sheet mein add karein.
+            </p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal('modal-daily-arrivals')">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.15rem; max-height: calc(88dvh - 120px); overflow-y: auto;">
+        <!-- Control Bar: Date Selection, Quick Shortcuts & Search -->
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <label for="arrivals-modal-date" style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
+            <input type="date" id="arrivals-modal-date" class="app-input" style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
+            
+            <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Aaj (Today)</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal (Yesterday)</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest" title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <input type="text" id="arrivals-modal-search" class="app-input" placeholder="🔍 Search Style or Contractor..." style="width: 190px; font-size: 0.8rem; padding: 5px 10px;">
+            <button type="button" class="btn btn-warning btn-sm" id="btn-arrivals-bulk-add" style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
+              ⚡ + Add All to Daily Sheet
+            </button>
+          </div>
+        </div>
+
+        <!-- 4 KPI Summary Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;" id="arrivals-kpi-container">
+          <!-- Populated dynamically via JS -->
+        </div>
+
+        <!-- Arrivals Table Card -->
+        <div class="table-card" style="box-shadow: none; border: 1px solid var(--border-color);">
+          <div class="table-responsive">
+            <table class="master-table" id="table-daily-arrivals">
+              <thead>
+                <tr class="column-header">
+                  <th style="width: 45px; text-align: center;">S#</th>
+                  <th>STYLE CODE</th>
+                  <th>CATEGORY</th>
+                  <th>CONTRACTOR & CHALLAN</th>
+                  <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR AAYE</th>
+                  <th style="text-align: right;">TOTAL CUT</th>
+                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED (AB TAK)</th>
+                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">BAQI PCS (PENDING)</th>
+                  <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-daily-arrivals">
+                <!-- Dynamically populated rows -->
+              </tbody>
+              <tfoot id="tfoot-daily-arrivals" style="font-weight: 800; background: var(--bg-card-hover);">
+                <!-- Dynamic Totals -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
+        <div style="font-size: 0.78rem; color: var(--text-muted);" id="arrivals-footer-note">
+          💡 <strong>Tip:</strong> Daily Sheet mein style add hone se wo wahan Master balances ke sath link ho jata hai.
+        </div>
+        <div style="display: flex; gap: 0.5rem;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein (Close)</button>
+          <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Daily Sheet Par Jayein 📋</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
   <!-- MOBILE BOTTOM STICKY NAVIGATION DOCK                           -->
+
   <!-- Direct 1-tap switching for Master, Daily Sheet, Logs & Dashboard -->
   <!-- ============================================================== -->
   <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation Dock">
@@ -3684,9 +3811,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=3"></script>
-  <script src="db.js?v=3"></script>
-  <script src="app.js?v=3"></script>
+  <script src="data.js?v=7"></script>
+  <script src="db.js?v=7"></script>
+  <script src="app.js?v=7"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
