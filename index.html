@@ -12,7 +12,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
   <link rel="icon" type="image/svg+xml" href="icon-192.svg">
 </head>
 
@@ -3689,12 +3689,12 @@
             📅
           </div>
           <div>
-            <h2 style="font-size: 1.25rem; font-weight: 800; color: #f8fafc; margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
               <span>Daily Inward Arrivals & Balance Tracker</span>
-              <span class="badge-tag" style="background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem;">آمد اسمارٹ ٹریکر</span>
+              <span class="badge-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد اسمارٹ ٹریکر</span>
             </h2>
             <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
-              Kisi bhi date ko aane wale styles, unke aaj ke pieces, total received, aur baqi (pending) pieces live check karein aur seedha Daily Sheet mein add karein.
+              Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock balance hai live check karein.
             </p>
           </div>
         </div>
@@ -3723,8 +3723,8 @@
           </div>
         </div>
 
-        <!-- 4 KPI Summary Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;" id="arrivals-kpi-container">
+        <!-- 6 KPI Summary Cards -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;" id="arrivals-kpi-container">
           <!-- Populated dynamically via JS -->
         </div>
 
@@ -3740,8 +3740,10 @@
                   <th>CONTRACTOR & CHALLAN</th>
                   <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR AAYE</th>
                   <th style="text-align: right;">TOTAL CUT</th>
-                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED (AB TAK)</th>
-                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">BAQI PCS (PENDING)</th>
+                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED</th>
+                  <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY (DISPATCH)</th>
+                  <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS (STOCK)</th>
+                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI (PENDING)</th>
                   <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
                 </tr>
               </thead>
@@ -3811,9 +3813,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=7"></script>
-  <script src="db.js?v=7"></script>
-  <script src="app.js?v=7"></script>
+  <script src="data.js?v=8"></script>
+  <script src="db.js?v=8"></script>
+  <script src="app.js?v=8"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {

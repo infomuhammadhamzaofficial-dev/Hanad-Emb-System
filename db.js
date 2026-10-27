@@ -1511,6 +1511,8 @@ class DatabaseService {
     let totalDatePcs = 0;
     let totalCutPcs = 0;
     let totalCumulativeReceived = 0;
+    let totalDispatchedPcs = 0;
+    let totalStockBalancePcs = 0;
     let totalPendingPieces = 0;
 
     groupMap.forEach((g) => {
@@ -1538,9 +1540,10 @@ class DatabaseService {
         date_received_qty: g.date_received_qty,
         cut_qty: cutQty,
         total_received: totalRec,
-        balance_pending: balPending,
+        total_dispatched: totalDis,
         balance_from_stock: balStock,
         balance_from_hemb: balHemb,
+        balance_pending: balPending,
         in_daily_sheet: inDailySheet,
         master_found: !!master
       };
@@ -1549,6 +1552,8 @@ class DatabaseService {
       totalDatePcs += g.date_received_qty;
       totalCutPcs += cutQty;
       totalCumulativeReceived += totalRec;
+      totalDispatchedPcs += totalDis;
+      totalStockBalancePcs += balStock;
       if (balPending > 0) totalPendingPieces += balPending;
     });
 
@@ -1566,12 +1571,15 @@ class DatabaseService {
       totalDatePcs,
       totalCutPcs,
       totalCumulativeReceived,
+      totalDispatchedPcs,
+      totalStockBalancePcs,
       totalPendingPieces,
       missingFromDailySheetCount: styles.filter(s => !s.in_daily_sheet).length,
       styles,
       availableDates: sortedAvailableDates
     };
   }
+
 
 
   // -------------------------------------------------------------

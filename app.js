@@ -1986,7 +1986,7 @@ function renderDailyArrivalsModal() {
     badgeCount.textContent = rep.totalStylesCount;
   }
 
-  // 1. Render KPI Summary Cards
+  // 1. Render 6 KPI Summary Cards
   if (kpiContainer) {
     kpiContainer.innerHTML = `
       <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
@@ -2007,29 +2007,51 @@ function renderDailyArrivalsModal() {
         </div>
         <div class="dash-kpi-num text-emerald" style="font-size: 1.45rem;">${rep.totalDatePcs.toLocaleString()}</div>
         <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill emerald">Pieces Inward</span>
+          <span class="dash-kpi-pill emerald">Date Inward</span>
         </div>
       </div>
 
       <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
         <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Cumulative Received</span>
-          <div class="dash-kpi-icon cyan" style="width: 28px; height: 28px; font-size: 0.9rem;">📊</div>
+          <span class="dash-kpi-label">Total Received</span>
+          <div class="dash-kpi-icon emerald" style="width: 28px; height: 28px; font-size: 0.9rem;">📊</div>
         </div>
-        <div class="dash-kpi-num" style="font-size: 1.45rem;">${rep.totalCumulativeReceived.toLocaleString()}</div>
+        <div class="dash-kpi-num" style="font-size: 1.45rem; color: #10b981;">${rep.totalCumulativeReceived.toLocaleString()}</div>
         <div class="dash-kpi-bottom">
           <span class="dash-kpi-hint">Total: ${rep.totalCutPcs.toLocaleString()} Cut</span>
         </div>
       </div>
 
+      <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Dy Chuky (Dispatched)</span>
+          <div class="dash-kpi-icon cyan" style="width: 28px; height: 28px; font-size: 0.9rem;">📤</div>
+        </div>
+        <div class="dash-kpi-num" style="font-size: 1.45rem; color: #06b6d4;">${(rep.totalDispatchedPcs || 0).toLocaleString()}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-pill cyan">Unit Dispatch</span>
+        </div>
+      </div>
+
+      <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
+        <div class="dash-kpi-top">
+          <span class="dash-kpi-label">Hamary Pass (Stock)</span>
+          <div class="dash-kpi-icon amber" style="width: 28px; height: 28px; font-size: 0.9rem;">📦</div>
+        </div>
+        <div class="dash-kpi-num text-amber" style="font-size: 1.45rem;">${(rep.totalStockBalancePcs || 0).toLocaleString()}</div>
+        <div class="dash-kpi-bottom">
+          <span class="dash-kpi-pill amber">Factory Stock</span>
+        </div>
+      </div>
+
       <div class="dash-kpi-card highlight-rose" style="padding: 0.85rem; border: 1px solid rgba(244, 63, 94, 0.3); background: var(--bg-card);">
         <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Remaining Baqi Pcs</span>
+          <span class="dash-kpi-label">Aana Baqi (Pending)</span>
           <div class="dash-kpi-icon rose" style="width: 28px; height: 28px; font-size: 0.9rem;">⏳</div>
         </div>
         <div class="dash-kpi-num text-rose" style="font-size: 1.45rem;">${rep.totalPendingPieces.toLocaleString()}</div>
         <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill rose">Pending Inward</span>
+          <span class="dash-kpi-pill rose">Cut - Received</span>
         </div>
       </div>
     `;
@@ -2052,7 +2074,7 @@ function renderDailyArrivalsModal() {
   if (displayList.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+        <td colspan="11" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
           <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
           <strong style="font-size: 0.95rem; color: var(--text-main);">Is Tarikh (${rep.targetDate}) par koi Receiving Entry nahi mili.</strong>
           <p style="margin: 0.5rem 0 1rem 0; font-size: 0.8rem;">
@@ -2076,12 +2098,16 @@ function renderDailyArrivalsModal() {
   let sumDatePcs = 0;
   let sumCut = 0;
   let sumRec = 0;
+  let sumDis = 0;
+  let sumStockBal = 0;
   let sumPending = 0;
 
   tbody.innerHTML = displayList.map((item, idx) => {
     sumDatePcs += item.date_received_qty;
     sumCut += item.cut_qty;
     sumRec += item.total_received;
+    sumDis += (item.total_dispatched || 0);
+    sumStockBal += (item.balance_from_stock || 0);
     if (item.balance_pending > 0) sumPending += item.balance_pending;
 
     let pendingBadge = "";
@@ -2144,6 +2170,12 @@ function renderDailyArrivalsModal() {
         <td style="text-align: right; background: rgba(16, 185, 129, 0.05); font-family: var(--font-mono); font-weight: 700; color: #10b981;">
           ${item.total_received.toLocaleString()}
         </td>
+        <td style="text-align: right; background: rgba(6, 182, 212, 0.05); font-family: var(--font-mono); font-weight: 700; color: #06b6d4;">
+          ${(item.total_dispatched || 0).toLocaleString()}
+        </td>
+        <td style="text-align: right; background: rgba(245, 158, 11, 0.08); font-family: var(--font-mono); font-weight: 800; color: #f59e0b; font-size: 0.92rem;">
+          ${(item.balance_from_stock || 0).toLocaleString()}
+        </td>
         <td style="text-align: right; background: rgba(239, 68, 68, 0.05);">
           ${pendingBadge}
         </td>
@@ -2170,6 +2202,12 @@ function renderDailyArrivalsModal() {
         <td style="text-align: right; font-family: var(--font-mono); color: #10b981;">
           ${sumRec.toLocaleString()}
         </td>
+        <td style="text-align: right; font-family: var(--font-mono); color: #06b6d4;">
+          ${sumDis.toLocaleString()}
+        </td>
+        <td style="text-align: right; font-family: var(--font-mono); color: #f59e0b; font-weight: 800;">
+          ${sumStockBal.toLocaleString()}
+        </td>
         <td style="text-align: right; font-family: var(--font-mono); color: #ef4444;">
           ${sumPending.toLocaleString()} Baqi
         </td>
@@ -2181,6 +2219,7 @@ function renderDailyArrivalsModal() {
       </tr>
     `;
   }
+
 
   // 4. Attach click listeners for individual '+ Add to Daily Sheet' buttons
   tbody.querySelectorAll(".btn-add-incoming-to-sheet").forEach(btn => {
