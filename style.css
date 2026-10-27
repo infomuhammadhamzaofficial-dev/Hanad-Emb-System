@@ -176,9 +176,14 @@ body {
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
-  /* Prevent content jumping on mobile when address bar hides/shows */
-  overscroll-behavior-y: none;
   transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* HTML5 Semantic Main Container */
+.app-main {
+  flex: 1 0 auto;
+  width: 100%;
+  position: relative;
 }
 
 /* Header & Navbar */
@@ -615,9 +620,6 @@ body {
   width: 100%;
   margin: 0 auto;
   box-sizing: border-box;
-  /* GPU compositing: prevents mobile reflow on tab switch */
-  contain: layout style;
-  content-visibility: auto;
 }
 
 .tab-view.active {
@@ -1111,14 +1113,13 @@ select.app-select option {
   font-size: 0.8rem;
 }
 
-/* High-performance scroll optimization: virtual rendering on scroll for massive tables */
+/* Table Rows Rendering (Natural table layout without broken containment) */
 .master-table tbody tr,
 .final-style-table tbody tr,
 .distribution-table tbody tr,
 .table-rate-approval tbody tr,
 .table-card table tbody tr {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 38px;
+  /* content-visibility removed: was causing rows to vanish on mobile scroll */
 }
 
 .master-table tfoot td,
@@ -5174,25 +5175,36 @@ body.modal-open {
    ====================================================================== */
 @media (max-width: 767px) {
 
-  /* --- 1. Scroll Performance: Promote scrollable containers to GPU layer --- */
-  body {
-    /* Prevent iOS rubber-band scroll causing layout jumps */
-    overscroll-behavior: none;
+  /* --- 1. Natural Touch & Momentum Scrolling --- */
+  html, body {
+    touch-action: manipulation;
+    -webkit-overflow-scrolling: touch;
   }
 
-  /* --- 2. Sticky Header: Use dvh-aware height so it never overlaps content --- */
+  .app-main {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* --- 2. Zero-Lag Sticky Header: Solid GPU-free background on mobile --- */
   .app-header {
     position: sticky;
     top: 0;
     z-index: 50;
-    /* Promote header to own compositing layer for smooth scroll */
-    will-change: transform;
-    /* Reduce blur intensity on mobile (backdrop-filter is GPU-heavy) */
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
+    will-change: auto !important;
+    background: var(--bg-app) !important;
+    /* Eliminating blur filter on mobile: live blur shaders kill mobile frame rates */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    border-bottom: 1px solid var(--border-color);
   }
 
-  /* --- 3. Cards: Remove hover transforms that trigger repaints on touch --- */
+  /* --- 3. Instant Tab Switching (No layout thrash / blank flash) --- */
+  .tab-view.active {
+    animation: none !important;
+  }
+
+  /* --- 4. Cards: Remove hover transforms that trigger repaints on touch --- */
   .kpi-card:hover,
   .dash-kpi-card:hover,
   .table-card:hover,
@@ -5201,17 +5213,16 @@ body.modal-open {
     transform: none !important;
   }
 
-  /* --- 4. KPI Grid: Safe minmax so cards never overflow 360px phones --- */
+  /* --- 5. KPI Grid: Safe minmax so cards never overflow 360px phones --- */
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 0.65rem !important;
   }
 
-  /* --- 5. Table: Ensure horizontal scroll never triggers body scroll --- */
+  /* --- 6. Table: Ensure horizontal scroll never triggers body scroll --- */
   .table-card {
     overflow: hidden;
-    /* Contain table reflows within card boundary */
-    contain: layout paint;
+    contain: paint;
   }
 
   .table-responsive {
@@ -5219,7 +5230,6 @@ body.modal-open {
     overflow-y: visible !important;
     -webkit-overflow-scrolling: touch !important;
     overscroll-behavior-x: contain !important;
-    /* Min-width ensures tables don't collapse to unreadable widths */
     min-width: 0;
   }
 

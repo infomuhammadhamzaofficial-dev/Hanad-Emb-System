@@ -379,10 +379,13 @@
     </div>
   </aside>
 
+  <!-- HTML5 Main Application Viewport -->
+  <main id="main-content" class="app-main" role="main">
+
   <!-- ============================================================== -->
   <!-- TAB 0: EXECUTIVE DASHBOARD & REAL-TIME OPERATIONS CENTER        -->
   <!-- ============================================================== -->
-  <section id="dashboard-view" class="tab-view active">
+  <section id="dashboard-view" class="tab-view active" role="region" aria-label="Dashboard" aria-hidden="false">
 
     <!-- Executive Hero Banner with Live Status & Quick Action Launchpad -->
     <div class="dash-hero-card">
@@ -645,7 +648,7 @@
   <!-- ============================================================== -->
   <!-- TAB 1: MASTER INVENTORY VIEW (Exact to First Image)           -->
   <!-- ============================================================== -->
-  <section id="master-inventory-view" class="tab-view">
+  <section id="master-inventory-view" class="tab-view" role="region" aria-label="Master Inventory" aria-hidden="true">
 
     <!-- KPI Summary Cards Banner for Master Inventory -->
     <div class="kpi-grid">
@@ -799,7 +802,7 @@
   <!-- ============================================================== -->
   <!-- TAB 2: INWARD RECEIVING LOG (Dedicated Line Item Table)         -->
   <!-- ============================================================== -->
-  <section id="receiving-log-view" class="tab-view">
+  <section id="receiving-log-view" class="tab-view" role="region" aria-label="Receiving Log" aria-hidden="true">
     <div class="view-toolbar">
       <div>
         <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
@@ -898,7 +901,7 @@
   <!-- ============================================================== -->
   <!-- TAB 3: OUTWARD DISPATCH LOG (Dedicated Line Item Table)        -->
   <!-- ============================================================== -->
-  <section id="dispatch-log-view" class="tab-view">
+  <section id="dispatch-log-view" class="tab-view" role="region" aria-label="Dispatch Log" aria-hidden="true">
     <div class="view-toolbar">
       <div>
         <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
@@ -996,7 +999,7 @@
   <!-- ============================================================== -->
   <!-- TAB 2: DAILY FINAL STYLE SHEET (Exact to Second Image)        -->
   <!-- ============================================================== -->
-  <section id="final-style-view" class="tab-view">
+  <section id="final-style-view" class="tab-view" role="region" aria-label="Daily Sheet" aria-hidden="true">
 
     <!-- Print Only Title Header for Clean Paper Reports -->
     <div class="print-only-title" style="display: none;">
@@ -1165,7 +1168,7 @@
   <!-- TAB: WORK DISTRIBUTION & CONTRACTOR ALLOCATION                -->
   <!-- Bi-Monthly Style Distribution to 6 Contractors (Exact to Image) -->
   <!-- ============================================================== -->
-  <section id="work-distribution-view" class="tab-view">
+  <section id="work-distribution-view" class="tab-view" role="region" aria-label="Work Distribution" aria-hidden="true">
 
     <!-- Official Distribute Banner (Exact to Image 3: Payment Approval Summary Card Style) -->
     <div class="excel-sheet-header-banner">
@@ -1371,7 +1374,7 @@
   <!-- TAB: PAYMENT & DEDUCTION MANAGEMENT SHEET                      -->
   <!-- (Image Entries, Cutoff Deductions, Dorie & Floor Challans)    -->
   <!-- ============================================================== -->
-  <section id="payment-sheet-view" class="tab-view">
+  <section id="payment-sheet-view" class="tab-view" role="region" aria-label="Payment Sheet" aria-hidden="true">
     <!-- Official Excel Header Banner (Exact to Image) -->
     <div class="excel-sheet-header-banner">
       <h1 class="excel-main-title">Payment Approval Summary</h1>
@@ -1681,7 +1684,7 @@
   <!-- ============================================================== -->
   <!-- TAB 3: CONTRACTORS WORKLOAD & PERFORMANCE                     -->
   <!-- ============================================================== -->
-  <section id="contractors-view" class="tab-view">
+  <section id="contractors-view" class="tab-view" role="region" aria-label="Contractors Hub" aria-hidden="true">
     <div class="view-toolbar">
       <div>
         <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
@@ -1729,7 +1732,7 @@
   <!-- ============================================================== -->
   <!-- TAB 4: NEON POSTGRESQL SYNC & SETTINGS                        -->
   <!-- ============================================================== -->
-  <section id="neon-sync-view" class="tab-view">
+  <section id="neon-sync-view" class="tab-view" role="region" aria-label="Neon Cloud Sync" aria-hidden="true">
     <div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
 
       <!-- Neon Banner Card -->
