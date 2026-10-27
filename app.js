@@ -307,22 +307,30 @@ function switchTab(tabId) {
   document.querySelectorAll(".tab-view").forEach(view => {
     view.classList.remove("active");
     view.setAttribute("aria-hidden", "true");
+    view.style.display = "none";
   });
 
   const activeView = document.getElementById(`${tabId}-view`);
   if (activeView) {
     activeView.classList.add("active");
     activeView.setAttribute("aria-hidden", "false");
-    // MOBILE FIX: Scroll to top on every tab switch so content is always visible
-    // without this, mobile keeps previous tab's scroll position causing blank screen
-    window.scrollTo({ top: 0, behavior: "instant" });
+    activeView.style.display = "block";
+    activeView.style.opacity = "1";
+    activeView.style.visibility = "visible";
   }
 
-  // 2. Render target view only if dirty (first visit or after data modification)
+  // Safe universal scroll reset across all mobile & desktop browsers
+  try { window.scrollTo(0, 0); } catch (e) {}
+  try { document.documentElement.scrollTop = 0; } catch (e) {}
+  try { document.body.scrollTop = 0; } catch (e) {}
+
+  // 2. Render target view immediately
   if (dirtyViews.has(tabId)) {
-    requestAnimationFrame(() => {
+    try {
       renderTargetView(tabId);
-    });
+    } catch (err) {
+      console.warn("renderTargetView error:", tabId, err);
+    }
   }
 }
 

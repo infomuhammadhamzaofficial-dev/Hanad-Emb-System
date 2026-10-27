@@ -2,11 +2,14 @@
 // CraftFlow - Service Worker for PWA (Zero Lag & Mobile Cache)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v2';
+const CACHE_NAME = 'craftflow-cache-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
   './style.css',
+  './app.js',
+  './db.js',
+  './data.js',
   './manifest.json',
   './icon-192.svg',
   './icon-512.svg'

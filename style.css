@@ -2799,27 +2799,38 @@ body.modal-open {
   }
 
   .tab-view {
-    padding: 0.65rem 0.65rem !important;
+    display: none;
+    padding: 0.65rem 0.55rem calc(75px + env(safe-area-inset-bottom, 0px)) 0.55rem !important;
     max-width: 100% !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  /* KPI Grid on Mobile: STRICTLY 2 KPIS PER ROW */
+  .tab-view.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    animation: none !important;
+  }
+
+  /* KPI Grid on Mobile: STRICTLY 2 KPIS PER ROW (Compact to prevent table being pushed down) */
   .kpi-grid,
   .dash-kpi-grid,
   .form-kpi-grid {
     display: grid !important;
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-    gap: 0.55rem !important;
-    margin-bottom: 0.85rem !important;
+    gap: 0.4rem !important;
+    margin-bottom: 0.65rem !important;
   }
 
   .kpi-card,
   .dash-kpi-card {
-    padding: 0.65rem 0.75rem !important;
+    padding: 0.45rem 0.6rem !important;
     min-width: 0 !important;
     width: 100% !important;
     box-sizing: border-box !important;
     grid-column: auto !important;
+    gap: 0.15rem !important;
   }
 
   /* Remove 2-column span for last card: keep clean 2-per-row flow */
@@ -2830,19 +2841,21 @@ body.modal-open {
 
   .kpi-label,
   .dash-kpi-label {
-    font-size: 0.65rem !important;
+    font-size: 0.62rem !important;
+    line-height: 1.1 !important;
   }
 
   .kpi-value,
   .dash-kpi-num {
-    font-size: 1.35rem !important;
-    line-height: 1.2 !important;
+    font-size: 1.2rem !important;
+    line-height: 1.1 !important;
     word-break: break-all !important;
   }
 
+  /* Hide verbose subtitles on mobile to save vertical space for data tables */
   .kpi-sub,
   .dash-kpi-hint {
-    font-size: 0.62rem !important;
+    display: none !important;
   }
 
   /* View Toolbars & Filters */
@@ -2881,25 +2894,31 @@ body.modal-open {
   .master-filter-row {
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 0.5rem !important;
+    gap: 0.45rem !important;
+  }
+
+  .master-filter-row .search-box,
+  .search-box {
+    flex: 0 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 38px !important;
+    min-height: 38px !important;
+    padding: 0.4rem 0.75rem !important;
+    box-sizing: border-box !important;
   }
 
   .master-actions-grid {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 0.45rem !important;
+    gap: 0.4rem !important;
   }
 
   .btn-action-dock {
-    padding: 0.5rem 0.4rem !important;
-    font-size: 0.725rem !important;
-    white-space: normal !important;
+    padding: 0.38rem 0.5rem !important;
+    font-size: 0.72rem !important;
+    min-height: 36px !important;
+    white-space: nowrap !important;
     text-align: center !important;
-  }
-
-  .search-box {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 0.45rem 0.75rem;
   }
 
   .filter-group {
@@ -5651,8 +5670,11 @@ body.modal-open {
     border-bottom: 1px solid var(--border-color);
   }
 
-  /* --- 3. Instant Tab Switching (No layout thrash / blank flash) --- */
+  /* --- 3. Instant Tab Switching (Guaranteed Visibility & Block Rendering) --- */
   .tab-view.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
     animation: none !important;
   }
 
@@ -5665,24 +5687,33 @@ body.modal-open {
     transform: none !important;
   }
 
-  /* --- 5. KPI Grid: Safe minmax so cards never overflow 360px phones --- */
+  /* --- 5. KPI Grid: Safe compact layout for mobile phones --- */
   .kpi-grid {
     grid-template-columns: repeat(2, 1fr) !important;
-    gap: 0.65rem !important;
+    gap: 0.45rem !important;
   }
 
-  /* --- 6. Table: Ensure horizontal scroll never triggers body scroll --- */
+  /* --- 6. Table: Natural rendering without paint containment traps --- */
   .table-card {
-    overflow: hidden;
-    contain: paint;
+    overflow: visible !important;
+    contain: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
-  .table-responsive {
+  .table-responsive,
+  .table-container {
+    display: block !important;
     overflow-x: auto !important;
-    overflow-y: visible !important;
+    overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch !important;
     overscroll-behavior-x: contain !important;
-    min-width: 0;
+    touch-action: pan-x pan-y !important;
+    min-width: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
   }
 
   /* --- 6. Filter/Toolbar rows: Stack vertically, no horizontal overflow --- */
@@ -5695,6 +5726,9 @@ body.modal-open {
   .master-filter-row .search-box {
     max-width: 100% !important;
     width: 100% !important;
+    flex: 0 0 auto !important;
+    height: 38px !important;
+    min-height: 38px !important;
   }
 
   .filter-group {
