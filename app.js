@@ -190,6 +190,16 @@ function initMobileNav() {
     });
   });
 
+  // Mobile Bottom Navigation Dock Item Click Listeners
+  document.querySelectorAll(".mobile-bottom-nav-item").forEach(item => {
+    item.addEventListener("click", () => {
+      const targetTab = item.getAttribute("data-tab");
+      if (targetTab) {
+        switchTab(targetTab);
+      }
+    });
+  });
+
   if (mobileNewEntryBtn) {
     mobileNewEntryBtn.addEventListener("click", () => {
       const mainBtn = document.getElementById("btn-open-new-entry");
@@ -273,6 +283,10 @@ function switchTab(tabId) {
     item.classList.toggle("active", item.getAttribute("data-tab") === tabId);
   });
 
+  document.querySelectorAll(".mobile-bottom-nav-item").forEach(item => {
+    item.classList.toggle("active", item.getAttribute("data-tab") === tabId);
+  });
+
   const tabTitles = {
     "dashboard": "⚡ Dashboard",
     "master-inventory": "📦 Master Inventory",
@@ -316,10 +330,6 @@ function switchTab(tabId) {
 // Master Render Orchestrator
 // -------------------------------------------------------------
 function renderAll(forceAll = false) {
-  if (window.db && typeof window.db.cleanOrphanMasterRecords === "function") {
-    try { window.db.cleanOrphanMasterRecords(); } catch (e) { console.warn(e); }
-  }
-
   // Lightweight global updates: KPIs, Dropdowns and Permissions
   try { renderKPIs(); } catch (e) { console.error("renderKPIs error:", e); }
   try { populateDropdowns(); } catch (e) { console.error("populateDropdowns error:", e); }
@@ -385,15 +395,19 @@ function renderKPIs() {
 
   setBadgeText("badge-master-count", master.length);
   setBadgeText("badge-master-count-mobile", master.length);
+  setBadgeText("mobile-bottom-badge-master", master.length);
 
   setBadgeText("badge-rec-count", recLogs.length);
   setBadgeText("badge-rec-count-mobile", recLogs.length);
+  setBadgeText("mobile-bottom-badge-rec", recLogs.length);
 
   setBadgeText("badge-dis-count", disLogs.length);
   setBadgeText("badge-dis-count-mobile", disLogs.length);
+  setBadgeText("mobile-bottom-badge-dis", disLogs.length);
 
   setBadgeText("badge-final-count", window.db.getFinalStyles().length);
   setBadgeText("badge-final-count-mobile", window.db.getFinalStyles().length);
+  setBadgeText("mobile-bottom-badge-final", window.db.getFinalStyles().length);
 
   setBadgeText("badge-payment-count", window.db.getPaymentSheets().length);
   setBadgeText("badge-payment-count-mobile", window.db.getPaymentSheets().length);
@@ -2368,14 +2382,15 @@ function startLiveNeonConnection() {
   // 1. Initial immediate background sync on startup / refresh
   syncLiveFromNeon(true);
 
-  // 2. Continuous real-time polling every 45 seconds (optimal for low-spec PCs & fast cloud)
+  // 2. Continuous real-time polling every 90 seconds (lightweight, zero PC lag, pauses when tab hidden)
   if (cfg.autoSync !== false) {
     liveSyncTimer = setInterval(() => {
+      if (document.hidden) return; // Zero background CPU/network load when tab is minimized
       const currentCfg = window.db.getConfig();
       if (currentCfg.autoSync !== false && (currentCfg.neonConnectionString || currentCfg.neonEndpointUrl)) {
         syncLiveFromNeon(true);
       }
-    }, 45000);
+    }, 90000);
   }
 }
 

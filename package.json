@@ -1,0 +1,19 @@
+{
+  "name": "craftflow-hand-emb",
+  "version": "2.0.0",
+  "private": true,
+  "description": "CraftFlow - Hand Embroidery Department Production & Inventory SaaS",
+  "scripts": {
+    "start": "npx serve -s . -p 3000",
+    "dev": "npx serve -s . -p 3000"
+  },
+  "keywords": [
+    "hand-embroidery",
+    "garment-production",
+    "inventory-management",
+    "challan-tracking",
+    "neon-postgresql"
+  ],
+  "author": "Amir Ghouri",
+  "license": "MIT"
+}

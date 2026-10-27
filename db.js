@@ -1188,34 +1188,17 @@ class DatabaseService {
       }
     });
 
+    // A record is ONLY an orphan if it has 0 cut_qty, 0 receiving, and 0 dispatch
     const orphans = masterList.filter(m => {
+      const cut = parseInt(m.cut_qty, 10) || 0;
+      if (cut > 0) return false; // Valid style order with cutting demand - NEVER DELETE!
       const key = `${(m.style_code || '').trim().toLowerCase()}:::${(m.category || '').trim().toLowerCase()}`;
       return !validKeys.has(key);
     });
 
     if (orphans.length > 0) {
-      orphans.forEach(item => {
-        const cleanCode = (item.style_code || '').trim();
-        const cleanCat = (item.category || '').trim();
-        this.trackDeletedRecord("master", item.id);
-        this.trackDeletedRecord("master", `${cleanCode}|${cleanCat}`);
-        const cfg = this.getConfig();
-        if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-          try {
-            this.executeNeonQuery(
-              "DELETE FROM master_inventory WHERE id = $1 OR (LOWER(style_code) = LOWER($2) AND LOWER(category) = LOWER($3));",
-              [item.id, cleanCode, cleanCat]
-            ).catch(err => console.warn("Neon auto-delete orphan master error:", err));
-          } catch (err) {
-            console.warn("Neon auto-delete orphan master error:", err);
-          }
-        }
-      });
-
-      masterList = masterList.filter(m => {
-        const key = `${(m.style_code || '').trim().toLowerCase()}:::${(m.category || '').trim().toLowerCase()}`;
-        return validKeys.has(key);
-      });
+      const orphanIds = new Set(orphans.map(o => o.id));
+      masterList = masterList.filter(m => !orphanIds.has(m.id));
       this.saveMasterInventory(masterList);
     }
 
@@ -3799,9 +3782,8 @@ class DatabaseService {
         }
       }
 
-      const activeMasterKeys = new Set(this.getMasterInventory().map(m => `${(m.style_code || '').trim().toLowerCase()}|${(m.category || '').trim().toLowerCase()}`));
+      // Background cleanup: Prune ONLY explicitly tombstoned deleted records from Neon
       const zombieMaster = rawMasterRows.filter(m => 
-        !activeMasterKeys.has(`${(m.style_code || '').trim().toLowerCase()}|${(m.category || '').trim().toLowerCase()}`) || 
         this.isRecordDeleted("master", m.id, `${m.style_code}|${m.category}`)
       );
       if (zombieMaster.length > 0) {

@@ -3,16 +3,18 @@
 
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <!-- Mobile Web App: prevents double-tap zoom lag -->
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0f19">
-  <title>Hand Embroidery Production & Inventory SaaS</title>
+  <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.svg">
   <link rel="stylesheet" href="style.css">
-  <link rel="icon"
-    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🪡</text></svg>">
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg">
 </head>
 
 <body>
@@ -46,7 +48,7 @@
           <label for="login-username" style="margin-bottom: 0.45rem;">Username:</label>
           <div class="input-icon-wrapper">
             <input type="text" class="app-input" id="login-username" required placeholder="Enter username"
-              autocomplete="off" autofocus value="">
+              autocomplete="off" value="">
           </div>
         </div>
 
@@ -88,7 +90,8 @@
     <div class="header-top-bar">
       <div class="brand-wrapper">
         <!-- Mobile 3-Line Hamburger Menu Toggle Button -->
-        <button type="button" class="btn-mobile-menu-toggle" id="btn-mobile-menu-toggle" aria-label="Open Navigation Menu" title="Open Menu">
+        <button type="button" class="btn-mobile-menu-toggle" id="btn-mobile-menu-toggle"
+          aria-label="Open Navigation Menu" title="Open Menu">
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
           <span class="hamburger-line"></span>
@@ -264,12 +267,13 @@
         <span id="mobile-active-tab-name">⚡ Dashboard</span>
         <span class="chip-caret">▾</span>
       </div>
-      <button type="button" class="btn btn-primary btn-sm btn-new-entry-mobile" id="btn-open-new-entry-mobile" title="New Style Entry">
+      <button type="button" class="btn btn-primary btn-sm btn-new-entry-mobile" id="btn-open-new-entry-mobile"
+        title="New Style Entry">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <line x1="12" y1="5" x2="12" y2="19"></line>
           <line x1="5" y1="12" x2="19" y2="12"></line>
         </svg>
-        <span>+ New Style</span>
+        <span>New Style</span>
       </button>
     </div>
   </header>
@@ -294,7 +298,8 @@
           <span class="brand-badge">Navigation</span>
         </div>
       </div>
-      <button type="button" id="btn-close-mobile-nav" class="mobile-drawer-close" aria-label="Close Navigation Menu" title="Close Menu">
+      <button type="button" id="btn-close-mobile-nav" class="mobile-drawer-close" aria-label="Close Navigation Menu"
+        title="Close Menu">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
           stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -382,325 +387,454 @@
   <!-- HTML5 Main Application Viewport -->
   <main id="main-content" class="app-main" role="main">
 
-  <!-- ============================================================== -->
-  <!-- TAB 0: EXECUTIVE DASHBOARD & REAL-TIME OPERATIONS CENTER        -->
-  <!-- ============================================================== -->
-  <section id="dashboard-view" class="tab-view active" role="region" aria-label="Dashboard" aria-hidden="false">
+    <!-- ============================================================== -->
+    <!-- TAB 0: EXECUTIVE DASHBOARD & REAL-TIME OPERATIONS CENTER        -->
+    <!-- ============================================================== -->
+    <section id="dashboard-view" class="tab-view active" role="region" aria-label="Dashboard" aria-hidden="false">
 
-    <!-- Executive Hero Banner with Live Status & Quick Action Launchpad -->
-    <div class="dash-hero-card">
-      <div class="dash-hero-left">
-        <div class="dash-hero-badge">
-          <span class="dash-pulse-dot"></span>
-          <span>Executive Operations Control Center</span>
+      <!-- Executive Hero Banner with Live Status & Quick Action Launchpad -->
+      <div class="dash-hero-card">
+        <div class="dash-hero-left">
+          <div class="dash-hero-badge">
+            <span class="dash-pulse-dot"></span>
+            <span>Executive Operations Control Center</span>
+          </div>
+          <h2 class="dash-hero-title">Hand Embroidery Production & Flow Overview</h2>
+          <p class="dash-hero-sub" id="dash-greeting-text">
+            Welcome back. Real-time factory floor overview of cutting orders, inward receiving, contractor floor WIP,
+            and
+            outward dispatches.
+          </p>
+          <div class="dash-hero-meta">
+            <span class="dash-meta-chip" id="dash-current-date">📅 --</span>
+            <span class="dash-meta-chip">🏭 Department: <strong style="color: var(--text-main);">Hand
+                Embroidery</strong></span>
+            <span class="dash-meta-chip" id="dash-neon-sync-chip">☁️ Storage: <strong
+                style="color: var(--primary);">Neon
+                Cloud & Local</strong></span>
+          </div>
         </div>
-        <h2 class="dash-hero-title">Hand Embroidery Production & Flow Overview</h2>
-        <p class="dash-hero-sub" id="dash-greeting-text">
-          Welcome back. Real-time factory floor overview of cutting orders, inward receiving, contractor floor WIP, and
-          outward dispatches.
-        </p>
-        <div class="dash-hero-meta">
-          <span class="dash-meta-chip" id="dash-current-date">📅 --</span>
-          <span class="dash-meta-chip">🏭 Department: <strong style="color: var(--text-main);">Hand
-              Embroidery</strong></span>
-          <span class="dash-meta-chip" id="dash-neon-sync-chip">☁️ Storage: <strong style="color: var(--primary);">Neon
-              Cloud & Local</strong></span>
+
+        <div class="dash-hero-right">
+          <div class="dash-actions-header">
+            <span>⚡ Quick Actions</span>
+            <button type="button" class="dash-btn-refresh" id="btn-dash-refresh" title="Refresh Dashboard Data">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M23 4v6h-6"></path>
+                <path d="M1 20v-6h6"></path>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Refresh</span>
+            </button>
+          </div>
+          <div class="dash-quick-actions-grid">
+            <button type="button" class="dash-action-btn primary" id="dash-act-new-style">
+              <span class="action-icon">➕</span>
+              <span class="action-label">New Style Order</span>
+            </button>
+            <button type="button" class="dash-action-btn emerald" id="dash-act-receiving">
+              <span class="action-icon">📥</span>
+              <span class="action-label">Log Inward Challan</span>
+            </button>
+            <button type="button" class="dash-action-btn cyan" id="dash-act-dispatch">
+              <span class="action-icon">📤</span>
+              <span class="action-label">Log Outward Challan</span>
+            </button>
+            <button type="button" class="dash-action-btn amber" id="dash-act-daily-sheet">
+              <span class="action-icon">⭐</span>
+              <span class="action-label">Daily Floor Sheet</span>
+            </button>
+          </div>
         </div>
       </div>
 
-      <div class="dash-hero-right">
-        <div class="dash-actions-header">
-          <span>⚡ Quick Actions</span>
-          <button type="button" class="dash-btn-refresh" id="btn-dash-refresh" title="Refresh Dashboard Data">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-              <path d="M23 4v6h-6"></path>
-              <path d="M1 20v-6h6"></path>
-              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+      <!-- Primary Executive KPI Grid (6 Top Cards) -->
+      <div class="dash-kpi-grid">
+        <!-- Card 1: Total Cut Demand -->
+        <div class="dash-kpi-card" data-jump="master-inventory" title="Click to view in Master Inventory">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Total Cut Order</span>
+            <div class="dash-kpi-icon indigo">✂️</div>
+          </div>
+          <div class="dash-kpi-num" id="dash-kpi-cut">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill indigo" id="dash-kpi-styles-count">0 Styles</span>
+            <span class="dash-kpi-hint">Total demand planned</span>
+          </div>
+        </div>
+
+        <!-- Card 2: Received in Embroidery -->
+        <div class="dash-kpi-card" data-jump="receiving-log" title="Click to view Inward Receiving Log">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Received in H-Emb</span>
+            <div class="dash-kpi-icon emerald">📥</div>
+          </div>
+          <div class="dash-kpi-num" id="dash-kpi-received">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill emerald" id="dash-kpi-rec-pct">0% of Cut</span>
+            <span class="dash-kpi-hint" id="dash-kpi-rec-challans">0 Inward Challans</span>
+          </div>
+        </div>
+
+        <!-- Card 3: Dispatched (Completed) -->
+        <div class="dash-kpi-card" data-jump="dispatch-log" title="Click to view Outward Dispatch Log">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Dispatched (Done)</span>
+            <div class="dash-kpi-icon cyan">📤</div>
+          </div>
+          <div class="dash-kpi-num" id="dash-kpi-dispatched">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill cyan" id="dash-kpi-fulfillment-rate">0% Fulfilled</span>
+            <span class="dash-kpi-hint" id="dash-kpi-dis-challans">0 Outward Challans</span>
+          </div>
+        </div>
+
+        <!-- Card 4: Balance in H-Emb (Floor WIP) -->
+        <div class="dash-kpi-card highlight-rose" data-jump="final-style"
+          title="Click to view Daily Sheet (Active WIP)">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Balance In H-Emb (WIP)</span>
+            <div class="dash-kpi-icon rose">🪡</div>
+          </div>
+          <div class="dash-kpi-num text-rose" id="dash-kpi-wip">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill rose" id="dash-kpi-wip-badge">Active on Floor / Adda</span>
+            <span class="dash-kpi-hint">With contractors</span>
+          </div>
+        </div>
+
+        <!-- Card 5: Balance from Stock (Cutting Pending) -->
+        <div class="dash-kpi-card" data-jump="master-inventory" title="Click to view in Master Inventory">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Balance From Stock</span>
+            <div class="dash-kpi-icon amber">⏳</div>
+          </div>
+          <div class="dash-kpi-num text-amber" id="dash-kpi-stock-bal">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill amber" id="dash-kpi-stock-pct">0% Pending</span>
+            <span class="dash-kpi-hint">To arrive from cutting</span>
+          </div>
+        </div>
+
+        <!-- Card 6: Active Contractors Engaged -->
+        <div class="dash-kpi-card" data-jump="contractors" title="Click to view Contractors Hub">
+          <div class="dash-kpi-top">
+            <span class="dash-kpi-label">Contractors Engaged</span>
+            <div class="dash-kpi-icon purple">👥</div>
+          </div>
+          <div class="dash-kpi-num" id="dash-kpi-contractors">0</div>
+          <div class="dash-kpi-bottom">
+            <span class="dash-kpi-pill purple" id="dash-kpi-cont-active">0 With WIP</span>
+            <span class="dash-kpi-hint">Holding active pieces</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Production Progress Pipeline (Lifecycle Funnel) -->
+      <div class="dash-card" style="margin-bottom: 1.25rem;">
+        <div class="dash-card-header">
+          <div>
+            <h3 class="dash-card-title">📊 Overall Production Progress Pipeline</h3>
+            <p class="dash-card-subtitle">Complete lifecycle of cutting orders moving through Hand Embroidery to Unit
+              Dispatch</p>
+          </div>
+          <div class="dash-pipeline-metrics" id="dash-pipeline-metrics">
+            <span class="dash-metric-tag" id="dash-metric-done-tag">Done: 0%</span>
+            <span class="dash-metric-tag wip" id="dash-metric-wip-tag">WIP: 0%</span>
+          </div>
+        </div>
+
+        <!-- Multi-segment visual progress track -->
+        <div class="dash-pipeline-track-wrapper">
+          <div class="dash-pipeline-track">
+            <div class="dash-track-bar bar-dispatched" id="dash-bar-dispatched" style="width: 0%;" title="Dispatched">
+            </div>
+            <div class="dash-track-bar bar-wip" id="dash-bar-wip" style="width: 0%;" title="Floor WIP"></div>
+            <div class="dash-track-bar bar-stock" id="dash-bar-stock" style="width: 0%;" title="Pending from Cutting">
+            </div>
+          </div>
+        </div>
+
+        <!-- Pipeline Legends with Piece counts and percentages -->
+        <div class="dash-pipeline-legend">
+          <div class="dash-legend-item">
+            <span class="dash-legend-dot dispatched"></span>
+            <div class="dash-legend-text">
+              <span class="dash-legend-title">Dispatched & Completed</span>
+              <strong class="dash-legend-qty" id="dash-legend-dispatched">0 pcs (0%)</strong>
+            </div>
+          </div>
+          <div class="dash-legend-item">
+            <span class="dash-legend-dot wip"></span>
+            <div class="dash-legend-text">
+              <span class="dash-legend-title">WIP in Hand-Embroidery (On Adda)</span>
+              <strong class="dash-legend-qty" id="dash-legend-wip">0 pcs (0%)</strong>
+            </div>
+          </div>
+          <div class="dash-legend-item">
+            <span class="dash-legend-dot stock"></span>
+            <div class="dash-legend-text">
+              <span class="dash-legend-title">Pending from Cutting / Stock</span>
+              <strong class="dash-legend-qty" id="dash-legend-stock">0 pcs (0%)</strong>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-Column Grid 1: Contractor Workload Matrix & Floor Alerts / Priority Styles -->
+      <div class="dash-two-col-grid">
+        <!-- Column 1: Contractor Workload Matrix -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div>
+              <h3 class="dash-card-title">⚖️ Contractor WIP & Workload Distribution</h3>
+              <p class="dash-card-subtitle">Pending embroidery pieces currently in custody of each contractor</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('contractors')">
+              Contractors Hub →
+            </button>
+          </div>
+          <div class="dash-contractor-list" id="dash-contractor-workload-list">
+            <!-- Dynamically populated contractor cards -->
+          </div>
+        </div>
+
+        <!-- Column 2: Floor Remarks & Bottlenecks -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div>
+              <h3 class="dash-card-title">⚠️ Floor Remarks & Bottlenecks</h3>
+              <p class="dash-card-subtitle">Active styles flagged with Material Issue, Alteration or Highest WIP</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('final-style')">
+              Daily Sheet →
+            </button>
+          </div>
+          <div class="dash-floor-remarks-list" id="dash-floor-remarks-list">
+            <!-- Dynamically populated alerts & high-WIP styles -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Two-Column Grid 2: Garment Category Breakdown & Recent Challans Activity Stream -->
+      <div class="dash-two-col-grid" style="margin-top: 1.25rem;">
+        <!-- Column 1: Garment Category Breakdown -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div>
+              <h3 class="dash-card-title">👗 Category & Garment Breakdown</h3>
+              <p class="dash-card-subtitle">Distribution of volume and completion by garment type (Shirt, Dupatta, etc.)
+              </p>
+            </div>
+          </div>
+          <div class="dash-category-grid" id="dash-category-breakdown-grid">
+            <!-- Dynamically populated category cards -->
+          </div>
+        </div>
+
+        <!-- Column 2: Recent Activity Log Stream -->
+        <div class="dash-card">
+          <div class="dash-card-header">
+            <div>
+              <h3 class="dash-card-title">🔄 Recent Challan Activity</h3>
+              <p class="dash-card-subtitle">Latest inward receiving and outward dispatch transactions</p>
+            </div>
+            <div class="dash-filter-pills" id="dash-stream-filter-pills">
+              <button type="button" class="dash-pill-btn active" data-stream="all">All</button>
+              <button type="button" class="dash-pill-btn" data-stream="rec">📥 Inward</button>
+              <button type="button" class="dash-pill-btn" data-stream="dis">📤 Outward</button>
+            </div>
+          </div>
+          <div class="dash-activity-stream" id="dash-activity-stream-list">
+            <!-- Dynamically populated activity rows -->
+          </div>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 1: MASTER INVENTORY VIEW (Exact to First Image)           -->
+    <!-- ============================================================== -->
+    <section id="master-inventory-view" class="tab-view" role="region" aria-label="Master Inventory" aria-hidden="true">
+
+      <!-- KPI Summary Cards Banner for Master Inventory -->
+      <div class="kpi-grid">
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Total Cut Quantity</span>
+          <div class="kpi-value" id="kpi-total-cut">0</div>
+          <span class="kpi-sub">Total pieces cut for embroidery</span>
+        </div>
+
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Received in H-Emb</span>
+          <div class="kpi-value" id="kpi-total-received">0</div>
+          <span class="kpi-sub">Physically arrived from cutting/stock</span>
+        </div>
+
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Dispatched From H-Emb</span>
+          <div class="kpi-value" id="kpi-total-dispatched">0</div>
+          <span class="kpi-sub">Completed & returned to unit</span>
+        </div>
+
+        <div class="kpi-card rose">
+          <span class="kpi-label">Balance In H-Emb (WIP)</span>
+          <div class="kpi-value" id="kpi-total-balance-hemb">0</div>
+          <span class="kpi-sub">Currently with contractors / on adda</span>
+        </div>
+
+        <div class="kpi-card amber">
+          <span class="kpi-label">Balance From Stock</span>
+          <div class="kpi-value" id="kpi-total-balance-stock">0</div>
+          <span class="kpi-sub">Pending to be delivered by cutting</span>
+        </div>
+      </div>
+
+      <!-- Master Inventory Toolbar Panel (Search, Filters & Full-Width Action Grid) -->
+      <div class="master-toolbar-panel">
+        <div class="master-filter-row">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <span>Refresh</span>
+            <input type="text" id="master-search-input" placeholder="Search Style Code, Contractor, Challan...">
+          </div>
+
+          <div class="filter-group">
+            <select class="app-select" id="filter-contractor">
+              <option value="">All Contractors</option>
+            </select>
+
+            <select class="app-select" id="filter-category">
+              <option value="">All Categories</option>
+              <option value="Shirt">Shirt</option>
+              <option value="Dupatta">Dupatta</option>
+              <option value="Trouser">Trouser</option>
+              <option value="Gala">Gala</option>
+              <option value="Sleeve">Sleeve</option>
+            </select>
+
+            <select class="app-select" id="filter-balance-status">
+              <option value="">All Balances</option>
+              <option value="pending_hemb">Has H-Emb Balance (> 0)</option>
+              <option value="pending_stock">Pending From Stock (> 0)</option>
+              <option value="completed">Completed (0 Balance)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="master-actions-grid">
+          <button class="btn btn-action-dock" id="btn-quick-receiving"
+            title="Quickly record incoming goods from cutting">
+            <span class="btn-dock-icon">📥</span>
+            <span>+ Receive Stock</span>
+          </button>
+          <button class="btn btn-action-dock" id="btn-quick-dispatch"
+            title="Quickly record finished embroidery dispatch">
+            <span class="btn-dock-icon">📤</span>
+            <span>+ Dispatch Entry</span>
+          </button>
+          <button class="btn btn-action-dock" id="btn-goto-receiving" title="View all receiving challan line entries">
+            <span class="btn-dock-icon">📋</span>
+            <span>View Receiving Log</span>
+          </button>
+          <button class="btn btn-action-dock" id="btn-goto-dispatch" title="View all dispatch challan line entries">
+            <span class="btn-dock-icon">🚚</span>
+            <span>View Dispatch Log</span>
+          </button>
+          <button class="btn btn-action-dock" id="btn-export-master-csv" title="Export current table to CSV file">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>Export Excel/CSV</span>
+          </button>
+          <button class="btn btn-action-dock btn-action-danger" id="btn-clear-all"
+            title="Clear all local data and start fresh">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Clear All Data</span>
           </button>
         </div>
-        <div class="dash-quick-actions-grid">
-          <button type="button" class="dash-action-btn primary" id="dash-act-new-style">
-            <span class="action-icon">➕</span>
-            <span class="action-label">New Style Order</span>
-          </button>
-          <button type="button" class="dash-action-btn emerald" id="dash-act-receiving">
-            <span class="action-icon">📥</span>
-            <span class="action-label">Log Inward Challan</span>
-          </button>
-          <button type="button" class="dash-action-btn cyan" id="dash-act-dispatch">
-            <span class="action-icon">📤</span>
-            <span class="action-label">Log Outward Challan</span>
-          </button>
-          <button type="button" class="dash-action-btn amber" id="dash-act-daily-sheet">
-            <span class="action-icon">⭐</span>
-            <span class="action-label">Daily Floor Sheet</span>
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Primary Executive KPI Grid (6 Top Cards) -->
-    <div class="dash-kpi-grid">
-      <!-- Card 1: Total Cut Demand -->
-      <div class="dash-kpi-card" data-jump="master-inventory" title="Click to view in Master Inventory">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Total Cut Order</span>
-          <div class="dash-kpi-icon indigo">✂️</div>
-        </div>
-        <div class="dash-kpi-num" id="dash-kpi-cut">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill indigo" id="dash-kpi-styles-count">0 Styles</span>
-          <span class="dash-kpi-hint">Total demand planned</span>
-        </div>
       </div>
 
-      <!-- Card 2: Received in Embroidery -->
-      <div class="dash-kpi-card" data-jump="receiving-log" title="Click to view Inward Receiving Log">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Received in H-Emb</span>
-          <div class="dash-kpi-icon emerald">📥</div>
-        </div>
-        <div class="dash-kpi-num" id="dash-kpi-received">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill emerald" id="dash-kpi-rec-pct">0% of Cut</span>
-          <span class="dash-kpi-hint" id="dash-kpi-rec-challans">0 Inward Challans</span>
+      <!-- Master Inventory Table (Excel Image 1 Structure) -->
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="master-table" id="table-master-inventory">
+            <thead>
+              <!-- Group Header Row matching Excel Layout -->
+              <tr class="group-header">
+                <th colspan="5">STYLE INFORMATION</th>
+                <th colspan="4" class="rec-section">RECEIVING SECTION</th>
+                <th colspan="6" class="dis-section">DISPATCH SECTION</th>
+                <th>ACTIONS</th>
+              </tr>
+              <!-- Column Header Row -->
+              <tr class="column-header">
+                <th>SR</th>
+                <th>STYLE CODE</th>
+                <th>SHIP</th>
+                <th>CATEGORY</th>
+                <th>CUT QTY</th>
+
+                <!-- Receiving Section Columns -->
+                <th class="rec-section">RECEIVED QTY</th>
+                <th class="rec-section">BALANCE FROM STOCK</th>
+                <th class="rec-section">DATE RECEIVE</th>
+                <th class="rec-section">CHALLAN REC</th>
+
+                <!-- Dispatch Section Columns -->
+                <th class="dis-section">DISPATCH FROM H-EMB</th>
+                <th class="dis-section">BALNCE FROM H-EMB</th>
+                <th class="dis-section">TOTAL BALANCE</th>
+                <th class="dis-section">DATE DISPATCH</th>
+                <th class="dis-section">CHALLAN DIS</th>
+                <th class="dis-section">CONT NAME</th>
+
+                <th>ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-master-inventory">
+              <!-- Dynamically populated from JS -->
+            </tbody>
+          </table>
         </div>
       </div>
+    </section>
 
-      <!-- Card 3: Dispatched (Completed) -->
-      <div class="dash-kpi-card" data-jump="dispatch-log" title="Click to view Outward Dispatch Log">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Dispatched (Done)</span>
-          <div class="dash-kpi-icon cyan">📤</div>
-        </div>
-        <div class="dash-kpi-num" id="dash-kpi-dispatched">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill cyan" id="dash-kpi-fulfillment-rate">0% Fulfilled</span>
-          <span class="dash-kpi-hint" id="dash-kpi-dis-challans">0 Outward Challans</span>
-        </div>
-      </div>
-
-      <!-- Card 4: Balance in H-Emb (Floor WIP) -->
-      <div class="dash-kpi-card highlight-rose" data-jump="final-style" title="Click to view Daily Sheet (Active WIP)">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Balance In H-Emb (WIP)</span>
-          <div class="dash-kpi-icon rose">🪡</div>
-        </div>
-        <div class="dash-kpi-num text-rose" id="dash-kpi-wip">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill rose" id="dash-kpi-wip-badge">Active on Floor / Adda</span>
-          <span class="dash-kpi-hint">With contractors</span>
-        </div>
-      </div>
-
-      <!-- Card 5: Balance from Stock (Cutting Pending) -->
-      <div class="dash-kpi-card" data-jump="master-inventory" title="Click to view in Master Inventory">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Balance From Stock</span>
-          <div class="dash-kpi-icon amber">⏳</div>
-        </div>
-        <div class="dash-kpi-num text-amber" id="dash-kpi-stock-bal">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill amber" id="dash-kpi-stock-pct">0% Pending</span>
-          <span class="dash-kpi-hint">To arrive from cutting</span>
-        </div>
-      </div>
-
-      <!-- Card 6: Active Contractors Engaged -->
-      <div class="dash-kpi-card" data-jump="contractors" title="Click to view Contractors Hub">
-        <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Contractors Engaged</span>
-          <div class="dash-kpi-icon purple">👥</div>
-        </div>
-        <div class="dash-kpi-num" id="dash-kpi-contractors">0</div>
-        <div class="dash-kpi-bottom">
-          <span class="dash-kpi-pill purple" id="dash-kpi-cont-active">0 With WIP</span>
-          <span class="dash-kpi-hint">Holding active pieces</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Production Progress Pipeline (Lifecycle Funnel) -->
-    <div class="dash-card" style="margin-bottom: 1.25rem;">
-      <div class="dash-card-header">
+    <!-- ============================================================== -->
+    <!-- TAB 2: INWARD RECEIVING LOG (Dedicated Line Item Table)         -->
+    <!-- ============================================================== -->
+    <section id="receiving-log-view" class="tab-view" role="region" aria-label="Receiving Log" aria-hidden="true">
+      <div class="view-toolbar">
         <div>
-          <h3 class="dash-card-title">📊 Overall Production Progress Pipeline</h3>
-          <p class="dash-card-subtitle">Complete lifecycle of cutting orders moving through Hand Embroidery to Unit
-            Dispatch</p>
+          <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📥 Inward Receiving Log</span>
+            <span class="badge-tag inline" id="rec-kpi-count-badge">0 Challans</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Every receiving challan from cutting / stock saved as
+            an
+            individual line item.</p>
         </div>
-        <div class="dash-pipeline-metrics" id="dash-pipeline-metrics">
-          <span class="dash-metric-tag" id="dash-metric-done-tag">Done: 0%</span>
-          <span class="dash-metric-tag wip" id="dash-metric-wip-tag">WIP: 0%</span>
-        </div>
-      </div>
 
-      <!-- Multi-segment visual progress track -->
-      <div class="dash-pipeline-track-wrapper">
-        <div class="dash-pipeline-track">
-          <div class="dash-track-bar bar-dispatched" id="dash-bar-dispatched" style="width: 0%;" title="Dispatched">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="rec-search-input" placeholder="Search Style Code, Challan, Contractor...">
           </div>
-          <div class="dash-track-bar bar-wip" id="dash-bar-wip" style="width: 0%;" title="Floor WIP"></div>
-          <div class="dash-track-bar bar-stock" id="dash-bar-stock" style="width: 0%;" title="Pending from Cutting">
-          </div>
-        </div>
-      </div>
 
-      <!-- Pipeline Legends with Piece counts and percentages -->
-      <div class="dash-pipeline-legend">
-        <div class="dash-legend-item">
-          <span class="dash-legend-dot dispatched"></span>
-          <div class="dash-legend-text">
-            <span class="dash-legend-title">Dispatched & Completed</span>
-            <strong class="dash-legend-qty" id="dash-legend-dispatched">0 pcs (0%)</strong>
-          </div>
-        </div>
-        <div class="dash-legend-item">
-          <span class="dash-legend-dot wip"></span>
-          <div class="dash-legend-text">
-            <span class="dash-legend-title">WIP in Hand-Embroidery (On Adda)</span>
-            <strong class="dash-legend-qty" id="dash-legend-wip">0 pcs (0%)</strong>
-          </div>
-        </div>
-        <div class="dash-legend-item">
-          <span class="dash-legend-dot stock"></span>
-          <div class="dash-legend-text">
-            <span class="dash-legend-title">Pending from Cutting / Stock</span>
-            <strong class="dash-legend-qty" id="dash-legend-stock">0 pcs (0%)</strong>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Two-Column Grid 1: Contractor Workload Matrix & Floor Alerts / Priority Styles -->
-    <div class="dash-two-col-grid">
-      <!-- Column 1: Contractor Workload Matrix -->
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div>
-            <h3 class="dash-card-title">⚖️ Contractor WIP & Workload Distribution</h3>
-            <p class="dash-card-subtitle">Pending embroidery pieces currently in custody of each contractor</p>
-          </div>
-          <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('contractors')">
-            Contractors Hub →
-          </button>
-        </div>
-        <div class="dash-contractor-list" id="dash-contractor-workload-list">
-          <!-- Dynamically populated contractor cards -->
-        </div>
-      </div>
-
-      <!-- Column 2: Floor Remarks & Bottlenecks -->
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div>
-            <h3 class="dash-card-title">⚠️ Floor Remarks & Bottlenecks</h3>
-            <p class="dash-card-subtitle">Active styles flagged with Material Issue, Alteration or Highest WIP</p>
-          </div>
-          <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('final-style')">
-            Daily Sheet →
-          </button>
-        </div>
-        <div class="dash-floor-remarks-list" id="dash-floor-remarks-list">
-          <!-- Dynamically populated alerts & high-WIP styles -->
-        </div>
-      </div>
-    </div>
-
-    <!-- Two-Column Grid 2: Garment Category Breakdown & Recent Challans Activity Stream -->
-    <div class="dash-two-col-grid" style="margin-top: 1.25rem;">
-      <!-- Column 1: Garment Category Breakdown -->
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div>
-            <h3 class="dash-card-title">👗 Category & Garment Breakdown</h3>
-            <p class="dash-card-subtitle">Distribution of volume and completion by garment type (Shirt, Dupatta, etc.)
-            </p>
-          </div>
-        </div>
-        <div class="dash-category-grid" id="dash-category-breakdown-grid">
-          <!-- Dynamically populated category cards -->
-        </div>
-      </div>
-
-      <!-- Column 2: Recent Activity Log Stream -->
-      <div class="dash-card">
-        <div class="dash-card-header">
-          <div>
-            <h3 class="dash-card-title">🔄 Recent Challan Activity</h3>
-            <p class="dash-card-subtitle">Latest inward receiving and outward dispatch transactions</p>
-          </div>
-          <div class="dash-filter-pills" id="dash-stream-filter-pills">
-            <button type="button" class="dash-pill-btn active" data-stream="all">All</button>
-            <button type="button" class="dash-pill-btn" data-stream="rec">📥 Inward</button>
-            <button type="button" class="dash-pill-btn" data-stream="dis">📤 Outward</button>
-          </div>
-        </div>
-        <div class="dash-activity-stream" id="dash-activity-stream-list">
-          <!-- Dynamically populated activity rows -->
-        </div>
-      </div>
-    </div>
-
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 1: MASTER INVENTORY VIEW (Exact to First Image)           -->
-  <!-- ============================================================== -->
-  <section id="master-inventory-view" class="tab-view" role="region" aria-label="Master Inventory" aria-hidden="true">
-
-    <!-- KPI Summary Cards Banner for Master Inventory -->
-    <div class="kpi-grid">
-      <div class="kpi-card cyan">
-        <span class="kpi-label">Total Cut Quantity</span>
-        <div class="kpi-value" id="kpi-total-cut">0</div>
-        <span class="kpi-sub">Total pieces cut for embroidery</span>
-      </div>
-
-      <div class="kpi-card indigo">
-        <span class="kpi-label">Received in H-Emb</span>
-        <div class="kpi-value" id="kpi-total-received">0</div>
-        <span class="kpi-sub">Physically arrived from cutting/stock</span>
-      </div>
-
-      <div class="kpi-card emerald">
-        <span class="kpi-label">Dispatched From H-Emb</span>
-        <div class="kpi-value" id="kpi-total-dispatched">0</div>
-        <span class="kpi-sub">Completed & returned to unit</span>
-      </div>
-
-      <div class="kpi-card rose">
-        <span class="kpi-label">Balance In H-Emb (WIP)</span>
-        <div class="kpi-value" id="kpi-total-balance-hemb">0</div>
-        <span class="kpi-sub">Currently with contractors / on adda</span>
-      </div>
-
-      <div class="kpi-card amber">
-        <span class="kpi-label">Balance From Stock</span>
-        <div class="kpi-value" id="kpi-total-balance-stock">0</div>
-        <span class="kpi-sub">Pending to be delivered by cutting</span>
-      </div>
-    </div>
-
-    <!-- Master Inventory Toolbar Panel (Search, Filters & Full-Width Action Grid) -->
-    <div class="master-toolbar-panel">
-      <div class="master-filter-row">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color: var(--text-muted)">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="master-search-input" placeholder="Search Style Code, Contractor, Challan...">
-        </div>
-
-        <div class="filter-group">
-          <select class="app-select" id="filter-contractor">
-            <option value="">All Contractors</option>
-          </select>
-
-          <select class="app-select" id="filter-category">
+          <select class="app-select" id="filter-rec-category">
             <option value="">All Categories</option>
             <option value="Shirt">Shirt</option>
             <option value="Dupatta">Dupatta</option>
@@ -709,1174 +843,1063 @@
             <option value="Sleeve">Sleeve</option>
           </select>
 
-          <select class="app-select" id="filter-balance-status">
-            <option value="">All Balances</option>
-            <option value="pending_hemb">Has H-Emb Balance (> 0)</option>
-            <option value="pending_stock">Pending From Stock (> 0)</option>
-            <option value="completed">Completed (0 Balance)</option>
+          <select class="app-select" id="filter-rec-contractor">
+            <option value="">All Contractors</option>
           </select>
+
+          <button class="btn btn-primary btn-sm" id="btn-open-rec-modal">
+            📥 + New Receiving Entry
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-rec-csv">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Receiving CSV
+          </button>
         </div>
       </div>
 
-      <div class="master-actions-grid">
-        <button class="btn btn-action-dock" id="btn-quick-receiving" title="Quickly record incoming goods from cutting">
-          <span class="btn-dock-icon">📥</span>
-          <span>+ Receive Stock</span>
-        </button>
-        <button class="btn btn-action-dock" id="btn-quick-dispatch" title="Quickly record finished embroidery dispatch">
-          <span class="btn-dock-icon">📤</span>
-          <span>+ Dispatch Entry</span>
-        </button>
-        <button class="btn btn-action-dock" id="btn-goto-receiving" title="View all receiving challan line entries">
-          <span class="btn-dock-icon">📋</span>
-          <span>View Receiving Log</span>
-        </button>
-        <button class="btn btn-action-dock" id="btn-goto-dispatch" title="View all dispatch challan line entries">
-          <span class="btn-dock-icon">🚚</span>
-          <span>View Dispatch Log</span>
-        </button>
-        <button class="btn btn-action-dock" id="btn-export-master-csv" title="Export current table to CSV file">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          <span>Export Excel/CSV</span>
-        </button>
-        <button class="btn btn-action-dock btn-action-danger" id="btn-clear-all"
-          title="Clear all local data and start fresh">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"></polyline>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-          </svg>
-          <span>Clear All Data</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Master Inventory Table (Excel Image 1 Structure) -->
-    <div class="table-card">
-      <div class="table-responsive">
-        <table class="master-table" id="table-master-inventory">
-          <thead>
-            <!-- Group Header Row matching Excel Layout -->
-            <tr class="group-header">
-              <th colspan="5">STYLE INFORMATION</th>
-              <th colspan="4" class="rec-section">RECEIVING SECTION</th>
-              <th colspan="6" class="dis-section">DISPATCH SECTION</th>
-              <th>ACTIONS</th>
-            </tr>
-            <!-- Column Header Row -->
-            <tr class="column-header">
-              <th>SR</th>
-              <th>STYLE CODE</th>
-              <th>SHIP</th>
-              <th>CATEGORY</th>
-              <th>CUT QTY</th>
-
-              <!-- Receiving Section Columns -->
-              <th class="rec-section">RECEIVED QTY</th>
-              <th class="rec-section">BALANCE FROM STOCK</th>
-              <th class="rec-section">DATE RECEIVE</th>
-              <th class="rec-section">CHALLAN REC</th>
-
-              <!-- Dispatch Section Columns -->
-              <th class="dis-section">DISPATCH FROM H-EMB</th>
-              <th class="dis-section">BALNCE FROM H-EMB</th>
-              <th class="dis-section">TOTAL BALANCE</th>
-              <th class="dis-section">DATE DISPATCH</th>
-              <th class="dis-section">CHALLAN DIS</th>
-              <th class="dis-section">CONT NAME</th>
-
-              <th>ACTION</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-master-inventory">
-            <!-- Dynamically populated from JS -->
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 2: INWARD RECEIVING LOG (Dedicated Line Item Table)         -->
-  <!-- ============================================================== -->
-  <section id="receiving-log-view" class="tab-view" role="region" aria-label="Receiving Log" aria-hidden="true">
-    <div class="view-toolbar">
-      <div>
-        <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-          <span>📥 Inward Receiving Log</span>
-          <span class="badge-tag inline" id="rec-kpi-count-badge">0 Challans</span>
-        </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">Every receiving challan from cutting / stock saved as an
-          individual line item.</p>
-      </div>
-
-      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color: var(--text-muted)">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="rec-search-input" placeholder="Search Style Code, Challan, Contractor...">
+      <!-- Receiving Mini KPI Banner -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem;">
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Total Receiving Entries</span>
+          <div class="kpi-value" id="rec-kpi-entries">0</div>
+          <span class="kpi-sub">Total challan line items</span>
         </div>
-
-        <select class="app-select" id="filter-rec-category">
-          <option value="">All Categories</option>
-          <option value="Shirt">Shirt</option>
-          <option value="Dupatta">Dupatta</option>
-          <option value="Trouser">Trouser</option>
-          <option value="Gala">Gala</option>
-          <option value="Sleeve">Sleeve</option>
-        </select>
-
-        <select class="app-select" id="filter-rec-contractor">
-          <option value="">All Contractors</option>
-        </select>
-
-        <button class="btn btn-primary btn-sm" id="btn-open-rec-modal">
-          📥 + New Receiving Entry
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-export-rec-csv">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export Receiving CSV
-        </button>
-      </div>
-    </div>
-
-    <!-- Receiving Mini KPI Banner -->
-    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem;">
-      <div class="kpi-card cyan">
-        <span class="kpi-label">Total Receiving Entries</span>
-        <div class="kpi-value" id="rec-kpi-entries">0</div>
-        <span class="kpi-sub">Total challan line items</span>
-      </div>
-      <div class="kpi-card indigo">
-        <span class="kpi-label">Total Pieces Received</span>
-        <div class="kpi-value" id="rec-kpi-pieces">0</div>
-        <span class="kpi-sub">Sum of incoming garments</span>
-      </div>
-      <div class="kpi-card emerald">
-        <span class="kpi-label">Styles & Categories</span>
-        <div class="kpi-value" id="rec-kpi-distinct">0</div>
-        <span class="kpi-sub">Distinct style varieties</span>
-      </div>
-    </div>
-
-    <!-- Receiving Log Table -->
-    <div class="table-card">
-      <div class="table-responsive">
-        <table class="master-table" id="table-receiving-log">
-          <thead>
-            <tr class="column-header">
-              <th style="width: 50px; text-align: center;">SR</th>
-              <th>DATE RECEIVE</th>
-              <th>CHALLAN #</th>
-              <th>STYLE CODE</th>
-              <th>CATEGORY</th>
-              <th>CONTRACTOR</th>
-              <th style="text-align: right;">CUT ORDER</th>
-              <th style="text-align: right; background: rgba(14, 165, 233, 0.1);">RECEIVED QTY</th>
-              <th>REMARKS</th>
-              <th style="width: 70px; text-align: center;">ACTION</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-receiving-log">
-            <!-- Dynamically populated -->
-          </tbody>
-          <tfoot id="tfoot-receiving-log" style="font-weight: 800; background: var(--bg-card-hover);">
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 3: OUTWARD DISPATCH LOG (Dedicated Line Item Table)        -->
-  <!-- ============================================================== -->
-  <section id="dispatch-log-view" class="tab-view" role="region" aria-label="Dispatch Log" aria-hidden="true">
-    <div class="view-toolbar">
-      <div>
-        <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-          <span>📤 Outward Dispatch Log</span>
-          <span class="badge-tag inline" id="dis-kpi-count-badge">0 Challans</span>
-        </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">Every finished hand embroidery dispatch challan to unit
-          saved as an individual line item.</p>
-      </div>
-
-      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color: var(--text-muted)">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="dis-search-input" placeholder="Search Style Code, Challan, Contractor...">
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Total Pieces Received</span>
+          <div class="kpi-value" id="rec-kpi-pieces">0</div>
+          <span class="kpi-sub">Sum of incoming garments</span>
         </div>
-
-        <select class="app-select" id="filter-dis-category">
-          <option value="">All Categories</option>
-          <option value="Shirt">Shirt</option>
-          <option value="Dupatta">Dupatta</option>
-          <option value="Trouser">Trouser</option>
-          <option value="Gala">Gala</option>
-          <option value="Sleeve">Sleeve</option>
-        </select>
-
-        <select class="app-select" id="filter-dis-contractor">
-          <option value="">All Contractors</option>
-        </select>
-
-        <button class="btn btn-primary btn-sm" id="btn-open-dis-modal">
-          📤 + New Dispatch Entry
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-export-dis-csv">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-          </svg>
-          Export Dispatch CSV
-        </button>
-      </div>
-    </div>
-
-    <!-- Dispatch Mini KPI Banner -->
-    <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem;">
-      <div class="kpi-card indigo">
-        <span class="kpi-label">Total Dispatch Entries</span>
-        <div class="kpi-value" id="dis-kpi-entries">0</div>
-        <span class="kpi-sub">Total challan line items</span>
-      </div>
-      <div class="kpi-card emerald">
-        <span class="kpi-label">Total Pieces Dispatched</span>
-        <div class="kpi-value" id="dis-kpi-pieces">0</div>
-        <span class="kpi-sub">Finished embroidery sent to unit</span>
-      </div>
-      <div class="kpi-card rose">
-        <span class="kpi-label">Styles & Categories</span>
-        <div class="kpi-value" id="dis-kpi-distinct">0</div>
-        <span class="kpi-sub">Distinct style varieties</span>
-      </div>
-    </div>
-
-    <!-- Dispatch Log Table -->
-    <div class="table-card">
-      <div class="table-responsive">
-        <table class="master-table" id="table-dispatch-log">
-          <thead>
-            <tr class="column-header">
-              <th style="width: 50px; text-align: center;">SR</th>
-              <th>DATE DISPATCH</th>
-              <th>CHALLAN #</th>
-              <th>STYLE CODE</th>
-              <th>CATEGORY</th>
-              <th>CONTRACTOR</th>
-              <th style="text-align: right; background: rgba(99, 102, 241, 0.1);">DISPATCH QTY</th>
-              <th>STATUS / REMARKS</th>
-              <th style="width: 70px; text-align: center;">ACTION</th>
-            </tr>
-          </thead>
-          <tbody id="tbody-dispatch-log">
-            <!-- Dynamically populated -->
-          </tbody>
-          <tfoot id="tfoot-dispatch-log" style="font-weight: 800; background: var(--bg-card-hover);">
-          </tfoot>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 2: DAILY FINAL STYLE SHEET (Exact to Second Image)        -->
-  <!-- ============================================================== -->
-  <section id="final-style-view" class="tab-view" role="region" aria-label="Daily Sheet" aria-hidden="true">
-
-    <!-- Print Only Title Header for Clean Paper Reports -->
-    <div class="print-only-title" style="display: none;">
-      <h2>HAND EMBROIDERY DEPARTMENT - DAILY RUNNING STYLE STATUS</h2>
-      <p id="print-date-display">Date: 17-Oct-2026</p>
-    </div>
-
-    <!-- Report Header Banner -->
-    <div class="report-header-banner">
-      <div class="report-header-left">
-        <div>
-          <h2 style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">Daily Running Style Status Sheet
-          </h2>
-          <p style="font-size: 0.8rem; color: var(--text-muted);">Auto-fetches contractor, quantities, and balances
-            directly from Master Inventory.</p>
-        </div>
-
-        <div class="date-selector-wrapper">
-          <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-muted);">Sheet Date:</span>
-          <input type="date" class="app-input" id="report-date-picker" value="2026-10-17">
-          <div class="date-display-badge" id="report-formatted-date">17-Oct-2026</div>
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Styles & Categories</span>
+          <div class="kpi-value" id="rec-kpi-distinct">0</div>
+          <span class="kpi-sub">Distinct style varieties</span>
         </div>
       </div>
 
-      <div class="report-header-actions">
-        <button class="btn btn-secondary btn-sm" id="btn-auto-populate-active"
-          title="Add all active styles with pending H-Emb balance to this sheet">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-          </svg>
-          Auto-Add Active Styles
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-export-final-csv" title="Export this report to Excel/CSV">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          </svg>
-          Export Sheet
-        </button>
-
-        <button class="btn btn-primary btn-sm" id="btn-print-report" title="Print clean official report for management">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-            <rect x="6" y="14" width="12" height="8"></rect>
-          </svg>
-          Print / PDF Report
-        </button>
-      </div>
-    </div>
-
-    <!-- Quick Add Style Row (User selects Style Code + Category, Rest auto-fetches) -->
-    <div class="quick-add-bar">
-      <span
-        style="font-weight: 700; font-size: 0.85rem; color: var(--primary); display: flex; align-items: center; gap: 0.35rem;">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"></circle>
-          <line x1="12" y1="8" x2="12" y2="16"></line>
-          <line x1="8" y1="12" x2="16" y2="12"></line>
-        </svg>
-        Select Style to Add:
-      </span>
-
-      <select class="app-select" id="quick-style-select" style="min-width: 200px;">
-        <option value="">-- Choose Style Code --</option>
-      </select>
-
-      <select class="app-select" id="quick-category-select">
-        <option value="Shirt">Shirt</option>
-        <option value="Dupatta">Dupatta</option>
-        <option value="Trouser">Trouser</option>
-        <option value="Gala">Gala</option>
-        <option value="Sleeve">Sleeve</option>
-      </select>
-
-      <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 220px;">
-        <input type="text" class="app-input" id="quick-remarks-input"
-          placeholder="Time / Status / Remarks (e.g. MATERIAL NOT AVAILABLE)" style="width: 100%;">
-
-        <!-- Preset quick buttons for remarks -->
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL NOT AVAILABLE')"
-          title="Material Not Available">M-NA</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL ISSUE')"
-          title="Material Issue">M-Issue</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Inline')"
-          title="Inline production">Inline</button>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('ALTER')"
-          title="Alteration">Alter</button>
-      </div>
-
-      <button class="btn btn-primary" id="btn-add-final-style">
-        + Add to Daily Sheet
-      </button>
-    </div>
-
-    <!-- Final Style Main Grid Layout -->
-    <div class="final-style-grid">
-      <!-- Table matching Image 2 -->
+      <!-- Receiving Log Table -->
       <div class="table-card">
         <div class="table-responsive">
-          <table class="master-table" id="table-final-styles">
+          <table class="master-table" id="table-receiving-log">
             <thead>
               <tr class="column-header">
-                <th style="width: 45px; text-align: center;">S NO</th>
+                <th style="width: 50px; text-align: center;">SR</th>
+                <th>DATE RECEIVE</th>
+                <th>CHALLAN #</th>
                 <th>STYLE CODE</th>
                 <th>CATEGORY</th>
-                <th>CONT NAME</th>
-                <th>CUT QTY</th>
-                <th>RECEIVED QTY</th>
-                <th style="background: rgba(244, 63, 94, 0.1);">BALANCE FROM STOCK</th>
-                <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
-                <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
-                <th style="width: 60px; text-align: center;">ACTION</th>
+                <th>CONTRACTOR</th>
+                <th style="text-align: right;">CUT ORDER</th>
+                <th style="text-align: right; background: rgba(14, 165, 233, 0.1);">RECEIVED QTY</th>
+                <th>REMARKS</th>
+                <th style="width: 70px; text-align: center;">ACTION</th>
               </tr>
             </thead>
-            <tbody id="tbody-final-styles">
-              <!-- Dynamically populated from JS -->
+            <tbody id="tbody-receiving-log">
+              <!-- Dynamically populated -->
             </tbody>
-            <tfoot id="tfoot-final-styles" style="font-weight: 800; background: var(--bg-card-hover);">
-              <!-- Totals row calculated automatically -->
+            <tfoot id="tfoot-receiving-log" style="font-weight: 800; background: var(--bg-card-hover);">
             </tfoot>
           </table>
         </div>
       </div>
-
-      <!-- Sidebar Summary Cards (Contractor Balances from Excel Sheet) -->
-      <aside class="summary-sidebar">
-        <!-- Contractor Balance Widget -->
-        <div class="contractor-summary-card">
-          <h3>
-            <span>Contractor Pending Workload</span>
-            <span class="badge-tag inline" id="cont-summary-count">0 Conts</span>
-          </h3>
-          <div id="contractor-summary-list">
-            <!-- Dynamically populated -->
-          </div>
-        </div>
-
-        <!-- Production Quick Notes Card -->
-        <div class="contractor-summary-card">
-          <h3>
-            <span>Floor Quick Checklist</span>
-          </h3>
-          <div style="font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.5rem;">
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" checked> Verify incoming challans with gate pass
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox" checked> Check material issues (thread, beads, sequins)
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox"> Prioritize CPC export batch (JGF-26-1962)
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
-              <input type="checkbox"> Reconcile evening dispatches before print
-            </label>
-          </div>
-        </div>
-      </aside>
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB: WORK DISTRIBUTION & CONTRACTOR ALLOCATION                -->
-  <!-- Bi-Monthly Style Distribution to 6 Contractors (Exact to Image) -->
-  <!-- ============================================================== -->
-  <section id="work-distribution-view" class="tab-view" role="region" aria-label="Work Distribution" aria-hidden="true">
-
-    <!-- Official Distribute Banner (Exact to Image 3: Payment Approval Summary Card Style) -->
-    <div class="excel-sheet-header-banner">
-      <h1 class="excel-main-title">Work Distribution Summary</h1>
-      <div class="excel-period-subtitle">
-        <div style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-          <span style="font-weight: 700;">Date on Distribute Pcs</span>
-          <div
-            style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
-            <select id="select-distribution-period" class="app-select"
-              style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 270px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
-              <!-- Dynamic Periods populated from db.getDistributionPeriods() -->
-            </select>
-
-            <input type="text" id="input-distribution-period" class="app-input" list="datalist-distribution-periods"
-              placeholder="Type period name..."
-              style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
-            <datalist id="datalist-distribution-periods"></datalist>
-
-            <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-dist-period-input"
-              title="Switch between dropdown and typing period name" style="padding: 4px 8px; font-size: 0.75rem;">
-              ✏️ Type Period
-            </button>
-          </div>
-        </div>
-      </div>
-      <div class="excel-dept-subtitle">Hand Embroidery Department • 6 Contractors Distribution Cycle</div>
-    </div>
-
-    <!-- Action Toolbar -->
-    <div class="view-toolbar" style="margin-bottom: 1.25rem;">
-      <div>
-        <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-          <span>Contractor Work Distribution (تقسیم کار)</span>
-          <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Bi-Monthly Cycles</span>
-        </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-          Distribute styles to 6 contractors. Auto-links contractor names across Master Inventory, Receiving, Dispatch,
-          Daily & Payment sheets!
-        </p>
-      </div>
-
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn-primary" id="btn-open-dist-entry-modal">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>+ New Distribution Entry</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-open-dist-setup-toolbar"
-          title="Setup a new distribution time period sheet or manage existing sheets">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-            </path>
-          </svg>
-          <span>Sheet Setup</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-print-dist-sheet"
-          title="Print official contractor distribution sheet">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-            <rect x="6" y="14" width="12" height="8"></rect>
-          </svg>
-          <span>Print Sheet</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-export-dist-csv"
-          title="Export distribution sheet to CSV / Excel">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          </svg>
-          <span>Export CSV</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- KPI Summary Cards Banner -->
-    <section class="kpi-grid" style="margin-bottom: 1.25rem;">
-      <div class="kpi-card emerald" style="border: 2px solid #10b981;">
-        <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Distributed Pieces</span>
-        <div class="kpi-value" id="kpi-dist-total-pcs" style="font-size: 1.6rem; color: #34d399;">0</div>
-        <span class="kpi-sub" style="color: #6ee7b7;">Total pieces allocated to contractors</span>
-      </div>
-
-      <div class="kpi-card cyan">
-        <span class="kpi-label">Total Distribution Value</span>
-        <div class="kpi-value" id="kpi-dist-total-amount">Rs 0</div>
-        <span class="kpi-sub">Total amount (Qty × Rate)</span>
-      </div>
-
-      <div class="kpi-card indigo">
-        <span class="kpi-label">Total Style Entries</span>
-        <div class="kpi-value" id="kpi-dist-total-styles">0</div>
-        <span class="kpi-sub">Allocations in selected period</span>
-      </div>
-
-      <div class="kpi-card amber">
-        <span class="kpi-label">Average Rate / Piece</span>
-        <div class="kpi-value" id="kpi-dist-avg-rate">Rs 0</div>
-        <span class="kpi-sub">Weighted average rate</span>
-      </div>
     </section>
 
-    <!-- 6 Contractors Distribution Breakdown Bar -->
-    <div class="contractor-share-panel"
-      style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1.15rem; margin-bottom: 1.25rem;">
-      <div
-        style="font-size: 0.825rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.65rem; display: flex; align-items: center; justify-content: space-between;">
-        <span>👥 6 Contractors Distribution Breakdown (Pcs Share)</span>
-        <span style="font-size: 0.75rem; color: var(--text-muted);">Click contractor chip to quick filter</span>
-      </div>
-      <div id="dist-contractor-chips-container" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <!-- Populated dynamically with chips: Imtiaz, Asim, Asif, Naveed, Touseef, Shoaib, Joint -->
-      </div>
-    </div>
-
-    <!-- Filter and Search Toolbar Panel -->
-    <div class="master-toolbar-panel" style="margin-bottom: 1.25rem;">
-      <div class="master-filter-row">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color: var(--text-muted)">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="search-dist-input" placeholder="Search by Style Code, Contractor, Floor, Item..."
-            autocomplete="off">
+    <!-- ============================================================== -->
+    <!-- TAB 3: OUTWARD DISPATCH LOG (Dedicated Line Item Table)        -->
+    <!-- ============================================================== -->
+    <section id="dispatch-log-view" class="tab-view" role="region" aria-label="Dispatch Log" aria-hidden="true">
+      <div class="view-toolbar">
+        <div>
+          <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>📤 Outward Dispatch Log</span>
+            <span class="badge-tag inline" id="dis-kpi-count-badge">0 Challans</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Every finished hand embroidery dispatch challan to
+            unit
+            saved as an individual line item.</p>
         </div>
 
-        <div class="filter-group">
-          <select id="filter-dist-contractor" class="app-select">
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="dis-search-input" placeholder="Search Style Code, Challan, Contractor...">
+          </div>
+
+          <select class="app-select" id="filter-dis-category">
+            <option value="">All Categories</option>
+            <option value="Shirt">Shirt</option>
+            <option value="Dupatta">Dupatta</option>
+            <option value="Trouser">Trouser</option>
+            <option value="Gala">Gala</option>
+            <option value="Sleeve">Sleeve</option>
+          </select>
+
+          <select class="app-select" id="filter-dis-contractor">
             <option value="">All Contractors</option>
-            <option value="IMTIAZ">Imtiaz</option>
-            <option value="ASIM">Asim</option>
-            <option value="ASIF">Asif</option>
-            <option value="NAVEED">Naveed</option>
-            <option value="TOUSEEF">Touseef</option>
-            <option value="SHOAIB">Shoaib</option>
-            <option value="JOINT">Combined / Joint Contractors</option>
           </select>
 
-          <select id="filter-dist-floor" class="app-select">
-            <option value="">All Floors</option>
-            <option value="2">Floor 2</option>
-            <option value="3">Floor 3</option>
-            <option value="3B">Floor 3B</option>
-            <option value="4">Floor 4</option>
-            <option value="5">Floor 5</option>
-          </select>
+          <button class="btn btn-primary btn-sm" id="btn-open-dis-modal">
+            📤 + New Dispatch Entry
+          </button>
 
-          <select id="filter-dist-item" class="app-select">
-            <option value="">All Items</option>
-            <option value="SHIRT">SHIRT</option>
-            <option value="DUPATTA">DUPATTA</option>
-            <option value="TROUSER">TROUSER</option>
-            <option value="GALA">GALA</option>
-          </select>
-
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-dist-filters" title="Reset all filters">
-            ✕ Reset
+          <button class="btn btn-secondary btn-sm" id="btn-export-dis-csv">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Dispatch CSV
           </button>
         </div>
       </div>
-    </div>
 
-    <!-- Work Distribution Table (Exact to User's Uploaded Image) -->
-    <div class="table-container" style="max-height: 700px; overflow-y: auto;">
-      <table class="table-rate-approval table-dist-sheet" id="table-work-distribution">
-        <thead>
-          <tr>
-            <th style="width: 50px; text-align: center; vertical-align: middle;">SR NO</th>
-            <th style="width: 150px; text-align: left; vertical-align: middle;">STYLE CODE</th>
-            <th style="width: 140px; text-align: left; vertical-align: middle;">CONT NAME</th>
-            <th style="width: 90px; text-align: right; vertical-align: middle;">PCS QTY</th>
-            <th style="width: 80px; text-align: right; vertical-align: middle;">RATE</th>
-            <th style="width: 85px; text-align: center; vertical-align: middle;">ITEM</th>
-            <th style="width: 70px; text-align: center; vertical-align: middle;">Floor</th>
-            <th style="width: 110px; max-width: 120px; text-align: right; vertical-align: middle;">Total</th>
-            <th style="width: 160px; text-align: center; vertical-align: middle;">Time Period</th>
-            <th style="width: 95px; text-align: center; vertical-align: middle;">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="work-distribution-tbody">
-          <!-- Dynamic rows populated from js/app.js -->
-        </tbody>
-        <tfoot id="work-distribution-tfoot">
-          <!-- Dynamic totals -->
-        </tfoot>
-      </table>
-    </div>
-
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB: PAYMENT & DEDUCTION MANAGEMENT SHEET                      -->
-  <!-- (Image Entries, Cutoff Deductions, Dorie & Floor Challans)    -->
-  <!-- ============================================================== -->
-  <section id="payment-sheet-view" class="tab-view" role="region" aria-label="Payment Sheet" aria-hidden="true">
-    <!-- Official Excel Header Banner (Exact to Image) -->
-    <div class="excel-sheet-header-banner">
-      <h1 class="excel-main-title">Payment Approval Summary</h1>
-      <div class="excel-period-subtitle">
-        <div style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
-          <span style="font-weight: 700;">For The Period Of</span>
-          <div
-            style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
-            <select id="select-rate-approval-period" class="app-select"
-              style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 260px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
-              <!-- Populated dynamically from db.getRateApprovalPeriods() -->
-            </select>
-
-            <input type="text" id="input-rate-approval-period" class="app-input" list="datalist-rate-approval-periods"
-              placeholder="Type period name..."
-              style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
-            <datalist id="datalist-rate-approval-periods"></datalist>
-
-            <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-period-input"
-              title="Switch between dropdown and typing period name" style="padding: 4px 8px; font-size: 0.75rem;">
-              ✏️ Type Period
-            </button>
-          </div>
+      <!-- Dispatch Mini KPI Banner -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 1rem;">
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Total Dispatch Entries</span>
+          <div class="kpi-value" id="dis-kpi-entries">0</div>
+          <span class="kpi-sub">Total challan line items</span>
+        </div>
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Total Pieces Dispatched</span>
+          <div class="kpi-value" id="dis-kpi-pieces">0</div>
+          <span class="kpi-sub">Finished embroidery sent to unit</span>
+        </div>
+        <div class="kpi-card rose">
+          <span class="kpi-label">Styles & Categories</span>
+          <div class="kpi-value" id="dis-kpi-distinct">0</div>
+          <span class="kpi-sub">Distinct style varieties</span>
         </div>
       </div>
-      <div class="excel-dept-subtitle" id="excel-dept-label">Hand Embroidery Department</div>
-    </div>
 
-    <!-- Action Toolbar -->
-    <div class="view-toolbar" style="margin-bottom: 1.25rem;">
-      <div>
-        <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-          <span>Rate Approval & Payment Management</span>
-          <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Approval & Payment
-            Ledger</span>
-        </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-          Review piece approvals, rates, and real-time inventory balances across styles
-        </p>
-      </div>
-
-      <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn-primary" id="btn-open-payment-modal">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-          <span>+ New Entry</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-toggle-view-mode"
-          title="Toggle between Excel Table and Detailed Cards">
-          <span id="label-view-mode">📊 Excel Sheet View</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-reset-excel-sample" title="Clear all entries from this sheet">
-          <span>🗑️ Clear Table</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-open-sheet-setup-modal"
-          title="Setup a new time period sheet or manage existing sheets">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"></circle>
-            <path
-              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-            </path>
-          </svg>
-          <span>Sheet Setup</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-print-payment-sheet"
-          title="Print clean official rate approval sheet">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 6 2 18 2 18 9"></polyline>
-            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-            <rect x="6" y="14" width="12" height="8"></rect>
-          </svg>
-          <span>Print Sheet</span>
-        </button>
-
-        <button class="btn btn-secondary btn-sm" id="btn-export-payment-csv" title="Export to CSV / Excel spreadsheet">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="7 10 12 15 17 10"></polyline>
-            <line x1="12" y1="15" x2="12" y2="3"></line>
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          </svg>
-          <span>Export CSV</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- KPI Summary Cards Banner (Matching Excel Summary) -->
-    <section class="kpi-grid" style="margin-bottom: 1.25rem;">
-      <div class="kpi-card cyan">
-        <span class="kpi-label">Total Cut Quantity</span>
-        <div class="kpi-value" id="kpi-pay-total-cut">54,159</div>
-        <span class="kpi-sub">Total master pieces across styles</span>
-      </div>
-
-      <div class="kpi-card emerald">
-        <span class="kpi-label">Prod Pcs (This Sheet)</span>
-        <div class="kpi-value" id="kpi-pay-prod-pcs">42,158</div>
-        <span class="kpi-sub">Approved in current period</span>
-      </div>
-
-      <div class="kpi-card indigo">
-        <span class="kpi-label">Previous Pay Receive</span>
-        <div class="kpi-value" id="kpi-pay-prev-receive">0</div>
-        <span class="kpi-sub">Received from previous sheets</span>
-      </div>
-
-      <div class="kpi-card emerald" style="border: 2px solid #10b981;">
-        <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Pcs Qt (Approved)</span>
-        <div class="kpi-value" id="kpi-pay-cumulative-total" style="font-size: 1.6rem; color: #34d399;">0</div>
-        <span class="kpi-sub" style="color: #6ee7b7;">Cumulative Approved (Current + Past)</span>
-      </div>
-
-      <div class="kpi-card rose">
-        <span class="kpi-label">Total Pending Balance</span>
-        <div class="kpi-value" id="kpi-pay-total-balance">0</div>
-        <span class="kpi-sub">Pending Pieces & Deductions</span>
+      <!-- Dispatch Log Table -->
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="master-table" id="table-dispatch-log">
+            <thead>
+              <tr class="column-header">
+                <th style="width: 50px; text-align: center;">SR</th>
+                <th>DATE DISPATCH</th>
+                <th>CHALLAN #</th>
+                <th>STYLE CODE</th>
+                <th>CATEGORY</th>
+                <th>CONTRACTOR</th>
+                <th style="text-align: right; background: rgba(99, 102, 241, 0.1);">DISPATCH QTY</th>
+                <th>STATUS / REMARKS</th>
+                <th style="width: 70px; text-align: center;">ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-dispatch-log">
+              <!-- Dynamically populated -->
+            </tbody>
+            <tfoot id="tfoot-dispatch-log" style="font-weight: 800; background: var(--bg-card-hover);">
+            </tfoot>
+          </table>
+        </div>
       </div>
     </section>
 
-    <!-- SMART STYLE & CATEGORY AUDIT PANEL (Dual-Condition Intelligence) -->
     <!-- ============================================================== -->
-    <div class="smart-audit-panel" id="smart-audit-panel">
-      <div class="audit-header-row">
-        <div class="audit-title-text">
-          <h3>
-            <span>🔍</span>
-            <span>Smart Style & Category Audit</span>
-          </h3>
-          <p>
-            Enter Style Code and Category to cross-audit past sheets, calculate approved pieces, check remaining
-            balances, and verify delivery channels.
+    <!-- TAB 2: DAILY FINAL STYLE SHEET (Exact to Second Image)        -->
+    <!-- ============================================================== -->
+    <section id="final-style-view" class="tab-view" role="region" aria-label="Daily Sheet" aria-hidden="true">
+
+      <!-- Print Only Title Header for Clean Paper Reports -->
+      <div class="print-only-title" style="display: none;">
+        <h2>HAND EMBROIDERY DEPARTMENT - DAILY RUNNING STYLE STATUS</h2>
+        <p id="print-date-display">Date: 17-Oct-2026</p>
+      </div>
+
+      <!-- Report Header Banner -->
+      <div class="report-header-banner">
+        <div class="report-header-left">
+          <div>
+            <h2 style="font-size: 1.25rem; font-weight: 800; letter-spacing: -0.02em;">Daily Running Style Status Sheet
+            </h2>
+            <p style="font-size: 0.8rem; color: var(--text-muted);">Auto-fetches contractor, quantities, and balances
+              directly from Master Inventory.</p>
+          </div>
+
+          <div class="date-selector-wrapper">
+            <span style="font-weight: 700; font-size: 0.85rem; color: var(--text-muted);">Sheet Date:</span>
+            <input type="date" class="app-input" id="report-date-picker" value="2026-10-17">
+            <div class="date-display-badge" id="report-formatted-date">17-Oct-2026</div>
+          </div>
+        </div>
+
+        <div class="report-header-actions">
+          <button class="btn btn-secondary btn-sm" id="btn-auto-populate-active"
+            title="Add all active styles with pending H-Emb balance to this sheet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            Auto-Add Active Styles
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-final-csv" title="Export this report to Excel/CSV">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            </svg>
+            Export Sheet
+          </button>
+
+          <button class="btn btn-primary btn-sm" id="btn-print-report"
+            title="Print clean official report for management">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            Print / PDF Report
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Add Style Row (User selects Style Code + Category, Rest auto-fetches) -->
+      <div class="quick-add-bar">
+        <span
+          style="font-weight: 700; font-size: 0.85rem; color: var(--primary); display: flex; align-items: center; gap: 0.35rem;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="16"></line>
+            <line x1="8" y1="12" x2="16" y2="12"></line>
+          </svg>
+          Select Style to Add:
+        </span>
+
+        <select class="app-select" id="quick-style-select" style="min-width: 200px;">
+          <option value="">-- Choose Style Code --</option>
+        </select>
+
+        <select class="app-select" id="quick-category-select">
+          <option value="Shirt">Shirt</option>
+          <option value="Dupatta">Dupatta</option>
+          <option value="Trouser">Trouser</option>
+          <option value="Gala">Gala</option>
+          <option value="Sleeve">Sleeve</option>
+        </select>
+
+        <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 220px;">
+          <input type="text" class="app-input" id="quick-remarks-input"
+            placeholder="Time / Status / Remarks (e.g. MATERIAL NOT AVAILABLE)" style="width: 100%;">
+
+          <!-- Preset quick buttons for remarks -->
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL NOT AVAILABLE')"
+            title="Material Not Available">M-NA</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL ISSUE')"
+            title="Material Issue">M-Issue</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Inline')"
+            title="Inline production">Inline</button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('ALTER')"
+            title="Alteration">Alter</button>
+        </div>
+
+        <button class="btn btn-primary" id="btn-add-final-style">
+          + Add to Daily Sheet
+        </button>
+      </div>
+
+      <!-- Final Style Main Grid Layout -->
+      <div class="final-style-grid">
+        <!-- Table matching Image 2 -->
+        <div class="table-card">
+          <div class="table-responsive">
+            <table class="master-table" id="table-final-styles">
+              <thead>
+                <tr class="column-header">
+                  <th style="width: 45px; text-align: center;">S NO</th>
+                  <th>STYLE CODE</th>
+                  <th>CATEGORY</th>
+                  <th>CONT NAME</th>
+                  <th>CUT QTY</th>
+                  <th>RECEIVED QTY</th>
+                  <th style="background: rgba(244, 63, 94, 0.1);">BALANCE FROM STOCK</th>
+                  <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
+                  <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
+                  <th style="width: 60px; text-align: center;">ACTION</th>
+                </tr>
+              </thead>
+              <tbody id="tbody-final-styles">
+                <!-- Dynamically populated from JS -->
+              </tbody>
+              <tfoot id="tfoot-final-styles" style="font-weight: 800; background: var(--bg-card-hover);">
+                <!-- Totals row calculated automatically -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- Sidebar Summary Cards (Contractor Balances from Excel Sheet) -->
+        <aside class="summary-sidebar">
+          <!-- Contractor Balance Widget -->
+          <div class="contractor-summary-card">
+            <h3>
+              <span>Contractor Pending Workload</span>
+              <span class="badge-tag inline" id="cont-summary-count">0 Conts</span>
+            </h3>
+            <div id="contractor-summary-list">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Production Quick Notes Card -->
+          <div class="contractor-summary-card">
+            <h3>
+              <span>Floor Quick Checklist</span>
+            </h3>
+            <div
+              style="font-size: 0.8rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.5rem;">
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" checked> Verify incoming challans with gate pass
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox" checked> Check material issues (thread, beads, sequins)
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox"> Prioritize CPC export batch (JGF-26-1962)
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                <input type="checkbox"> Reconcile evening dispatches before print
+              </label>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB: WORK DISTRIBUTION & CONTRACTOR ALLOCATION                -->
+    <!-- Bi-Monthly Style Distribution to 6 Contractors (Exact to Image) -->
+    <!-- ============================================================== -->
+    <section id="work-distribution-view" class="tab-view" role="region" aria-label="Work Distribution"
+      aria-hidden="true">
+
+      <!-- Official Distribute Banner (Exact to Image 3: Payment Approval Summary Card Style) -->
+      <div class="excel-sheet-header-banner">
+        <h1 class="excel-main-title">Work Distribution Summary</h1>
+        <div class="excel-period-subtitle">
+          <div
+            style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+            <span style="font-weight: 700;">Date on Distribute Pcs</span>
+            <div
+              style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
+              <select id="select-distribution-period" class="app-select"
+                style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 270px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
+                <!-- Dynamic Periods populated from db.getDistributionPeriods() -->
+              </select>
+
+              <input type="text" id="input-distribution-period" class="app-input" list="datalist-distribution-periods"
+                placeholder="Type period name..."
+                style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
+              <datalist id="datalist-distribution-periods"></datalist>
+
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-dist-period-input"
+                title="Switch between dropdown and typing period name" style="padding: 4px 8px; font-size: 0.75rem;">
+                ✏️ Type Period
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="excel-dept-subtitle">Hand Embroidery Department • 6 Contractors Distribution Cycle</div>
+      </div>
+
+      <!-- Action Toolbar -->
+      <div class="view-toolbar" style="margin-bottom: 1.25rem;">
+        <div>
+          <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>Contractor Work Distribution (تقسیم کار)</span>
+            <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Bi-Monthly Cycles</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+            Distribute styles to 6 contractors. Auto-links contractor names across Master Inventory, Receiving,
+            Dispatch,
+            Daily & Payment sheets!
           </p>
         </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-quick-test"
-            title="Quick sample test JGP-26-1746">
-            ⚡ Test: JGP-26-1746
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="btn-open-dist-entry-modal">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            <span>+ New Distribution Entry</span>
           </button>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-dorie-test"
-            title="Quick test Dorie style JLS-26-3018">
-            🧵 Test: DORIE (JLS-26-3018)
+
+          <button class="btn btn-secondary btn-sm" id="btn-open-dist-setup-toolbar"
+            title="Setup a new distribution time period sheet or manage existing sheets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
+            </svg>
+            <span>Sheet Setup</span>
           </button>
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-floor-test"
-            title="Quick test Floor style JPS-ROX-26-3918">
-            🏢 Test: 28 Floor
+
+          <button class="btn btn-secondary btn-sm" id="btn-print-dist-sheet"
+            title="Print official contractor distribution sheet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            <span>Print Sheet</span>
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-dist-csv"
+            title="Export distribution sheet to CSV / Excel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            </svg>
+            <span>Export CSV</span>
           </button>
         </div>
       </div>
 
-      <div class="audit-search-form">
-        <div class="form-group" style="margin-bottom: 0;">
-          <label for="audit-input-style" style="font-weight: 700; color: #38bdf8;">1. Style Code *:</label>
-          <input type="text" class="app-input" id="audit-input-style"
-            placeholder="Type or select style (e.g. JLS-26-983, JGP-26-1746...)" list="audit-styles-datalist"
-            autocomplete="off" style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem;">
-          <datalist id="audit-styles-datalist"></datalist>
+      <!-- KPI Summary Cards Banner -->
+      <section class="kpi-grid" style="margin-bottom: 1.25rem;">
+        <div class="kpi-card emerald" style="border: 2px solid #10b981;">
+          <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Distributed Pieces</span>
+          <div class="kpi-value" id="kpi-dist-total-pcs" style="font-size: 1.6rem; color: #34d399;">0</div>
+          <span class="kpi-sub" style="color: #6ee7b7;">Total pieces allocated to contractors</span>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-          <label for="audit-input-category" style="font-weight: 700; color: #38bdf8;">2. Working / Category *:</label>
-          <select class="app-select" id="audit-input-category" style="font-weight: 700;">
-            <option value="SHIRT">SHIRT</option>
-            <option value="DUPATTA">DUPATTA</option>
-            <option value="TROUSER">TROUSER</option>
-            <option value="GALA">GALA</option>
-            <option value="SLEEVE">SLEEVE</option>
-          </select>
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Total Distribution Value</span>
+          <div class="kpi-value" id="kpi-dist-total-amount">Rs 0</div>
+          <span class="kpi-sub">Total amount (Qty × Rate)</span>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-          <button type="button" class="btn btn-primary" id="btn-execute-smart-audit"
-            style="height: 42px; font-weight: 800; padding: 0 1.25rem;">
-            ⚡ View Audit Result
-          </button>
-        </div>
-      </div>
-
-      <!-- Dynamic Results Card Container -->
-      <div id="smart-audit-result-display" style="display: none;"></div>
-    </div>
-
-    <!-- Filter and Search Toolbar Panel -->
-    <div class="master-toolbar-panel" style="margin-bottom: 1.25rem;">
-      <div class="master-filter-row">
-        <div class="search-box">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            style="color: var(--text-muted)">
-            <circle cx="11" cy="11" r="8"></circle>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-          </svg>
-          <input type="text" id="payment-search-input"
-            placeholder="Search Style Name, Contractor, Remarks (DORIE, 28 floor, Pay Receive, close)...">
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Total Style Entries</span>
+          <div class="kpi-value" id="kpi-dist-total-styles">0</div>
+          <span class="kpi-sub">Allocations in selected period</span>
         </div>
 
-        <div class="filter-group">
-          <select class="app-select" id="filter-payment-channel">
-            <option value="">All Payment Channels</option>
-            <option value="dorie">🧵 DORIE Claim</option>
-            <option value="floor_transfer">🏢 Other Floor Transfer (28 Floor / Gatepass)</option>
-            <option value="stock_direct">📦 Direct Stock Delivery</option>
-          </select>
-
-          <select class="app-select" id="filter-payment-status">
-            <option value="">All Statuses</option>
-            <option value="close">✅ Close (Fully Cleared)</option>
-            <option value="deduction">✂️ Deductions</option>
-            <option value="balance">⏳ With Balance (> 0 Balance)</option>
-          </select>
-
-          <select class="app-select" id="filter-payment-contractor">
-            <option value="">All Contractors</option>
-          </select>
+        <div class="kpi-card amber">
+          <span class="kpi-label">Average Rate / Piece</span>
+          <div class="kpi-value" id="kpi-dist-avg-rate">Rs 0</div>
+          <span class="kpi-sub">Weighted average rate</span>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- Table Quick Navigation & Horizontal Scroll Controls -->
-    <div class="table-scroll-toolbar"
-      style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding: 0.4rem 0.75rem; background: rgba(17, 24, 39, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-      <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
-        <span style="color: var(--primary); font-size: 1rem;">↔️</span>
-        <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
-      </span>
-      <div style="display: flex; gap: 0.4rem;">
-        <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-left" title="Scroll Left">
-          ◀ Scroll Left
-        </button>
-        <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-right" title="Scroll Right">
-          Scroll Right ▶
-        </button>
-      </div>
-    </div>
-
-    <!-- ============================================================== -->
-    <!-- VIEW 1: EXCEL RATE APPROVAL SUMMARY TABLE (EXACT TO IMAGE)     -->
-    <!-- ============================================================== -->
-    <div class="table-container" id="container-excel-table">
-      <table class="table-rate-approval" id="table-rate-approval">
-        <thead>
-          <tr>
-            <th style="width: 45px;">S.NO</th>
-            <th style="min-width: 130px;">Style Name</th>
-            <th style="min-width: 80px;">Working</th>
-            <th style="min-width: 100px;">Cont Name</th>
-            <th style="min-width: 85px;">H-Emb P-O Fix Rate</th>
-            <th style="min-width: 75px;">CUT QTY</th>
-            <th style="min-width: 75px;">Prod Pcs Qty</th>
-            <th style="min-width: 85px;">Carigar Rate</th>
-            <th style="min-width: 85px;">Commission</th>
-            <th style="min-width: 80px;">Total</th>
-            <th style="min-width: 170px;">Remarks</th>
-            <th style="min-width: 85px;" class="header-group-bal">BALANCE FROM STOCK</th>
-            <th style="min-width: 85px;" class="header-group-bal">BALANCE FROM H-EMB</th>
-            <th style="min-width: 85px;" class="header-group-bal">TOTAL BALANCE</th>
-            <th style="min-width: 150px; text-align: center; vertical-align: middle;">Time Period</th>
-            <th style="width: 80px;">ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-rate-approval">
-          <!-- Populated from JS -->
-        </tbody>
-        <tfoot id="tfoot-rate-approval">
-          <!-- Calculated dynamically from JS (Default: Total Pcs Qt: 51004) -->
-        </tfoot>
-      </table>
-    </div>
-
-    <!-- ============================================================== -->
-    <!-- VIEW 2: DETAILED PAYMENT & PHOTO LEDGER (TOGGLEABLE)          -->
-    <!-- ============================================================== -->
-    <div class="table-container" id="container-detailed-table" style="display: none;">
-      <table class="data-table" id="table-payment-sheet">
-        <thead>
-          <tr class="column-header">
-            <th style="width: 55px; text-align: center;">PHOTO</th>
-            <th style="width: 50px; text-align: center;">SR</th>
-            <th>STYLE CODE & SHIP</th>
-            <th>CATEGORY</th>
-            <th>CONTRACTOR</th>
-            <th>PAYMENT CHANNEL & ROUTE</th>
-            <th>CUTOFF & SUBMIT</th>
-            <th style="text-align: right;">TOTAL PCS & RATE</th>
-            <th style="text-align: right;">TOTAL BILL (PKR)</th>
-            <th style="text-align: right; background: rgba(16, 185, 129, 0.08);">PAID (PCS & PKR)</th>
-            <th style="text-align: right; background: rgba(244, 63, 94, 0.08);">BALANCE (PCS & PKR)</th>
-            <th style="text-align: right;">DEDUCTION</th>
-            <th style="text-align: center;">STATUS</th>
-            <th style="min-width: 140px; text-align: center;">TIME PERIOD</th>
-            <th style="width: 120px; text-align: center;">ACTIONS</th>
-          </tr>
-        </thead>
-        <tbody id="tbody-payment-sheet">
-          <!-- Dynamically populated from JS -->
-        </tbody>
-        <tfoot id="tfoot-payment-sheet" style="font-weight: 800; background: var(--bg-card-hover);">
-          <!-- Totals row calculated automatically -->
-        </tfoot>
-      </table>
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 3: CONTRACTORS WORKLOAD & PERFORMANCE                     -->
-  <!-- ============================================================== -->
-  <section id="contractors-view" class="tab-view" role="region" aria-label="Contractors Hub" aria-hidden="true">
-    <div class="view-toolbar">
-      <div>
-        <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-          <span>Contractor Workload & Directory</span>
-          <span class="badge-tag"
-            style="background: rgba(0, 229, 153, 0.12); color: #00e599; border: 1px solid rgba(0, 229, 153, 0.3); font-size: 0.725rem;">⚡
-            Neon Cloud Connected</span>
-        </h2>
-        <p style="font-size: 0.8rem; color: var(--text-muted);">Real-time tracking of active style balances, pending
-          pieces, and verified Neon contractors directory.</p>
-      </div>
-
-      <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
-        <!-- View Mode Toggle Buttons -->
-        <div class="btn-group"
-          style="display: flex; background: var(--bg-surface); padding: 3px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-          <button class="btn btn-sm active" id="btn-cont-mode-workload"
-            style="font-size: 0.775rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
-            <span>⚖️ Active Workload</span>
-            <span class="badge-tag rose inline" id="badge-workload-count"
-              style="padding: 1px 6px; font-size: 0.7rem;">0</span>
-          </button>
-          <button class="btn btn-sm" id="btn-cont-mode-directory"
-            style="font-size: 0.775rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
-            <span>👥 Contractors Directory</span>
-            <span class="badge-tag inline" id="badge-directory-count"
-              style="padding: 1px 6px; font-size: 0.7rem;">6</span>
-          </button>
-          <button class="btn btn-sm" id="btn-cont-mode-both" style="font-size: 0.775rem; font-weight: 700;">
-            👁️ Show Both
-          </button>
-        </div>
-
-        <button class="btn btn-primary" id="btn-open-new-contractor">
-          + Add New Contractor
-        </button>
-      </div>
-    </div>
-
-    <div id="contractors-card-grid">
-      <!-- Dynamically populated with Active Workload cards & Directory cards -->
-    </div>
-  </section>
-
-  <!-- ============================================================== -->
-  <!-- TAB 4: NEON POSTGRESQL SYNC & SETTINGS                        -->
-  <!-- ============================================================== -->
-  <section id="neon-sync-view" class="tab-view" role="region" aria-label="Neon Cloud Sync" aria-hidden="true">
-    <div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
-
-      <!-- Neon Banner Card -->
-      <div class="contractor-summary-card" style="padding: 1.75rem;">
-        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
-          <div
-            style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #00e599; display: flex; align-items: center; justify-content: center; color: black; font-weight: 900; font-size: 1.3rem;">
-            N
-          </div>
-          <div>
-            <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 0.2rem;">Neon PostgreSQL Cloud Sync</h2>
-            <p style="font-size: 0.85rem; color: var(--text-muted);">Connect your serverless PostgreSQL database to
-              synchronize master inventory and daily reports across all devices.</p>
-          </div>
-        </div>
-
-        <!-- Step-by-Step Neon Guide Alert -->
+      <!-- 6 Contractors Distribution Breakdown Bar -->
+      <div class="contractor-share-panel"
+        style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1.15rem; margin-bottom: 1.25rem;">
         <div
-          style="background: rgba(0, 229, 153, 0.08); border: 1px solid rgba(0, 229, 153, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.825rem; line-height: 1.6;">
+          style="font-size: 0.825rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.65rem; display: flex; align-items: center; justify-content: space-between;">
+          <span>👥 6 Contractors Distribution Breakdown (Pcs Share)</span>
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Click contractor chip to quick filter</span>
+        </div>
+        <div id="dist-contractor-chips-container" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <!-- Populated dynamically with chips: Imtiaz, Asim, Asif, Naveed, Touseef, Shoaib, Joint -->
+        </div>
+      </div>
+
+      <!-- Filter and Search Toolbar Panel -->
+      <div class="master-toolbar-panel" style="margin-bottom: 1.25rem;">
+        <div class="master-filter-row">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="search-dist-input" placeholder="Search by Style Code, Contractor, Floor, Item..."
+              autocomplete="off">
+          </div>
+
+          <div class="filter-group">
+            <select id="filter-dist-contractor" class="app-select">
+              <option value="">All Contractors</option>
+              <option value="IMTIAZ">Imtiaz</option>
+              <option value="ASIM">Asim</option>
+              <option value="ASIF">Asif</option>
+              <option value="NAVEED">Naveed</option>
+              <option value="TOUSEEF">Touseef</option>
+              <option value="SHOAIB">Shoaib</option>
+              <option value="JOINT">Combined / Joint Contractors</option>
+            </select>
+
+            <select id="filter-dist-floor" class="app-select">
+              <option value="">All Floors</option>
+              <option value="2">Floor 2</option>
+              <option value="3">Floor 3</option>
+              <option value="3B">Floor 3B</option>
+              <option value="4">Floor 4</option>
+              <option value="5">Floor 5</option>
+            </select>
+
+            <select id="filter-dist-item" class="app-select">
+              <option value="">All Items</option>
+              <option value="SHIRT">SHIRT</option>
+              <option value="DUPATTA">DUPATTA</option>
+              <option value="TROUSER">TROUSER</option>
+              <option value="GALA">GALA</option>
+            </select>
+
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-clear-dist-filters"
+              title="Reset all filters">
+              ✕ Reset
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Work Distribution Table (Exact to User's Uploaded Image) -->
+      <div class="table-container" style="max-height: 700px; overflow-y: auto;">
+        <table class="table-rate-approval table-dist-sheet" id="table-work-distribution">
+          <thead>
+            <tr>
+              <th style="width: 50px; text-align: center; vertical-align: middle;">SR NO</th>
+              <th style="width: 150px; text-align: left; vertical-align: middle;">STYLE CODE</th>
+              <th style="width: 140px; text-align: left; vertical-align: middle;">CONT NAME</th>
+              <th style="width: 90px; text-align: right; vertical-align: middle;">PCS QTY</th>
+              <th style="width: 80px; text-align: right; vertical-align: middle;">RATE</th>
+              <th style="width: 85px; text-align: center; vertical-align: middle;">ITEM</th>
+              <th style="width: 70px; text-align: center; vertical-align: middle;">Floor</th>
+              <th style="width: 110px; max-width: 120px; text-align: right; vertical-align: middle;">Total</th>
+              <th style="width: 160px; text-align: center; vertical-align: middle;">Time Period</th>
+              <th style="width: 95px; text-align: center; vertical-align: middle;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="work-distribution-tbody">
+            <!-- Dynamic rows populated from js/app.js -->
+          </tbody>
+          <tfoot id="work-distribution-tfoot">
+            <!-- Dynamic totals -->
+          </tfoot>
+        </table>
+      </div>
+
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB: PAYMENT & DEDUCTION MANAGEMENT SHEET                      -->
+    <!-- (Image Entries, Cutoff Deductions, Dorie & Floor Challans)    -->
+    <!-- ============================================================== -->
+    <section id="payment-sheet-view" class="tab-view" role="region" aria-label="Payment Sheet" aria-hidden="true">
+      <!-- Official Excel Header Banner (Exact to Image) -->
+      <div class="excel-sheet-header-banner">
+        <h1 class="excel-main-title">Payment Approval Summary</h1>
+        <div class="excel-period-subtitle">
           <div
-            style="font-weight: 700; color: #00e599; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
-            <span>🔑 How to Connect Neon in 3 Simple Steps:</span>
-          </div>
-          <ol
-            style="margin-left: 1.25rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.25rem;">
-            <li>In your <strong>Neon Console</strong> modal, click <strong>"Show password"</strong> (bottom-left) so the
-              asterisks (<code>****</code>) reveal your actual password!</li>
-            <li>Click <strong>"Copy snippet"</strong> to copy the full string:
-              <code>postgresql://neondb_owner:...@ep-...aws.neon.tech/neondb...</code>
-            </li>
-            <li>Paste it into the box below and click <strong>"Save Neon Settings"</strong> & then <strong>"Test Neon
-                Connection"</strong>.</li>
-          </ol>
-        </div>
+            style="display: inline-flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+            <span style="font-weight: 700;">For The Period Of</span>
+            <div
+              style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
+              <select id="select-rate-approval-period" class="app-select"
+                style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 260px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
+                <!-- Populated dynamically from db.getRateApprovalPeriods() -->
+              </select>
 
-        <!-- Connection Form -->
-        <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label for="neon-conn-string">Neon Database Connection String (Direct or Pooled):</label>
-            <button type="button" id="btn-toggle-neon-pw" class="btn btn-secondary btn-sm"
-              style="padding: 2px 8px; font-size: 0.725rem;">Show / Hide</button>
-          </div>
-          <input type="password" class="app-input" id="neon-conn-string"
-            placeholder="postgresql://neondb_owner:YOUR_ACTUAL_PASSWORD@ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require">
-          <span style="font-size: 0.725rem; color: var(--text-faint);">Make sure your real password is in the URL
-            instead of asterisks (****).</span>
-        </div>
+              <input type="text" id="input-rate-approval-period" class="app-input" list="datalist-rate-approval-periods"
+                placeholder="Type period name..."
+                style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
+              <datalist id="datalist-rate-approval-periods"></datalist>
 
-        <div class="form-grid-2">
-          <div class="form-group">
-            <label for="neon-endpoint-url">Neon HTTP SQL Endpoint URL (Optional):</label>
-            <input type="text" class="app-input" id="neon-endpoint-url"
-              placeholder="https://ep-cool-pond-123456.us-east-2.aws.neon.tech/sql">
-          </div>
-
-          <div class="form-group">
-            <label for="neon-api-key">Neon Password / Auth Token:</label>
-            <input type="password" class="app-input" id="neon-api-key"
-              placeholder="Enter database password or API token">
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-period-input"
+                title="Switch between dropdown and typing period name" style="padding: 4px 8px; font-size: 0.75rem;">
+                ✏️ Type Period
+              </button>
+            </div>
           </div>
         </div>
+        <div class="excel-dept-subtitle" id="excel-dept-label">Hand Embroidery Department</div>
+      </div>
 
-        <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
-          <button class="btn btn-secondary" id="btn-test-neon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"></circle>
-              <line x1="12" y1="16" x2="12" y2="12"></line>
-              <line x1="12" y1="8" x2="12.01" y2="8"></line>
+      <!-- Action Toolbar -->
+      <div class="view-toolbar" style="margin-bottom: 1.25rem;">
+        <div>
+          <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>Rate Approval & Payment Management</span>
+            <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Approval & Payment
+              Ledger</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
+            Review piece approvals, rates, and real-time inventory balances across styles
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="btn-open-payment-modal">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            Test Neon Connection
+            <span>+ New Entry</span>
           </button>
 
-          <button class="btn btn-primary" id="btn-save-neon-cfg">
-            Save Neon Settings
+          <button class="btn btn-secondary btn-sm" id="btn-toggle-view-mode"
+            title="Toggle between Excel Table and Detailed Cards">
+            <span id="label-view-mode">📊 Excel Sheet View</span>
           </button>
 
-          <button class="btn btn-secondary" id="btn-init-neon-tables">
-            Initialize Neon Tables
+          <button class="btn btn-secondary btn-sm" id="btn-reset-excel-sample"
+            title="Clear all entries from this sheet">
+            <span>🗑️ Clear Table</span>
           </button>
 
-          <button class="btn btn-secondary" id="btn-migrate-neon-tables"
-            title="Remove useless columns from Neon payment table and add period column">
-            🔧 Clean & Upgrade Table Columns
+          <button class="btn btn-secondary btn-sm" id="btn-open-sheet-setup-modal"
+            title="Setup a new time period sheet or manage existing sheets">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path
+                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+              </path>
+            </svg>
+            <span>Sheet Setup</span>
           </button>
 
+          <button class="btn btn-secondary btn-sm" id="btn-print-payment-sheet"
+            title="Print clean official rate approval sheet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            <span>Print Sheet</span>
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-payment-csv"
+            title="Export to CSV / Excel spreadsheet">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            </svg>
+            <span>Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI Summary Cards Banner (Matching Excel Summary) -->
+      <section class="kpi-grid" style="margin-bottom: 1.25rem;">
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Total Cut Quantity</span>
+          <div class="kpi-value" id="kpi-pay-total-cut">54,159</div>
+          <span class="kpi-sub">Total master pieces across styles</span>
+        </div>
+
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Prod Pcs (This Sheet)</span>
+          <div class="kpi-value" id="kpi-pay-prod-pcs">42,158</div>
+          <span class="kpi-sub">Approved in current period</span>
+        </div>
+
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Previous Pay Receive</span>
+          <div class="kpi-value" id="kpi-pay-prev-receive">0</div>
+          <span class="kpi-sub">Received from previous sheets</span>
+        </div>
+
+        <div class="kpi-card emerald" style="border: 2px solid #10b981;">
+          <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Pcs Qt (Approved)</span>
+          <div class="kpi-value" id="kpi-pay-cumulative-total" style="font-size: 1.6rem; color: #34d399;">0</div>
+          <span class="kpi-sub" style="color: #6ee7b7;">Cumulative Approved (Current + Past)</span>
+        </div>
+
+        <div class="kpi-card rose">
+          <span class="kpi-label">Total Pending Balance</span>
+          <div class="kpi-value" id="kpi-pay-total-balance">0</div>
+          <span class="kpi-sub">Pending Pieces & Deductions</span>
+        </div>
+      </section>
+
+      <!-- SMART STYLE & CATEGORY AUDIT PANEL (Dual-Condition Intelligence) -->
+      <!-- ============================================================== -->
+      <div class="smart-audit-panel" id="smart-audit-panel">
+        <div class="audit-header-row">
+          <div class="audit-title-text">
+            <h3>
+              <span>🔍</span>
+              <span>Smart Style & Category Audit</span>
+            </h3>
+            <p>
+              Enter Style Code and Category to cross-audit past sheets, calculate approved pieces, check remaining
+              balances, and verify delivery channels.
+            </p>
+          </div>
+          <div style="display: flex; gap: 0.5rem;">
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-quick-test"
+              title="Quick sample test JGP-26-1746">
+              ⚡ Test: JGP-26-1746
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-dorie-test"
+              title="Quick test Dorie style JLS-26-3018">
+              🧵 Test: DORIE (JLS-26-3018)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-audit-floor-test"
+              title="Quick test Floor style JPS-ROX-26-3918">
+              🏢 Test: 28 Floor
+            </button>
+          </div>
+        </div>
+
+        <div class="audit-search-form">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="audit-input-style" style="font-weight: 700; color: #38bdf8;">1. Style Code *:</label>
+            <input type="text" class="app-input" id="audit-input-style"
+              placeholder="Type or select style (e.g. JLS-26-983, JGP-26-1746...)" list="audit-styles-datalist"
+              autocomplete="off" style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem;">
+            <datalist id="audit-styles-datalist"></datalist>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="audit-input-category" style="font-weight: 700; color: #38bdf8;">2. Working / Category *:</label>
+            <select class="app-select" id="audit-input-category" style="font-weight: 700;">
+              <option value="SHIRT">SHIRT</option>
+              <option value="DUPATTA">DUPATTA</option>
+              <option value="TROUSER">TROUSER</option>
+              <option value="GALA">GALA</option>
+              <option value="SLEEVE">SLEEVE</option>
+            </select>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <button type="button" class="btn btn-primary" id="btn-execute-smart-audit"
+              style="height: 42px; font-weight: 800; padding: 0 1.25rem;">
+              ⚡ View Audit Result
+            </button>
+          </div>
+        </div>
+
+        <!-- Dynamic Results Card Container -->
+        <div id="smart-audit-result-display" style="display: none;"></div>
+      </div>
+
+      <!-- Filter and Search Toolbar Panel -->
+      <div class="master-toolbar-panel" style="margin-bottom: 1.25rem;">
+        <div class="master-filter-row">
+          <div class="search-box">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="payment-search-input"
+              placeholder="Search Style Name, Contractor, Remarks (DORIE, 28 floor, Pay Receive, close)...">
+          </div>
+
+          <div class="filter-group">
+            <select class="app-select" id="filter-payment-channel">
+              <option value="">All Payment Channels</option>
+              <option value="dorie">🧵 DORIE Claim</option>
+              <option value="floor_transfer">🏢 Other Floor Transfer (28 Floor / Gatepass)</option>
+              <option value="stock_direct">📦 Direct Stock Delivery</option>
+            </select>
+
+            <select class="app-select" id="filter-payment-status">
+              <option value="">All Statuses</option>
+              <option value="close">✅ Close (Fully Cleared)</option>
+              <option value="deduction">✂️ Deductions</option>
+              <option value="balance">⏳ With Balance (> 0 Balance)</option>
+            </select>
+
+            <select class="app-select" id="filter-payment-contractor">
+              <option value="">All Contractors</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar"
+        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding: 0.4rem 0.75rem; background: rgba(17, 24, 39, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+        <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+          <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+          <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view
+            columns</span>
+        </span>
+        <div style="display: flex; gap: 0.4rem;">
+          <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-left" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-right" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 1: EXCEL RATE APPROVAL SUMMARY TABLE (EXACT TO IMAGE)     -->
+      <!-- ============================================================== -->
+      <div class="table-container" id="container-excel-table">
+        <table class="table-rate-approval" id="table-rate-approval">
+          <thead>
+            <tr>
+              <th style="width: 45px;">S.NO</th>
+              <th style="min-width: 130px;">Style Name</th>
+              <th style="min-width: 80px;">Working</th>
+              <th style="min-width: 100px;">Cont Name</th>
+              <th style="min-width: 85px;">H-Emb P-O Fix Rate</th>
+              <th style="min-width: 75px;">CUT QTY</th>
+              <th style="min-width: 75px;">Prod Pcs Qty</th>
+              <th style="min-width: 85px;">Carigar Rate</th>
+              <th style="min-width: 85px;">Commission</th>
+              <th style="min-width: 80px;">Total</th>
+              <th style="min-width: 170px;">Remarks</th>
+              <th style="min-width: 85px;" class="header-group-bal">BALANCE FROM STOCK</th>
+              <th style="min-width: 85px;" class="header-group-bal">BALANCE FROM H-EMB</th>
+              <th style="min-width: 85px;" class="header-group-bal">TOTAL BALANCE</th>
+              <th style="min-width: 150px; text-align: center; vertical-align: middle;">Time Period</th>
+              <th style="width: 80px;">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-rate-approval">
+            <!-- Populated from JS -->
+          </tbody>
+          <tfoot id="tfoot-rate-approval">
+            <!-- Calculated dynamically from JS (Default: Total Pcs Qt: 51004) -->
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- VIEW 2: DETAILED PAYMENT & PHOTO LEDGER (TOGGLEABLE)          -->
+      <!-- ============================================================== -->
+      <div class="table-container" id="container-detailed-table" style="display: none;">
+        <table class="data-table" id="table-payment-sheet">
+          <thead>
+            <tr class="column-header">
+              <th style="width: 55px; text-align: center;">PHOTO</th>
+              <th style="width: 50px; text-align: center;">SR</th>
+              <th>STYLE CODE & SHIP</th>
+              <th>CATEGORY</th>
+              <th>CONTRACTOR</th>
+              <th>PAYMENT CHANNEL & ROUTE</th>
+              <th>CUTOFF & SUBMIT</th>
+              <th style="text-align: right;">TOTAL PCS & RATE</th>
+              <th style="text-align: right;">TOTAL BILL (PKR)</th>
+              <th style="text-align: right; background: rgba(16, 185, 129, 0.08);">PAID (PCS & PKR)</th>
+              <th style="text-align: right; background: rgba(244, 63, 94, 0.08);">BALANCE (PCS & PKR)</th>
+              <th style="text-align: right;">DEDUCTION</th>
+              <th style="text-align: center;">STATUS</th>
+              <th style="min-width: 140px; text-align: center;">TIME PERIOD</th>
+              <th style="width: 120px; text-align: center;">ACTIONS</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-payment-sheet">
+            <!-- Dynamically populated from JS -->
+          </tbody>
+          <tfoot id="tfoot-payment-sheet" style="font-weight: 800; background: var(--bg-card-hover);">
+            <!-- Totals row calculated automatically -->
+          </tfoot>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3: CONTRACTORS WORKLOAD & PERFORMANCE                     -->
+    <!-- ============================================================== -->
+    <section id="contractors-view" class="tab-view" role="region" aria-label="Contractors Hub" aria-hidden="true">
+      <div class="view-toolbar">
+        <div>
+          <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>Contractor Workload & Directory</span>
+            <span class="badge-tag"
+              style="background: rgba(0, 229, 153, 0.12); color: #00e599; border: 1px solid rgba(0, 229, 153, 0.3); font-size: 0.725rem;">⚡
+              Neon Cloud Connected</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Real-time tracking of active style balances, pending
+            pieces, and verified Neon contractors directory.</p>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+          <!-- View Mode Toggle Buttons -->
+          <div class="btn-group"
+            style="display: flex; background: var(--bg-surface); padding: 3px; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+            <button class="btn btn-sm active" id="btn-cont-mode-workload"
+              style="font-size: 0.775rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+              <span>⚖️ Active Workload</span>
+              <span class="badge-tag rose inline" id="badge-workload-count"
+                style="padding: 1px 6px; font-size: 0.7rem;">0</span>
+            </button>
+            <button class="btn btn-sm" id="btn-cont-mode-directory"
+              style="font-size: 0.775rem; font-weight: 700; display: flex; align-items: center; gap: 0.35rem;">
+              <span>👥 Contractors Directory</span>
+              <span class="badge-tag inline" id="badge-directory-count"
+                style="padding: 1px 6px; font-size: 0.7rem;">6</span>
+            </button>
+            <button class="btn btn-sm" id="btn-cont-mode-both" style="font-size: 0.775rem; font-weight: 700;">
+              👁️ Show Both
+            </button>
+          </div>
+
+          <button class="btn btn-primary" id="btn-open-new-contractor">
+            + Add New Contractor
+          </button>
+        </div>
+      </div>
+
+      <div id="contractors-card-grid">
+        <!-- Dynamically populated with Active Workload cards & Directory cards -->
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 4: NEON POSTGRESQL SYNC & SETTINGS                        -->
+    <!-- ============================================================== -->
+    <section id="neon-sync-view" class="tab-view" role="region" aria-label="Neon Cloud Sync" aria-hidden="true">
+      <div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
+
+        <!-- Neon Banner Card -->
+        <div class="contractor-summary-card" style="padding: 1.75rem;">
+          <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
+            <div
+              style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #00e599; display: flex; align-items: center; justify-content: center; color: black; font-weight: 900; font-size: 1.3rem;">
+              N
+            </div>
+            <div>
+              <h2 style="font-size: 1.25rem; font-weight: 800; margin-bottom: 0.2rem;">Neon PostgreSQL Cloud Sync</h2>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">Connect your serverless PostgreSQL database to
+                synchronize master inventory and daily reports across all devices.</p>
+            </div>
+          </div>
+
+          <!-- Step-by-Step Neon Guide Alert -->
           <div
-            style="margin-left: auto; display: flex; align-items: center; gap: 0.6rem; background: var(--bg-card-hover); padding: 0.4rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-            <label
-              style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin: 0;">
-              <input type="checkbox" id="chk-auto-sync" style="width: 17px; height: 17px; cursor: pointer;">
-              <span>Auto-sync on changes</span>
-            </label>
-            <span class="badge-tag inline" id="auto-sync-status-badge"
-              style="font-size: 0.7rem; padding: 1px 6px;">Persistent</span>
+            style="background: rgba(0, 229, 153, 0.08); border: 1px solid rgba(0, 229, 153, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.825rem; line-height: 1.6;">
+            <div
+              style="font-weight: 700; color: #00e599; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+              <span>🔑 How to Connect Neon in 3 Simple Steps:</span>
+            </div>
+            <ol
+              style="margin-left: 1.25rem; color: var(--text-main); display: flex; flex-direction: column; gap: 0.25rem;">
+              <li>In your <strong>Neon Console</strong> modal, click <strong>"Show password"</strong> (bottom-left) so
+                the
+                asterisks (<code>****</code>) reveal your actual password!</li>
+              <li>Click <strong>"Copy snippet"</strong> to copy the full string:
+                <code>postgresql://neondb_owner:...@ep-...aws.neon.tech/neondb...</code>
+              </li>
+              <li>Paste it into the box below and click <strong>"Save Neon Settings"</strong> & then <strong>"Test Neon
+                  Connection"</strong>.</li>
+            </ol>
+          </div>
+
+          <!-- Connection Form -->
+          <div class="form-group">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <label for="neon-conn-string">Neon Database Connection String (Direct or Pooled):</label>
+              <button type="button" id="btn-toggle-neon-pw" class="btn btn-secondary btn-sm"
+                style="padding: 2px 8px; font-size: 0.725rem;">Show / Hide</button>
+            </div>
+            <input type="password" class="app-input" id="neon-conn-string"
+              placeholder="postgresql://neondb_owner:YOUR_ACTUAL_PASSWORD@ep-lucky-fog-aoc4urdw-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require">
+            <span style="font-size: 0.725rem; color: var(--text-faint);">Make sure your real password is in the URL
+              instead of asterisks (****).</span>
+          </div>
+
+          <div class="form-grid-2">
+            <div class="form-group">
+              <label for="neon-endpoint-url">Neon HTTP SQL Endpoint URL (Optional):</label>
+              <input type="text" class="app-input" id="neon-endpoint-url"
+                placeholder="https://ep-cool-pond-123456.us-east-2.aws.neon.tech/sql">
+            </div>
+
+            <div class="form-group">
+              <label for="neon-api-key">Neon Password / Auth Token:</label>
+              <input type="password" class="app-input" id="neon-api-key"
+                placeholder="Enter database password or API token">
+            </div>
+          </div>
+
+          <div style="display: flex; align-items: center; gap: 1rem; margin-top: 1rem; flex-wrap: wrap;">
+            <button class="btn btn-secondary" id="btn-test-neon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="16" x2="12" y2="12"></line>
+                <line x1="12" y1="8" x2="12.01" y2="8"></line>
+              </svg>
+              Test Neon Connection
+            </button>
+
+            <button class="btn btn-primary" id="btn-save-neon-cfg">
+              Save Neon Settings
+            </button>
+
+            <button class="btn btn-secondary" id="btn-init-neon-tables">
+              Initialize Neon Tables
+            </button>
+
+            <button class="btn btn-secondary" id="btn-migrate-neon-tables"
+              title="Remove useless columns from Neon payment table and add period column">
+              🔧 Clean & Upgrade Table Columns
+            </button>
+
+            <div
+              style="margin-left: auto; display: flex; align-items: center; gap: 0.6rem; background: var(--bg-card-hover); padding: 0.4rem 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+              <label
+                style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; font-weight: 700; cursor: pointer; margin: 0;">
+                <input type="checkbox" id="chk-auto-sync" style="width: 17px; height: 17px; cursor: pointer;">
+                <span>Auto-sync on changes</span>
+              </label>
+              <span class="badge-tag inline" id="auto-sync-status-badge"
+                style="font-size: 0.7rem; padding: 1px 6px;">Persistent</span>
+            </div>
+          </div>
+
+          <!-- Connection Status Box -->
+          <div id="neon-test-result" style="margin-top: 1.25rem; display: none;"></div>
+        </div>
+
+        <!-- Sync Actions Card -->
+        <div class="contractor-summary-card">
+          <h3>
+            <span>Cloud Synchronization Controls</span>
+            <span id="last-sync-time" style="font-size: 0.75rem; color: var(--text-faint);">Never synced</span>
+          </h3>
+
+          <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
+            <button class="btn btn-success" id="btn-push-to-neon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 19V5M5 12l7-7 7 7"></path>
+              </svg>
+              Push Local Data to Neon Cloud
+            </button>
+
+            <button class="btn btn-secondary" id="btn-pull-from-neon">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M12 5v14M5 12l7 7 7-7"></path>
+              </svg>
+              Pull Cloud Data from Neon
+            </button>
+
+            <button class="btn btn-secondary" id="btn-view-schema-modal">
+              View PostgreSQL Schema (schema.sql)
+            </button>
           </div>
         </div>
 
-        <!-- Connection Status Box -->
-        <div id="neon-test-result" style="margin-top: 1.25rem; display: none;"></div>
-      </div>
-
-      <!-- Sync Actions Card -->
-      <div class="contractor-summary-card">
-        <h3>
-          <span>Cloud Synchronization Controls</span>
-          <span id="last-sync-time" style="font-size: 0.75rem; color: var(--text-faint);">Never synced</span>
-        </h3>
-
-        <div style="display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;">
-          <button class="btn btn-success" id="btn-push-to-neon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 19V5M5 12l7-7 7 7"></path>
-            </svg>
-            Push Local Data to Neon Cloud
-          </button>
-
-          <button class="btn btn-secondary" id="btn-pull-from-neon">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 5v14M5 12l7 7 7-7"></path>
-            </svg>
-            Pull Cloud Data from Neon
-          </button>
-
-          <button class="btn btn-secondary" id="btn-view-schema-modal">
-            View PostgreSQL Schema (schema.sql)
-          </button>
+        <!-- Offline & LocalStorage Information -->
+        <div class="contractor-summary-card">
+          <h3>
+            <span>High Reliability Architecture (Offline-First)</span>
+          </h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
+            This software is designed with an <strong>Offline-First architecture</strong>. All your master records,
+            dispatch entries, contractor assignments, and daily style sheets are instantly saved in your local browser
+            cache. You can use the software with 100% full speed even without an internet connection, and whenever you
+            connect to Neon PostgreSQL, all your data synchronizes to the cloud!
+          </p>
         </div>
-      </div>
 
-      <!-- Offline & LocalStorage Information -->
-      <div class="contractor-summary-card">
-        <h3>
-          <span>High Reliability Architecture (Offline-First)</span>
-        </h3>
-        <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.6;">
-          This software is designed with an <strong>Offline-First architecture</strong>. All your master records,
-          dispatch entries, contractor assignments, and daily style sheets are instantly saved in your local browser
-          cache. You can use the software with 100% full speed even without an internet connection, and whenever you
-          connect to Neon PostgreSQL, all your data synchronizes to the cloud!
-        </p>
       </div>
-
-    </div>
-  </section>
+    </section>
 
   </main>
 
@@ -3619,6 +3642,41 @@
     </div>
   </div>
 
+  <!-- ============================================================== -->
+  <!-- MOBILE BOTTOM STICKY NAVIGATION DOCK                           -->
+  <!-- Direct 1-tap switching for Master, Daily Sheet, Logs & Dashboard -->
+  <!-- ============================================================== -->
+  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation Dock">
+    <button type="button" class="mobile-bottom-nav-item active" data-tab="dashboard">
+      <span class="bottom-nav-icon">⚡</span>
+      <span class="bottom-nav-label">Dashboard</span>
+    </button>
+    <button type="button" class="mobile-bottom-nav-item" data-tab="master-inventory">
+      <span class="bottom-nav-icon">📦</span>
+      <span class="bottom-nav-label">Master</span>
+      <span class="bottom-nav-badge" id="mobile-bottom-badge-master">0</span>
+    </button>
+    <button type="button" class="mobile-bottom-nav-item" data-tab="receiving-log">
+      <span class="bottom-nav-icon">📥</span>
+      <span class="bottom-nav-label">Receiving</span>
+      <span class="bottom-nav-badge" id="mobile-bottom-badge-rec">0</span>
+    </button>
+    <button type="button" class="mobile-bottom-nav-item" data-tab="dispatch-log">
+      <span class="bottom-nav-icon">📤</span>
+      <span class="bottom-nav-label">Dispatch</span>
+      <span class="bottom-nav-badge" id="mobile-bottom-badge-dis">0</span>
+    </button>
+    <button type="button" class="mobile-bottom-nav-item" data-tab="final-style">
+      <span class="bottom-nav-icon">📋</span>
+      <span class="bottom-nav-label">Daily Sheet</span>
+      <span class="bottom-nav-badge" id="mobile-bottom-badge-final">0</span>
+    </button>
+    <button type="button" class="mobile-bottom-nav-item" data-tab="payment-sheet">
+      <span class="bottom-nav-icon">💰</span>
+      <span class="bottom-nav-label">Payment</span>
+    </button>
+  </nav>
+
   <!-- Isolated Dedicated DOM Root for Clean window.print() Output -->
   <div id="print-studio-paper-root" class="print-studio-paper-root" style="display: none;"></div>
 
@@ -3629,6 +3687,15 @@
   <script src="data.js"></script>
   <script src="db.js"></script>
   <script src="app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(err => {
+          console.log('SW registration note:', err.message);
+        });
+      });
+    }
+  </script>
 </body>
 
 </html>
