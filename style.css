@@ -261,6 +261,14 @@ body {
   margin: 0;
 }
 
+[data-theme="light"] .brand-text h1 {
+  color: #0f172a !important;
+  background: linear-gradient(120deg, #0f172a 65%, #059669 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
 .brand-badge {
   display: inline-flex;
   align-items: center;
@@ -2088,10 +2096,34 @@ body.auth-locked .mobile-bottom-nav {
   font-weight: 800;
   letter-spacing: -0.02em;
   margin: 0;
-  background: linear-gradient(135deg, #ffffff, #a7f3d0);
+  color: #064e3b;
+  background: linear-gradient(135deg, #064e3b 10%, #059669 65%, #047857 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+:root:not([data-theme="light"]) .auth-header h2,
+[data-theme="dark"] .auth-header h2 {
+  color: #ffffff;
+  background: linear-gradient(135deg, #ffffff 40%, #a7f3d0 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+[data-theme="light"] .auth-header h2 {
+  color: #064e3b !important;
+  background: linear-gradient(135deg, #064e3b 0%, #059669 65%, #047857 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+[data-theme="light"] .auth-card {
+  background: #ffffff;
+  border: 1px solid rgba(5, 150, 105, 0.28);
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.12), 0 0 24px rgba(5, 150, 105, 0.08);
 }
 
 .auth-alert {
@@ -2104,6 +2136,12 @@ body.auth-locked .mobile-bottom-nav {
   border: 1px solid #f43f5e;
   color: #fda4af;
   line-height: 1.4;
+}
+
+[data-theme="light"] .auth-alert {
+  background: #fee2e2 !important;
+  border-color: #f87171 !important;
+  color: #991b1b !important;
 }
 
 /* Authentication Form Full-Width Inputs & Eye Toggle */

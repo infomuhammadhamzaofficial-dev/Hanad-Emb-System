@@ -11,10 +11,10 @@
   <meta name="theme-color" content="#0b0f19">
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg?v=12">
-  <link rel="stylesheet" href="style.css?v=12">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=12">
-  <link rel="shortcut icon" href="icon-192.svg?v=12">
+  <link rel="apple-touch-icon" href="icon-192.svg?v=16">
+  <link rel="stylesheet" href="style.css?v=16">
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=16">
+  <link rel="shortcut icon" href="icon-192.svg?v=16">
 </head>
 
 <body>
@@ -22,7 +22,7 @@
   <!-- ============================================================== -->
   <!-- FULL SCREEN AUTHENTICATION OVERLAY                             -->
   <!-- ============================================================== -->
-  <div id="auth-screen-overlay" class="auth-screen-overlay" style="display: none;">
+  <div id="auth-screen-overlay" class="auth-screen-overlay" style="display: flex;">
     <div class="auth-card">
       <div class="auth-header">
         <div class="auth-brand-logo">
@@ -801,7 +801,7 @@
             <thead>
               <!-- Group Header Row matching Excel Layout -->
               <tr class="group-header">
-                <th colspan="5">STYLE INFORMATION</th>
+                <th colspan="4">STYLE INFORMATION</th>
                 <th colspan="4" class="rec-section">RECEIVING SECTION</th>
                 <th colspan="6" class="dis-section">DISPATCH SECTION</th>
                 <th>ACTIONS</th>
@@ -810,7 +810,6 @@
               <tr class="column-header">
                 <th>SR</th>
                 <th>STYLE CODE</th>
-                <th>SHIP</th>
                 <th>CATEGORY</th>
                 <th>CUT QTY</th>
 
@@ -1627,7 +1626,7 @@
           <div class="form-group" style="margin-bottom: 0;">
             <label for="audit-input-style" style="font-weight: 700; color: #38bdf8;">1. Style Code *:</label>
             <input type="text" class="app-input" id="audit-input-style"
-              placeholder="Type or select style (e.g. JLS-26-983, JGP-26-1746...)" list="audit-styles-datalist"
+              placeholder="Type or select style (e.g. JLS-27-001, JST-27-2003...)" list="audit-styles-datalist"
               autocomplete="off" style="font-weight: 700; font-family: var(--font-mono); font-size: 0.95rem;">
             <datalist id="audit-styles-datalist"></datalist>
           </div>
@@ -1751,7 +1750,7 @@
             <tr class="column-header">
               <th style="width: 55px; text-align: center;">PHOTO</th>
               <th style="width: 50px; text-align: center;">SR</th>
-              <th>STYLE CODE & SHIP</th>
+              <th>STYLE CODE</th>
               <th>CATEGORY</th>
               <th>CONTRACTOR</th>
               <th>PAYMENT CHANNEL & ROUTE</th>
@@ -2242,8 +2241,8 @@
             </div>
           </div>
 
-          <!-- Row 3: 7. Total Received/Dispatch Qty | 8. Challan Rec/Dis | 9. Ship / Lot -->
-          <div class="form-grid-3">
+          <!-- Row 3: 7. Total Received/Dispatch Qty | 8. Challan Rec/Dis -->
+          <div class="form-grid-2">
             <!-- 7. Total Received Qty (Receiving mode) -->
             <div class="form-group form-slot-receiving">
               <label for="entry-received-qty" style="color: #38bdf8; font-weight: 700;">Total Received Qty:</label>
@@ -2267,12 +2266,6 @@
             <div class="form-group form-slot-dispatch" style="display: none;">
               <label for="entry-challan-dis">Challan Dis:</label>
               <input type="text" class="app-input" id="entry-challan-dis" placeholder="e.g. 210005" tabindex="6">
-            </div>
-
-            <!-- 9. Ship / Lot (Optional) -->
-            <div class="form-group">
-              <label for="entry-ship">Ship / Lot (Optional):</label>
-              <input type="text" class="app-input" id="entry-ship" placeholder="e.g. CPC" tabindex="7">
             </div>
           </div>
 
@@ -4017,9 +4010,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=12"></script>
-  <script src="db.js?v=12"></script>
-  <script src="app.js?v=12"></script>
+  <script src="data.js?v=16"></script>
+  <script src="db.js?v=16"></script>
+  <script src="app.js?v=16"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {

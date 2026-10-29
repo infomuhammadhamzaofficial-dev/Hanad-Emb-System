@@ -33,10 +33,14 @@ function initApp() {
 
   // 3. If a valid session exists, apply permissions and render
   try {
-    const currentUser = (window.db && typeof window.db.getCurrentUser === "function") 
-      ? window.db.getCurrentUser() 
+    const currentUser = (window.db && typeof window.db.getCurrentUser === "function")
+      ? window.db.getCurrentUser()
       : null;
-    if (currentUser) {
+    const sessionActive = sessionStorage.getItem("craftflow_session_active") === "true";
+    const lastActivity = parseInt(localStorage.getItem("craftflow_last_activity") || "0", 10);
+    const isExpired = !lastActivity || (Date.now() - lastActivity >= 5 * 60 * 1000);
+
+    if (currentUser && sessionActive && !isExpired) {
       if (typeof window.db.rebuildAllMastersFromLogs === "function") {
         window.db.rebuildAllMastersFromLogs();
       }
@@ -44,13 +48,14 @@ function initApp() {
       renderAll();
       checkNeonStatus();
       startLiveNeonConnection();
+      initInactivityTimer();
 
       // Real-time cross-tab & background change listener
       window.addEventListener("storage", (e) => {
-        if (e.key === "craftflow_last_mutation" || 
-            e.key === "hand_emb_receiving_log_v2" || 
-            e.key === "hand_emb_dispatch_log_v2" || 
-            e.key === "hand_emb_master_inventory_v2") {
+        if (e.key === "craftflow_last_mutation" ||
+          e.key === "hand_emb_receiving_log_v2" ||
+          e.key === "hand_emb_dispatch_log_v2" ||
+          e.key === "hand_emb_master_inventory_v2") {
           if (window.db && typeof window.db.clearCache === "function") window.db.clearCache();
           renderAll();
         }
@@ -60,7 +65,7 @@ function initApp() {
         renderAll();
       });
     }
-  } catch (e) { 
+  } catch (e) {
     console.error("Session restoration error:", e);
   }
 }
@@ -87,7 +92,7 @@ function showToast(message, type = "success") {
 
   const toast = document.createElement("div");
   toast.className = `toast ${type}`;
-  
+
   let icon = `✓`;
   if (type === "error") icon = `✕`;
   if (type === "info") icon = `ℹ`;
@@ -331,9 +336,9 @@ function switchTab(tabId) {
   }
 
   // Safe universal scroll reset across all mobile & desktop browsers
-  try { window.scrollTo(0, 0); } catch (e) {}
-  try { document.documentElement.scrollTop = 0; } catch (e) {}
-  try { document.body.scrollTop = 0; } catch (e) {}
+  try { window.scrollTo(0, 0); } catch (e) { }
+  try { document.documentElement.scrollTop = 0; } catch (e) { }
+  try { document.body.scrollTop = 0; } catch (e) { }
 
   // 2. Render target view immediately
   if (dirtyViews.has(tabId)) {
@@ -345,7 +350,7 @@ function switchTab(tabId) {
   }
 
   if (tabId === "neon-sync") {
-    try { updateNeonStorageMeter(); } catch (e) {}
+    try { updateNeonStorageMeter(); } catch (e) { }
   }
 }
 
@@ -374,8 +379,8 @@ function renderAll(forceAll = false) {
 }
 
 function renderNavigation() {
-  const currentUser = (window.db && typeof window.db.getCurrentUser === "function") 
-    ? window.db.getCurrentUser() 
+  const currentUser = (window.db && typeof window.db.getCurrentUser === "function")
+    ? window.db.getCurrentUser()
     : null;
   if (currentUser) {
     applyUserPermissions(currentUser);
@@ -524,8 +529,8 @@ function renderDashboardView() {
     const disLogs = window.db.getDispatchLogs() || [];
     const finalStyles = window.db.getFinalStyles() || [];
     const contractors = window.db.getContractors() || [];
-    const workloads = (typeof window.db.getContractorWorkload === "function") 
-      ? window.db.getContractorWorkload() 
+    const workloads = (typeof window.db.getContractorWorkload === "function")
+      ? window.db.getContractorWorkload()
       : [];
 
     // 1. GREETING & METADATA
@@ -700,12 +705,12 @@ function renderDashboardContractorWorkload(workloads, totalBalHemb) {
           </div>
         </div>
         <div class="dash-cont-right">
-          ${bal > 0 
-            ? `<div class="dash-cont-pcs">${bal.toLocaleString()} pcs</div>
+          ${bal > 0
+        ? `<div class="dash-cont-pcs">${bal.toLocaleString()} pcs</div>
                <div class="dash-cont-pcs-sub">Pending WIP</div>`
-            : `<div class="dash-cont-pcs-zero">✓ 0 pcs</div>
+        : `<div class="dash-cont-pcs-zero">✓ 0 pcs</div>
                <div class="dash-cont-pcs-sub" style="color: var(--primary);">Cleared</div>`
-          }
+      }
         </div>
       </div>
     `;
@@ -1008,7 +1013,7 @@ function initMasterInventoryView() {
   });
 
   document.getElementById("btn-export-master-csv")?.addEventListener("click", exportMasterInventoryToCSV);
-  
+
   // Navigation buttons inside toolbar
   document.getElementById("btn-goto-receiving")?.addEventListener("click", () => switchTab("receiving-log"));
   document.getElementById("btn-goto-dispatch")?.addEventListener("click", () => switchTab("dispatch-log"));
@@ -1078,7 +1083,7 @@ function renderMasterInventory() {
     const isFiltered = !!(searchQuery || selectedContractor || selectedCategory || selectedBalance);
     tbody.innerHTML = `
       <tr>
-        <td colspan="16" style="text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
+        <td colspan="15" style="text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
           <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem;">
             ${isFiltered ? "No matching styles or categories found" : "No styles in Master Inventory yet"}
           </div>
@@ -1107,7 +1112,6 @@ function renderMasterInventory() {
         <td>
           <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
         </td>
-        <td class="cell-ship">${escapeHtml(item.ship || '-')}</td>
         <td><span class="badge-tag inline">${escapeHtml(item.category)}</span></td>
         <td style="font-weight: 700; font-family: var(--font-mono);">${item.cut_qty.toLocaleString()}</td>
         
@@ -1661,8 +1665,8 @@ function initFinalStyleView() {
 
     activeStyles.forEach(s => {
       // STRICT MATCH on both style_code AND category
-      const alreadyInSheet = currentFinal.some(f => 
-        f.style_code.toLowerCase() === s.style_code.toLowerCase() && 
+      const alreadyInSheet = currentFinal.some(f =>
+        f.style_code.toLowerCase() === s.style_code.toLowerCase() &&
         f.category.toLowerCase() === s.category.toLowerCase()
       );
       if (!alreadyInSheet) {
@@ -2064,7 +2068,7 @@ function renderDailyArrivalsModal() {
   // Filter list by search query if any
   let displayList = rep.styles;
   if (_arrivalsFilterQuery) {
-    displayList = displayList.filter(s => 
+    displayList = displayList.filter(s =>
       s.style_code.toLowerCase().includes(_arrivalsFilterQuery) ||
       s.category.toLowerCase().includes(_arrivalsFilterQuery) ||
       s.contractors.toLowerCase().includes(_arrivalsFilterQuery) ||
@@ -2231,7 +2235,7 @@ function renderDailyArrivalsModal() {
       const code = e.currentTarget.getAttribute("data-style");
       const cat = e.currentTarget.getAttribute("data-cat");
       const rec = e.currentTarget.getAttribute("data-rec");
-      
+
       const remark = `Rec: ${rec} pcs on ${_currentArrivalsDate}`;
       window.db.addFinalStyle(code, cat, remark);
       renderFinalStyleSheet();
@@ -2278,7 +2282,7 @@ function addIncomingArrivalsToDailySheet(showFeedback = true) {
 function updateDailySheetArrivalsBanner() {
   const reportDatePicker = document.getElementById("report-date-picker");
   const targetDate = reportDatePicker?.value || _currentArrivalsDate || new Date().toISOString().slice(0, 10);
-  
+
   const rep = window.db.getArrivalsReportByDate(targetDate);
   const badgeCount = document.getElementById("badge-incoming-arrivals-count");
   const summaryText = document.getElementById("sheet-arrivals-summary-text");
@@ -2294,8 +2298,8 @@ function updateDailySheetArrivalsBanner() {
     } else {
       summaryText.innerHTML = `
         <strong>${rep.totalStylesCount} styles aaye hain</strong> (Total <strong>${rep.totalDatePcs.toLocaleString()} pcs</strong>). 
-        ${rep.missingFromDailySheetCount > 0 
-          ? `<span style="color: #fbbf24; font-weight: 700;">${rep.missingFromDailySheetCount} styles Daily Sheet mein missing hain.</span>` 
+        ${rep.missingFromDailySheetCount > 0
+          ? `<span style="color: #fbbf24; font-weight: 700;">${rep.missingFromDailySheetCount} styles Daily Sheet mein missing hain.</span>`
           : `<span style="color: #34d399; font-weight: 700;">✓ Tamam styles Daily Sheet mein mojood hain.</span>`}
       `;
     }
@@ -2416,7 +2420,7 @@ function updateContractorModeButtons() {
   }
 }
 
-window.openEditContractorModal = function(name) {
+window.openEditContractorModal = function (name) {
   const contractors = window.db.getContractors();
   const c = contractors.find(item => (item.name || "").toLowerCase() === name.toLowerCase());
   if (!c) return;
@@ -2575,8 +2579,8 @@ function renderContractorsView() {
 
         <div class="kpi-grid" style="grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem;">
           ${allContractors.map(c => {
-            const workloadInfo = allWorkloads.find(w => w.name.toLowerCase() === c.name.toLowerCase()) || { total_balance: 0, style_count: 0 };
-            return `
+      const workloadInfo = allWorkloads.find(w => w.name.toLowerCase() === c.name.toLowerCase()) || { total_balance: 0, style_count: 0 };
+      return `
               <div class="contractor-summary-card" style="border: 1px solid var(--border-color); transition: all 0.2s ease;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.85rem;">
                   <div style="display: flex; align-items: center; gap: 0.75rem;">
@@ -2598,9 +2602,9 @@ function renderContractorsView() {
                   </div>
                   <div style="display: flex; align-items: center; justify-content: space-between;">
                     <span style="color: var(--text-muted);">Current Balance:</span>
-                    ${workloadInfo.total_balance > 0 
-                      ? `<strong style="color: var(--accent-rose); font-family: var(--font-mono); font-weight: 800;">${workloadInfo.total_balance.toLocaleString()} pcs (${workloadInfo.style_count} styles)</strong>` 
-                      : `<strong style="color: var(--accent-emerald);">✓ 0 pcs balance</strong>`}
+                    ${workloadInfo.total_balance > 0
+          ? `<strong style="color: var(--accent-rose); font-family: var(--font-mono); font-weight: 800;">${workloadInfo.total_balance.toLocaleString()} pcs (${workloadInfo.style_count} styles)</strong>`
+          : `<strong style="color: var(--accent-emerald);">✓ 0 pcs balance</strong>`}
                   </div>
                 </div>
 
@@ -2612,7 +2616,7 @@ function renderContractorsView() {
                 </div>
               </div>
             `;
-          }).join("")}
+    }).join("")}
         </div>
       </div>
     `;
@@ -2643,7 +2647,7 @@ function initNeonSyncView() {
   if (connInput) connInput.value = cfg.neonConnectionString || "";
   if (endInput) endInput.value = cfg.neonEndpointUrl || "";
   if (keyInput) keyInput.value = cfg.neonApiKey || "";
-  
+
   // Set persistent checkbox state
   const isAuto = window.db.isAutoSyncEnabled();
   updateAutoSyncUI(isAuto);
@@ -3082,11 +3086,11 @@ async function checkNeonStatus(forcedOnlineState) {
   const hasConn = Boolean(cfg.neonConnectionString || cfg.neonEndpointUrl);
   if (hasConn) {
     dot.className = "status-dot connected";
-    const masterLen = (window.db && typeof window.db.getMasterInventory === "function") 
-      ? window.db.getMasterInventory().length 
+    const masterLen = (window.db && typeof window.db.getMasterInventory === "function")
+      ? window.db.getMasterInventory().length
       : 0;
-    label.textContent = (cfg.autoSync !== false) 
-      ? `⚡ Live Connected (${masterLen})` 
+    label.textContent = (cfg.autoSync !== false)
+      ? `⚡ Live Connected (${masterLen})`
       : "Neon Ready";
   } else {
     dot.className = "status-dot";
@@ -3119,7 +3123,7 @@ function populateDropdowns() {
   filterConts.forEach(filterEl => {
     if (filterEl) {
       const cur = filterEl.value;
-      filterEl.innerHTML = `<option value="">All Contractors</option>` + 
+      filterEl.innerHTML = `<option value="">All Contractors</option>` +
         contractors.map(c => `<option value="${escapeHtml(c.name)}">${escapeHtml(c.name)}</option>`).join("");
       filterEl.value = cur;
     }
@@ -3185,7 +3189,7 @@ function focusActiveDateInput() {
   if (dateInp) {
     dateInp.focus();
     if (typeof dateInp.select === "function") {
-      try { dateInp.select(); } catch(e) {}
+      try { dateInp.select(); } catch (e) { }
     }
   }
 }
@@ -3332,7 +3336,7 @@ function initFormKeyboardNavigation() {
           e.preventDefault();
           e.stopPropagation();
           if (typeof el.showPicker === "function") {
-            try { el.showPicker(); } catch (err) {}
+            try { el.showPicker(); } catch (err) { }
           }
           return;
         }
@@ -3345,7 +3349,7 @@ function initFormKeyboardNavigation() {
             const styleInp = document.getElementById("entry-style-code");
             if (styleInp) {
               styleInp.focus();
-              try { styleInp.select(); } catch (err) {}
+              try { styleInp.select(); } catch (err) { }
             }
             return;
           } else {
@@ -3380,7 +3384,7 @@ function initFormKeyboardNavigation() {
           const styleInp = document.getElementById("entry-style-code");
           if (styleInp) {
             styleInp.focus();
-            try { styleInp.select(); } catch (err) {}
+            try { styleInp.select(); } catch (err) { }
           }
           return;
         }
@@ -3442,7 +3446,7 @@ function initFormKeyboardNavigation() {
     if (el.tagName === "INPUT" && el.type === "date" && key === "ArrowDown") {
       e.preventDefault();
       if (typeof el.showPicker === "function") {
-        try { el.showPicker(); } catch (err) {}
+        try { el.showPicker(); } catch (err) { }
       }
       return;
     }
@@ -3508,7 +3512,7 @@ function initFormKeyboardNavigation() {
             direction = 1;
             shouldMove = true;
           }
-        } catch(err) {
+        } catch (err) {
           e.preventDefault();
           direction = 1;
           shouldMove = true;
@@ -3526,7 +3530,7 @@ function initFormKeyboardNavigation() {
             direction = -1;
             shouldMove = true;
           }
-        } catch(err) {
+        } catch (err) {
           e.preventDefault();
           direction = -1;
           shouldMove = true;
@@ -3566,7 +3570,7 @@ function initFormKeyboardNavigation() {
         // Fast async select to eliminate input stutter
         requestAnimationFrame(() => {
           if (document.activeElement === targetEl && typeof targetEl.select === "function") {
-            try { targetEl.select(); } catch(e) {}
+            try { targetEl.select(); } catch (e) { }
           }
         });
       }
@@ -3660,7 +3664,7 @@ function handleLiveStyleFetch() {
     // Auto-fetch master details
     document.getElementById("entry-id").value = existing.id;
     if (existing.sr_no) document.getElementById("entry-sr").value = existing.sr_no;
-    
+
     // Auto-fill contractor (check master first, then distribution sheet!)
     const contInp = document.getElementById("entry-contractor");
     if (existing.contractor_name && existing.contractor_name !== "Unassigned" && existing.contractor_name !== "-") {
@@ -3673,8 +3677,18 @@ function handleLiveStyleFetch() {
     }
 
     if (existing.cut_qty) document.getElementById("entry-cut-qty").value = existing.cut_qty;
-    if (existing.ship) document.getElementById("entry-ship").value = existing.ship;
-    if (existing.remarks) document.getElementById("entry-remarks").value = existing.remarks;
+
+    // Always keep date as today's current date (never pull old date from record)
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const dateRecEl = document.getElementById("entry-date-receive");
+    const dateDisEl = document.getElementById("entry-date-dispatch");
+    if (dateRecEl && !dateRecEl.value) dateRecEl.value = todayIso;
+    if (dateDisEl && !dateDisEl.value) dateDisEl.value = todayIso;
+
+    // Challan numbers and Remarks must stay EMPTY for fresh entry
+    if (document.getElementById("entry-challan-rec")) document.getElementById("entry-challan-rec").value = "";
+    if (document.getElementById("entry-challan-dis")) document.getElementById("entry-challan-dis").value = "";
+    if (document.getElementById("entry-remarks")) document.getElementById("entry-remarks").value = "";
   } else {
     if (badge) {
       badge.style.display = "inline-block";
@@ -3857,22 +3871,25 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
 
   populateDropdowns();
 
+  const todayIso = new Date().toISOString().slice(0, 10);
+
   if (itemToEdit) {
     title.textContent = `Edit Style Entry (${itemToEdit.style_code} [${itemToEdit.category}])`;
     idInput.value = itemToEdit.id;
     document.getElementById("entry-sr").value = itemToEdit.sr_no || "";
     document.getElementById("entry-style-code").value = itemToEdit.style_code || "";
-    document.getElementById("entry-ship").value = itemToEdit.ship || "";
     document.getElementById("entry-category").value = itemToEdit.category || "Shirt";
     document.getElementById("entry-contractor").value = itemToEdit.contractor_name || "";
     document.getElementById("entry-cut-qty").value = itemToEdit.cut_qty || 0;
-    document.getElementById("entry-received-qty").value = itemToEdit.received_qty || 0;
-    document.getElementById("entry-date-receive").value = toIsoDateInput(itemToEdit.date_receive);
-    document.getElementById("entry-challan-rec").value = itemToEdit.challan_rec || "";
-    document.getElementById("entry-dispatch-qty").value = itemToEdit.dispatch_from_hemb || 0;
-    document.getElementById("entry-date-dispatch").value = toIsoDateInput(itemToEdit.date_dispatch);
-    document.getElementById("entry-challan-dis").value = itemToEdit.challan_dis || "";
-    document.getElementById("entry-remarks").value = itemToEdit.remarks || "";
+    document.getElementById("entry-received-qty").value = 0;
+    document.getElementById("entry-dispatch-qty").value = 0;
+    // Always default to current today's date
+    document.getElementById("entry-date-receive").value = todayIso;
+    document.getElementById("entry-date-dispatch").value = todayIso;
+    // Always keep challan numbers and remarks empty for fresh entry
+    document.getElementById("entry-challan-rec").value = "";
+    document.getElementById("entry-challan-dis").value = "";
+    document.getElementById("entry-remarks").value = "";
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
   } else {
     title.textContent = "Style Production & Balance Entry";
@@ -3880,9 +3897,11 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     const list = window.db.getMasterInventory();
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
     document.getElementById("entry-sr").value = maxSr + 1;
-    const todayIso = new Date().toISOString().slice(0, 10);
     document.getElementById("entry-date-receive").value = todayIso;
     document.getElementById("entry-date-dispatch").value = todayIso;
+    document.getElementById("entry-challan-rec").value = "";
+    document.getElementById("entry-challan-dis").value = "";
+    document.getElementById("entry-remarks").value = "";
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
   }
 
@@ -4133,28 +4152,27 @@ async function saveMasterEntryFromForm() {
   // Refresh all background tables and navigation badges immediately
   renderAll();
 
-  // PRESERVE DATES, CONTRACTOR & CHALLAN FOR ULTRA-FAST BATCH ENTRY
-  const preserveDateRec = document.getElementById("entry-date-receive")?.value || new Date().toISOString().slice(0, 10);
-  const preserveDateDis = document.getElementById("entry-date-dispatch")?.value || new Date().toISOString().slice(0, 10);
+  // PRESERVE CONTRACTOR FOR RAPID SUCCESSIVE BATCH ENTRY
   const preserveContractor = document.getElementById("entry-contractor")?.value || "";
-  const preserveChallanRec = document.getElementById("entry-challan-rec")?.value || "";
-  const preserveChallanDis = document.getElementById("entry-challan-dis")?.value || "";
+
+  // ALWAYS RESET TO TODAY'S CURRENT DATE
+  const todayIso = new Date().toISOString().slice(0, 10);
 
   // CLEAR FIELDS FOR RAPID SUCCESSIVE ENTRY (Modal stays open!)
   document.getElementById("entry-id").value = "";
   document.getElementById("entry-style-code").value = "";
-  document.getElementById("entry-ship").value = "";
   document.getElementById("entry-cut-qty").value = "";
   document.getElementById("entry-received-qty").value = 0;
   document.getElementById("entry-dispatch-qty").value = 0;
+  // Always clear remarks and challan numbers so text boxes remain empty
+  document.getElementById("entry-challan-rec").value = "";
+  document.getElementById("entry-challan-dis").value = "";
   document.getElementById("entry-remarks").value = "";
 
-  // RESTORE WORKFLOW CONTEXT (Dates, Contractor, Challan preserved so user only types Style Code & Qty)
-  if (document.getElementById("entry-date-receive")) document.getElementById("entry-date-receive").value = preserveDateRec;
-  if (document.getElementById("entry-date-dispatch")) document.getElementById("entry-date-dispatch").value = preserveDateDis;
+  // RESTORE DATE AS TODAY'S CURRENT DATE
+  if (document.getElementById("entry-date-receive")) document.getElementById("entry-date-receive").value = todayIso;
+  if (document.getElementById("entry-date-dispatch")) document.getElementById("entry-date-dispatch").value = todayIso;
   if (document.getElementById("entry-contractor") && preserveContractor) document.getElementById("entry-contractor").value = preserveContractor;
-  if (document.getElementById("entry-challan-rec") && preserveChallanRec) document.getElementById("entry-challan-rec").value = preserveChallanRec;
-  if (document.getElementById("entry-challan-dis") && preserveChallanDis) document.getElementById("entry-challan-dis").value = preserveChallanDis;
 
   // Next SR Number
   const list = window.db.getMasterInventory();
@@ -4532,7 +4550,6 @@ CREATE TABLE IF NOT EXISTS master_inventory (
   id SERIAL PRIMARY KEY,
   sr_no INT,
   style_code VARCHAR(100) NOT NULL,
-  ship VARCHAR(50) DEFAULT '',
   category VARCHAR(50) NOT NULL,
   cut_qty INT NOT NULL DEFAULT 0,
   received_qty INT NOT NULL DEFAULT 0,
@@ -4630,9 +4647,9 @@ function exportMasterInventoryToCSV() {
   }
 
   const headers = [
-    "SR", "STYLE CODE", "SHIP", "CATEGORY", "CUT QTY", 
-    "RECEIVED QTY", "BALANCE FROM STOCK", "DATE RECEIVE", "CHALLAN REC", 
-    "DISPATCH FROM H-EMB", "BALNCE FROM H-EMB", "TOTAL BALANCE", 
+    "SR", "STYLE CODE", "SHIP", "CATEGORY", "CUT QTY",
+    "RECEIVED QTY", "BALANCE FROM STOCK", "DATE RECEIVE", "CHALLAN REC",
+    "DISPATCH FROM H-EMB", "BALNCE FROM H-EMB", "TOTAL BALANCE",
     "DATE DISPATCH", "CHALLAN DIS", "CONT NAME", "REMARKS"
   ];
 
@@ -4714,7 +4731,7 @@ function exportFinalStylesToCSV() {
   const dateStr = window.db.getReportDate();
 
   const headers = [
-    "S NO", "STYLE CODE", "CATEGORY", "CONT NAME", "CUT QTY", 
+    "S NO", "STYLE CODE", "CATEGORY", "CONT NAME", "CUT QTY",
     "RECEIVED QTY", "BALANCE FROM STOCK", "BALNCE FROM H-EMB", "TIME / REMARKS"
   ];
 
@@ -4816,7 +4833,7 @@ function recordUserActivity() {
   lastUserActivity = now;
   try {
     localStorage.setItem("craftflow_last_activity", String(now));
-  } catch (e) {}
+  } catch (e) { }
   resetInactivityTimer();
 }
 
@@ -4826,8 +4843,8 @@ function resetInactivityTimer() {
     inactivityTimer = null;
   }
 
-  // Only track when user is logged in
-  if (!window.db || !window.db.getCurrentUser()) return;
+  // Only track when user is authenticated in current session
+  if (!window.db || !window.db.getCurrentUser() || sessionStorage.getItem("craftflow_session_active") !== "true") return;
 
   inactivityTimer = setTimeout(() => {
     checkAndTriggerInactivityLogout();
@@ -4835,18 +4852,65 @@ function resetInactivityTimer() {
 }
 
 function checkAndTriggerInactivityLogout() {
-  // Disabled: Keep user permanently logged in on mobile and desktop without disruptive logouts
-  return;
+  const sessionActive = sessionStorage.getItem("craftflow_session_active") === "true";
+  if (!sessionActive || !window.db || !window.db.getCurrentUser()) return;
+
+  const last = parseInt(localStorage.getItem("craftflow_last_activity") || "0", 10) || lastUserActivity;
+  const elapsed = Date.now() - last;
+
+  if (elapsed >= INACTIVITY_TIMEOUT_MS) {
+    performInactivityAutoLogout();
+  } else {
+    // User was active in another tab, reschedule
+    const remaining = INACTIVITY_TIMEOUT_MS - elapsed;
+    inactivityTimer = setTimeout(() => {
+      checkAndTriggerInactivityLogout();
+    }, Math.max(1000, remaining));
+  }
 }
 
 function performInactivityAutoLogout() {
-  // Disabled: Permanent login state
-  return;
+  stopInactivityTimer();
+  sessionStorage.removeItem("craftflow_session_active");
+
+  const overlay = document.getElementById("auth-screen-overlay");
+  if (overlay) overlay.style.display = "flex";
+
+  const passInput = document.getElementById("login-password");
+  if (passInput) {
+    passInput.value = "";
+    passInput.setAttribute("type", "password");
+  }
+
+  const errorAlert = document.getElementById("auth-error-alert");
+  if (errorAlert) {
+    errorAlert.style.display = "block";
+    errorAlert.textContent = "Session locked due to 5 minutes of inactivity. Please enter your password to resume.";
+  }
+
+  if (typeof showToast === "function") {
+    showToast("Workspace locked due to 5 minutes of inactivity.", "warning");
+  }
 }
 
 function initInactivityTimer() {
-  // Inactivity tracking disabled for seamless 24/7 mobile access
-  return;
+  if (!activityListenersAttached) {
+    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart", "click"];
+    events.forEach(evt => {
+      window.addEventListener(evt, recordUserActivity, { passive: true });
+    });
+
+    // Cross-tab synchronization of activity
+    window.addEventListener("storage", (e) => {
+      if (e.key === "craftflow_last_activity") {
+        lastUserActivity = parseInt(e.newValue || "0", 10) || Date.now();
+        resetInactivityTimer();
+      }
+    });
+
+    activityListenersAttached = true;
+  }
+  recordUserActivity();
 }
 
 function stopInactivityTimer() {
@@ -4884,24 +4948,28 @@ function initAuthSystem() {
 
   // Check current session
   const currentUser = window.db.getCurrentUser();
-  if (currentUser) {
+  const sessionActive = sessionStorage.getItem("craftflow_session_active") === "true";
+  const lastActivity = parseInt(localStorage.getItem("craftflow_last_activity") || "0", 10);
+  const now = Date.now();
+  const isExpired = !lastActivity || (now - lastActivity >= INACTIVITY_TIMEOUT_MS);
+
+  if (currentUser && sessionActive && !isExpired) {
     if (overlay) overlay.style.display = "none";
     updateHeaderUserProfile(currentUser);
     applyUserPermissions(currentUser);
     initInactivityTimer(); // Start 5-minute inactivity tracker
   } else {
+    // Show login overlay by default
     if (overlay) overlay.style.display = "flex";
+    sessionStorage.removeItem("craftflow_session_active");
+    stopInactivityTimer();
+
     const uInp = document.getElementById("login-username");
     const pInp = document.getElementById("login-password");
-    if (uInp) uInp.value = "";
+    if (uInp && currentUser && currentUser.username) {
+      uInp.value = currentUser.username;
+    }
     if (pInp) pInp.value = "";
-    // Prevent browser autofill from popping in saved credentials automatically
-    setTimeout(() => {
-      if (!window.db.getCurrentUser()) {
-        if (uInp) uInp.value = "";
-        if (pInp) pInp.value = "";
-      }
-    }, 60);
   }
 
   // Handle Login Submission
@@ -4944,6 +5012,9 @@ function initAuthSystem() {
       }
 
       if (result.success) {
+        sessionStorage.setItem("craftflow_session_active", "true");
+        localStorage.setItem("craftflow_last_activity", String(Date.now()));
+
         if (overlay) overlay.style.display = "none";
         if (passInput) {
           passInput.value = "";
@@ -4961,6 +5032,17 @@ function initAuthSystem() {
         checkNeonStatus();
         startLiveNeonConnection();
         initInactivityTimer(); // Start 5-minute inactivity tracker on login
+
+        // Auto-navigate to Dashboard if permitted, else first accessible tab
+        const canViewDash = window.db.canUserAccessTab("dashboard", result.user);
+        if (canViewDash && typeof switchTab === "function") {
+          switchTab("dashboard");
+        } else if (typeof switchTab === "function") {
+          const tabs = ["master-inventory", "receiving-log", "dispatch-log", "final-style", "work-distribution", "payment-sheet", "contractors"];
+          const firstTab = tabs.find(t => window.db.canUserAccessTab(t.replace(/-/g, '_'), result.user));
+          if (firstTab) switchTab(firstTab);
+        }
+
         showToast(`Welcome back, ${result.user.full_name || result.user.username}!`, "success");
       } else {
         if (errorAlert) {
@@ -4980,6 +5062,8 @@ function initAuthSystem() {
     logoutBtn.addEventListener("click", () => {
       if (confirm("Are you sure you want to sign out of CraftFlow?")) {
         stopInactivityTimer();
+        sessionStorage.removeItem("craftflow_session_active");
+        localStorage.removeItem("craftflow_last_activity");
         window.db.logoutUser();
         if (overlay) overlay.style.display = "flex";
         if (passInput) {
@@ -5187,9 +5271,9 @@ function renderUsersTable() {
     if (tabs.payment_sheet || (u.role === "admin")) allowedTabNames.push("Payment");
     if (tabs.neon_sync) allowedTabNames.push("Neon");
 
-    const tabsHtml = u.role === "admin" 
+    const tabsHtml = u.role === "admin"
       ? `<span class="badge-tag inline" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">All Tabs (8/8)</span>`
-      : allowedTabNames.length > 0 
+      : allowedTabNames.length > 0
         ? `<div style="display: flex; flex-wrap: wrap; gap: 3px;">${allowedTabNames.map(t => `<span class="badge-tag" style="font-size: 0.675rem; padding: 1px 6px;">${t}</span>`).join("")}</div>`
         : `<span style="color: var(--text-faint); font-size: 0.75rem;">None</span>`;
 
@@ -5563,7 +5647,7 @@ function populateRateApprovalPeriods() {
 
   if (periodSelect) {
     const curVal = periodSelect.value;
-    periodSelect.innerHTML = periods.map(p => 
+    periodSelect.innerHTML = periods.map(p =>
       `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}${p.status === "Active" ? " (Current Active)" : ` (${escapeHtml(p.status)})`}</option>`
     ).join("") + `<option value="all">All Periods (Combined)</option>`;
 
@@ -5573,7 +5657,7 @@ function populateRateApprovalPeriods() {
   }
 
   if (periodDatalist) {
-    periodDatalist.innerHTML = periods.map(p => 
+    periodDatalist.innerHTML = periods.map(p =>
       `<option value="${escapeHtml(p.period_name)}">`
     ).join("");
   }
@@ -6217,16 +6301,16 @@ function renderPaymentSheet() {
   const list = window.db.getPaymentSheets();
 
   // Find active period metadata (department, notes, etc.)
-  const allPeriods = (window.db && typeof window.db.getRateApprovalPeriods === "function") 
-    ? window.db.getRateApprovalPeriods() 
+  const allPeriods = (window.db && typeof window.db.getRateApprovalPeriods === "function")
+    ? window.db.getRateApprovalPeriods()
     : [];
   const activePeriodObj = allPeriods.find(p => (p.period_name || "").toLowerCase() === periodFilter.toLowerCase());
 
   // Update department subtitle in excel banner
   const deptLabel = document.getElementById("excel-dept-label");
   if (deptLabel) {
-    deptLabel.textContent = (activePeriodObj && activePeriodObj.department) 
-      ? activePeriodObj.department 
+    deptLabel.textContent = (activePeriodObj && activePeriodObj.department)
+      ? activePeriodObj.department
       : "Hand Embroidery Department";
   }
 
@@ -6359,8 +6443,8 @@ function renderPaymentSheet() {
         const srNo = item.sr_no || (idx + 1);
         const styleCode = item.style_code || "";
         const working = item.working || item.category || "SHIRT";
-        const distAssigned = (window.db && typeof window.db.getContractorForStyle === "function") 
-          ? window.db.getContractorForStyle(styleCode, working) 
+        const distAssigned = (window.db && typeof window.db.getContractorForStyle === "function")
+          ? window.db.getContractorForStyle(styleCode, working)
           : null;
         const contName = item.contractor_name || (distAssigned ? distAssigned.contractor_name : "");
         const rate = item.rate_per_pc || (distAssigned && distAssigned.rate ? distAssigned.rate : "");
@@ -6483,15 +6567,15 @@ function renderPaymentSheet() {
       if (tfootDetailed) tfootDetailed.innerHTML = "";
     } else {
       tbodyDetailed.innerHTML = filtered.map((item, idx) => {
-        let thumbHtml = item.image_data 
+        let thumbHtml = item.image_data
           ? `<div class="payment-thumb-wrapper" onclick="openImageLightbox('${item.id}')"><img src="${item.image_data}" class="payment-thumb-img"/></div>`
           : `<div class="payment-thumb-placeholder">📷</div>`;
 
         let channelBadge = item.payment_channel === "dorie"
           ? `<span class="channel-badge dorie">🧵 DORIE</span>`
-          : (item.payment_channel === "floor_transfer" 
-              ? `<span class="channel-badge floor">🏢 ${escapeHtml(item.target_floor || '28 floor')}</span>`
-              : `<span class="channel-badge stock">📦 Stock</span>`);
+          : (item.payment_channel === "floor_transfer"
+            ? `<span class="channel-badge floor">🏢 ${escapeHtml(item.target_floor || '28 floor')}</span>`
+            : `<span class="channel-badge stock">📦 Stock</span>`);
 
         const isPending = (item.total_balance || 0) > 0;
 
@@ -6501,7 +6585,6 @@ function renderPaymentSheet() {
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-size: 0.8rem;">${item.sr_no || (idx + 1)}</td>
             <td style="text-align: center; vertical-align: middle;">
               <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
-              ${item.ship ? `<span class="badge-tag inline" style="font-size: 0.65rem;">${escapeHtml(item.ship)}</span>` : ""}
             </td>
             <td style="text-align: center; vertical-align: middle;"><span class="badge-tag category">${escapeHtml(item.category || item.working || "SHIRT")}</span></td>
             <td style="text-align: center; vertical-align: middle;"><strong>${escapeHtml(item.contractor_name || "-")}</strong></td>
@@ -6742,7 +6825,7 @@ function openPaymentEntryModal(id = null, prefillData = null) {
     document.getElementById("payment-contractor").value = item.contractor_name || "";
     if (document.getElementById("payment-ship")) document.getElementById("payment-ship").value = item.ship || "";
     document.getElementById("payment-sr").value = item.sr_no || "";
-    
+
     const entryPeriod = item.period || "11-SEP-2026 TO 25-SEP-2026";
     const periodInp = document.getElementById("payment-period-input");
     if (periodInp) periodInp.value = entryPeriod;
@@ -6790,13 +6873,13 @@ function openPaymentEntryModal(id = null, prefillData = null) {
     const allConfiguredPeriods = (window.db && typeof window.db.getRateApprovalPeriods === "function")
       ? window.db.getRateApprovalPeriods()
       : [];
-    const defaultPeriodName = (activePeriod && activePeriod !== "all") 
-      ? activePeriod 
+    const defaultPeriodName = (activePeriod && activePeriod !== "all")
+      ? activePeriod
       : (allConfiguredPeriods[0]?.period_name || "11-SEP-2026 TO 25-SEP-2026");
 
     const periodItems = currentList.filter(it => (it.period || "").trim().toLowerCase() === defaultPeriodName.trim().toLowerCase());
     document.getElementById("payment-sr").value = periodItems.length + 1;
-    
+
     const periodInp = document.getElementById("payment-period-input");
     if (periodInp) periodInp.value = defaultPeriodName;
     const periodBadge = document.getElementById("payment-modal-period-badge");
@@ -6843,8 +6926,8 @@ function handlePaymentStyleAutoFetch() {
   }
 
   // Look up contractor & rate from Work Distribution or Style History
-  const distAssigned = (window.db && typeof window.db.getContractorForStyle === "function") 
-    ? window.db.getContractorForStyle(styleCode, category) 
+  const distAssigned = (window.db && typeof window.db.getContractorForStyle === "function")
+    ? window.db.getContractorForStyle(styleCode, category)
     : null;
   const assignedCont = (distAssigned && distAssigned.contractor_name) || (audit && audit.contractor_name) || "";
 
@@ -8464,7 +8547,7 @@ function showPrintStudioStatus(msgText, isSuccess = true) {
     sideMsgEl.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
     sideMsgEl.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
     sideMsgEl.style.color = isSuccess ? "#10b981" : "#f43f5e";
-    
+
     if (window._printSideMsgTimer) clearTimeout(window._printSideMsgTimer);
     window._printSideMsgTimer = setTimeout(() => {
       if (sideMsgEl) sideMsgEl.style.display = "none";
@@ -8480,7 +8563,7 @@ function showPrintStudioStatus(msgText, isSuccess = true) {
     footerMsgEl.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
     footerMsgEl.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
     footerMsgEl.style.color = isSuccess ? "#10b981" : "#f43f5e";
-    
+
     if (window._printFooterMsgTimer) clearTimeout(window._printFooterMsgTimer);
     window._printFooterMsgTimer = setTimeout(() => {
       if (footerMsgEl) footerMsgEl.style.display = "none";
@@ -8713,7 +8796,7 @@ function populatePrintPresetsDropdown(sheetType) {
   if (!sel) return;
 
   const presets = getPrintPresetsForSheet(sheetType);
-  sel.innerHTML = presets.map(p => 
+  sel.innerHTML = presets.map(p =>
     `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)}</option>`
   ).join("");
 }
@@ -8877,7 +8960,7 @@ function renderPrintColumnControls() {
   }
 }
 
-window.togglePrintStudioColBold = function(colId) {
+window.togglePrintStudioColBold = function (colId) {
   const col = printStudioColumns.find(c => c.id === colId);
   if (col) {
     col.bold = !col.bold;
@@ -8886,7 +8969,7 @@ window.togglePrintStudioColBold = function(colId) {
   }
 };
 
-window.togglePrintStudioCol = function(colId, isChecked) {
+window.togglePrintStudioCol = function (colId, isChecked) {
   const col = printStudioColumns.find(c => c.id === colId);
   if (col) {
     const activeCount = printStudioColumns.filter(c => c.enabled).length;
@@ -8901,7 +8984,7 @@ window.togglePrintStudioCol = function(colId, isChecked) {
   }
 };
 
-window.updatePrintStudioColWidth = function(colId, newWidth) {
+window.updatePrintStudioColWidth = function (colId, newWidth) {
   const widthVal = Math.max(3, Math.min(60, parseInt(newWidth, 10) || 10));
   const col = printStudioColumns.find(c => c.id === colId);
   if (col) {
@@ -9072,7 +9155,7 @@ function renderLiveA4Preview() {
     let sumHemb = 0;
 
     rows = finalStyles.map((item, idx) => {
-      const sMatch = master.find(m => 
+      const sMatch = master.find(m =>
         m.style_code.toLowerCase() === item.style_code.toLowerCase() &&
         m.category.toLowerCase() === item.category.toLowerCase()
       );
@@ -9114,7 +9197,7 @@ function renderLiveA4Preview() {
 
     let distList = window.db.getWorkDistribution();
     if (query) {
-      distList = distList.filter(item => 
+      distList = distList.filter(item =>
         (item.style_code && item.style_code.toLowerCase().includes(query)) ||
         (item.contractor_name && item.contractor_name.toLowerCase().includes(query)) ||
         (item.floor && item.floor.toLowerCase().includes(query)) ||
@@ -9249,13 +9332,13 @@ function renderLiveA4Preview() {
       <thead>
         <tr>
           ${colsWithEffectiveWidth.map(c => {
-            const headAlign = printStudioTextAlign === 'auto' ? c.align : printStudioTextAlign;
-            return `
+    const headAlign = printStudioTextAlign === 'auto' ? c.align : printStudioTextAlign;
+    return `
               <th style="text-align: ${headAlign}; width: ${c.effectiveWidth}; font-size: ${printStudioHeaderFontSize}pt !important; font-weight: ${printStudioHeaderBold ? '800' : '500'} !important; padding: ${printStudioHeaderPadding}px 4px !important; line-height: 1.15; border: 1px solid #000000; background: #f1f5f9; color: #000000;">
                 ${escapeHtml(c.label)}
               </th>
             `;
-          }).join("")}
+  }).join("")}
         </tr>
       </thead>
       <tbody>
@@ -9268,81 +9351,81 @@ function renderLiveA4Preview() {
         ` : rows.map(r => `
           <tr>
             ${colsWithEffectiveWidth.map(col => {
-              const val = r[col.id];
-              let cellContent = (val != null) ? escapeHtml(String(val)) : "-";
-              const dataAlign = printStudioTextAlign === 'auto' ? col.align : printStudioTextAlign;
-              let extraStyle = `text-align: ${dataAlign};`;
+    const val = r[col.id];
+    let cellContent = (val != null) ? escapeHtml(String(val)) : "-";
+    const dataAlign = printStudioTextAlign === 'auto' ? col.align : printStudioTextAlign;
+    let extraStyle = `text-align: ${dataAlign};`;
 
-              if (typeof val === "number") {
-                cellContent = val.toLocaleString();
-                extraStyle += " font-family: monospace;";
-              }
-              if (col.id.includes("balance") || col.id === "total_balance") {
-                if (Number(val) > 0) extraStyle += " color: #b91c1c;";
-              }
-              if (col.id === "total") {
-                cellContent = `Rs. ${Number(val).toLocaleString()}`;
-              }
+    if (typeof val === "number") {
+      cellContent = val.toLocaleString();
+      extraStyle += " font-family: monospace;";
+    }
+    if (col.id.includes("balance") || col.id === "total_balance") {
+      if (Number(val) > 0) extraStyle += " color: #b91c1c;";
+    }
+    if (col.id === "total") {
+      cellContent = `Rs. ${Number(val).toLocaleString()}`;
+    }
 
-              // Apply individual column bold setting
-              const isColBold = Boolean(col.bold);
-              extraStyle += ` font-weight: ${isColBold ? '800' : '400'} !important;`;
+    // Apply individual column bold setting
+    const isColBold = Boolean(col.bold);
+    extraStyle += ` font-weight: ${isColBold ? '800' : '400'} !important;`;
 
-              const isRemarksCol = col.id.toLowerCase().includes("remark");
-              if (isRemarksCol) {
-                const rawText = val != null ? String(val).trim() : "";
-                if (!rawText || rawText === "-") {
-                  return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
-                }
+    const isRemarksCol = col.id.toLowerCase().includes("remark");
+    if (isRemarksCol) {
+      const rawText = val != null ? String(val).trim() : "";
+      if (!rawText || rawText === "-") {
+        return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
+      }
 
-                // Check if text is multiple lines or long enough to wrap into 2 lines
-                const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
-                const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
+      // Check if text is multiple lines or long enough to wrap into 2 lines
+      const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
+      const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
 
-                if (isDoubleLine) {
-                  // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
-                  const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
-                  return `
+      if (isDoubleLine) {
+        // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
+        const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
+        return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} padding: 0px 3px !important; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       <div class="print-remarks-container" style="font-size: ${compactFontSize}pt !important; line-height: 0.92 !important; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 100%; word-break: break-word;">
                         ${formattedHtml}
                       </div>
                     </td>
                   `;
-                } else {
-                  return `
+      } else {
+        return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       ${formattedHtml}
                     </td>
                   `;
-                }
-              }
+      }
+    }
 
-              return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
-            }).join("")}
+    return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
+  }).join("")}
           </tr>
         `).join("")}
       </tbody>
       <tfoot>
         <tr class="print-total-row">
           ${colsWithEffectiveWidth.map((col, idx) => {
-            const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
-            const isColBold = Boolean(col.bold);
-            const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
-            if (idx === 0) {
-              return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
-            }
-            if (col.id === "style_code") {
-              return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
-            }
-            if (totals[col.id] != null) {
-              const formattedVal = (col.id === "total")
-                ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
-                : totals[col.id].toLocaleString();
-              return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
-            }
-            return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
-          }).join("")}
+    const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
+    const isColBold = Boolean(col.bold);
+    const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
+    if (idx === 0) {
+      return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
+    }
+    if (col.id === "style_code") {
+      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
+    }
+    if (totals[col.id] != null) {
+      const formattedVal = (col.id === "total")
+        ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
+        : totals[col.id].toLocaleString();
+      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
+    }
+    return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
+  }).join("")}
         </tr>
       </tfoot>
     </table>
@@ -9361,13 +9444,13 @@ function adjustRemarksRowHeights(container) {
   rows.forEach(tr => {
     const remarksTd = tr.querySelector(".print-remarks-td");
     if (!remarksTd) return;
-    
+
     const remarksDiv = remarksTd.querySelector(".print-remarks-container");
     const refTd = tr.querySelector("td:not(.print-remarks-td)");
     if (!refTd) return;
-    
+
     const targetHeight = refTd.clientHeight || refTd.offsetHeight;
-    
+
     // If remarks cell does not have container yet, but its height is taller than reference cell, convert it
     if (!remarksDiv && remarksTd.textContent.trim() && remarksTd.clientHeight > (targetHeight + 2)) {
       const text = remarksTd.innerHTML;
@@ -9379,7 +9462,7 @@ function adjustRemarksRowHeights(container) {
         </div>
       `;
     }
-    
+
     // If it has remarksDiv, ensure it does not expand the row height
     const activeDiv = remarksTd.querySelector(".print-remarks-container");
     if (activeDiv) {

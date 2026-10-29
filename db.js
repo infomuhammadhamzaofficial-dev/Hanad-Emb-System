@@ -30,6 +30,15 @@ const DEFAULT_NEON_CONFIG = {
   autoSync: true
 };
 
+// Official assigned serial numbers matching Neon master_inventory table
+const NEON_ASSIGNED_SR = {
+  "jst-27-2003": 1,
+  "jst-27-2001": 2,
+  "jss-27-302": 3,
+  "jss-27-301": 4,
+  "jls-27-001": 5
+};
+
 class DatabaseService {
   constructor() {
     this._memCache = {};
@@ -144,9 +153,6 @@ class DatabaseService {
 
     const isExcelSeeded = localStorage.getItem("hand_emb_excel_seeded_v3") === "true";
     if (!isExcelSeeded) {
-      if (typeof INITIAL_MASTER_INVENTORY !== "undefined" && INITIAL_MASTER_INVENTORY.length > 0) {
-        localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(INITIAL_MASTER_INVENTORY));
-      }
       if (typeof INITIAL_CONTRACTORS !== "undefined" && INITIAL_CONTRACTORS.length > 0) {
         localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(INITIAL_CONTRACTORS));
       }
@@ -156,6 +162,34 @@ class DatabaseService {
       if (!rawCont) {
         localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(typeof INITIAL_CONTRACTORS !== "undefined" ? INITIAL_CONTRACTORS : []));
       }
+    }
+
+    // Instant cleanup of any legacy dummy styles in localStorage (e.g. CH-1000..CH-1099 or fake codes)
+    try {
+      const rawMaster = localStorage.getItem(DB_KEYS.MASTER_INVENTORY);
+      if (rawMaster) {
+        const parsed = JSON.parse(rawMaster);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const cleaned = parsed.filter(m => {
+            if (!m) return false;
+            if (m.challan_rec && String(m.challan_rec).startsWith("CH-10")) return false;
+            if (m.challan_dis && String(m.challan_dis).startsWith("DIS-20")) return false;
+            return true;
+          });
+          cleaned.forEach(m => {
+            const code = (m.style_code || '').trim().toLowerCase();
+            if (NEON_ASSIGNED_SR[code] !== undefined) {
+              m.sr_no = NEON_ASSIGNED_SR[code];
+            }
+          });
+          // Strict ordering: sr_no DESC (5 at top, 1 at bottom)
+          cleaned.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
+          localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(cleaned));
+          this.clearCache();
+        }
+      }
+    } catch (e) {
+      console.warn("Dummy master cleanup notice:", e);
     }
 
     // Initialize Work Distribution & Distribution Periods
@@ -272,10 +306,17 @@ class DatabaseService {
   getMasterInventory() {
     return this._getCached(DB_KEYS.MASTER_INVENTORY, () => {
       const data = JSON.parse(localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "[]");
-      return data.map(item => ({
-        ...item,
-        ...this.computeRecordBalances(item)
-      }));
+      const mapped = data.map(item => {
+        const code = (item.style_code || '').trim().toLowerCase();
+        const assignedSr = NEON_ASSIGNED_SR[code];
+        return {
+          ...item,
+          sr_no: (assignedSr !== undefined) ? assignedSr : (parseInt(item.sr_no, 10) || 1),
+          ...this.computeRecordBalances(item)
+        };
+      });
+      // Sort strictly by sr_no DESC so 5 is at top, 1 is at bottom
+      return mapped.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
     });
   }
 
@@ -1128,7 +1169,12 @@ class DatabaseService {
     this.untrackDeletedRecord("master", item ? item.id : "");
     this.untrackDeletedRecord("master", `${cleanCode}|${cleanCat}`);
 
+    const assignedSr = NEON_ASSIGNED_SR[cleanCode.toLowerCase()];
+
     if (item) {
+      if (assignedSr !== undefined) {
+        item.sr_no = assignedSr;
+      }
       item.cut_qty = cutQty;
       item.received_qty = totalReceived;
       item.dispatch_from_hemb = totalDispatched;
@@ -1142,10 +1188,11 @@ class DatabaseService {
       item.status = (cutQty > 0 && item.dispatch_from_hemb >= cutQty) ? "Completed" : "In Progress";
     } else {
       const newId = masterList.length > 0 ? Math.max(...masterList.map(i => i.id || 0)) + 1 : 1;
-      const maxSr = masterList.length > 0 ? Math.max(...masterList.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
+      const validSrs = masterList.map(i => parseInt(i.sr_no, 10) || 0).filter(n => n < 50);
+      const maxSr = validSrs.length > 0 ? Math.max(...validSrs) : 0;
       item = {
         id: newId,
-        sr_no: maxSr + 1,
+        sr_no: (assignedSr !== undefined) ? assignedSr : (maxSr + 1),
         style_code: cleanCode,
         ship: ship,
         category: cleanCat,
@@ -1190,12 +1237,21 @@ class DatabaseService {
       }
     });
 
-    // A record is ONLY an orphan if it has 0 cut_qty, 0 receiving, and 0 dispatch
     const orphans = masterList.filter(m => {
-      const cut = parseInt(m.cut_qty, 10) || 0;
-      if (cut > 0) return false; // Valid style order with cutting demand - NEVER DELETE!
-      const key = `${(m.style_code || '').trim().toLowerCase()}:::${(m.category || '').trim().toLowerCase()}`;
-      return !validKeys.has(key);
+      const code = (m.style_code || '').trim().toLowerCase();
+      const cat = (m.category || '').trim().toLowerCase();
+      const key = `${code}:::${cat}`;
+
+      // Purge any dummy records with sample challan pattern CH-10* or DIS-20*
+      if (m.challan_rec && String(m.challan_rec).startsWith("CH-10")) return true;
+      if (m.challan_dis && String(m.challan_dis).startsWith("DIS-20")) return true;
+
+      // If style has no receiving logs and no dispatch logs, only keep if it is an explicit draft
+      if (!validKeys.has(key)) {
+        if (m._is_manual_draft === true) return false;
+        return true;
+      }
+      return false;
     });
 
     if (orphans.length > 0) {
@@ -1230,9 +1286,18 @@ class DatabaseService {
     });
 
     // Save once to localStorage and memory cache at the end of the batch
-    this.saveMasterInventory(this.getMasterInventory());
+    const currentMaster = this.getMasterInventory();
+    this.saveMasterInventory(currentMaster);
 
-    return this.getMasterInventory();
+    // Keep Neon's master_inventory table 100% synchronized with the active software records
+    const cfg = this.getConfig();
+    if (cfg.autoSync !== false && (cfg.neonConnectionString || cfg.neonEndpointUrl)) {
+      currentMaster.forEach(m => {
+        this.syncMasterRecordToNeon(m).catch(() => null);
+      });
+    }
+
+    return currentMaster;
   }
 
   // Helper to sync an individual Master Inventory record to Neon
@@ -1246,22 +1311,21 @@ class DatabaseService {
       const updateRes = await this.executeNeonQuery(
         `UPDATE master_inventory SET
            sr_no = $3,
-           ship = $4,
-           cut_qty = $5,
-           received_qty = $6,
-           date_receive = $7,
-           challan_rec = $8,
-           dispatch_from_hemb = $9,
-           date_dispatch = $10,
-           challan_dis = $11,
-           contractor_name = $12,
-           status = $13,
-           remarks = $14,
+           cut_qty = $4,
+           received_qty = $5,
+           date_receive = $6,
+           challan_rec = $7,
+           dispatch_from_hemb = $8,
+           date_dispatch = $9,
+           challan_dis = $10,
+           contractor_name = $11,
+           status = $12,
+           remarks = $13,
            updated_at = NOW()
          WHERE LOWER(style_code) = LOWER($1) AND LOWER(category) = LOWER($2)
          RETURNING id;`,
         [
-          savedRecord.style_code, savedRecord.category || 'Shirt', savedRecord.sr_no || 0, savedRecord.ship || '',
+          savedRecord.style_code, savedRecord.category || 'Shirt', savedRecord.sr_no || 0,
           savedRecord.cut_qty || 0, savedRecord.received_qty || 0, savedRecord.date_receive || '', savedRecord.challan_rec || '',
           savedRecord.dispatch_from_hemb || 0, savedRecord.date_dispatch || '', savedRecord.challan_dis || '',
           savedRecord.contractor_name || '', savedRecord.status || 'In Progress', savedRecord.remarks || ''
@@ -1273,11 +1337,10 @@ class DatabaseService {
         // Doesn't exist yet -> INSERT brand new style row with conflict safe upsert
         await this.executeNeonQuery(
           `INSERT INTO master_inventory 
-           (style_code, category, sr_no, ship, cut_qty, received_qty, date_receive, challan_rec, dispatch_from_hemb, date_dispatch, challan_dis, contractor_name, status, remarks)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+           (style_code, category, sr_no, cut_qty, received_qty, date_receive, challan_rec, dispatch_from_hemb, date_dispatch, challan_dis, contractor_name, status, remarks)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
            ON CONFLICT (style_code, category) DO UPDATE SET
              sr_no = EXCLUDED.sr_no,
-             ship = EXCLUDED.ship,
              cut_qty = EXCLUDED.cut_qty,
              received_qty = EXCLUDED.received_qty,
              date_receive = EXCLUDED.date_receive,
@@ -1290,7 +1353,7 @@ class DatabaseService {
              remarks = EXCLUDED.remarks,
              updated_at = NOW();`,
           [
-            savedRecord.style_code, savedRecord.category || 'Shirt', savedRecord.sr_no || 0, savedRecord.ship || '',
+            savedRecord.style_code, savedRecord.category || 'Shirt', savedRecord.sr_no || 0,
             savedRecord.cut_qty || 0, savedRecord.received_qty || 0, savedRecord.date_receive || '', savedRecord.challan_rec || '',
             savedRecord.dispatch_from_hemb || 0, savedRecord.date_dispatch || '', savedRecord.challan_dis || '',
             savedRecord.contractor_name || '', savedRecord.status || 'In Progress', savedRecord.remarks || ''
@@ -3491,7 +3554,6 @@ class DatabaseService {
         id SERIAL PRIMARY KEY,
         sr_no INT,
         style_code VARCHAR(100) NOT NULL,
-        ship VARCHAR(50) DEFAULT '',
         category VARCHAR(50) NOT NULL,
         cut_qty INT NOT NULL DEFAULT 0,
         received_qty INT NOT NULL DEFAULT 0,
@@ -3716,6 +3778,9 @@ class DatabaseService {
           ALTER COLUMN challan_dis TYPE TEXT;
       `;
       await this.executeNeonQuery(alterMasterSql).catch(e => console.warn("Alter master_inventory text cols notice:", e.message));
+
+      // 6. Drop ship column from master_inventory if it exists on Neon
+      await this.executeNeonQuery("ALTER TABLE master_inventory DROP COLUMN IF EXISTS ship;").catch(e => console.warn("Drop ship notice:", e.message));
 
       console.log("✓ Neon payment_sheet and master_inventory schemas upgraded successfully!");
       return { success: true };
@@ -3971,7 +4036,20 @@ class DatabaseService {
 
       // 3. Master Inventory: Cloud (Neon) is the single source of truth
       const offlineMasterDrafts = (this.getMasterInventory() || []).filter(m => m._is_offline_draft === true);
-      const finalMasterList = [...offlineMasterDrafts, ...masterRows];
+      const cleanMasterRows = masterRows.map(m => {
+        const code = (m.style_code || '').trim().toLowerCase();
+        const assignedSr = NEON_ASSIGNED_SR[code];
+        return {
+          ...m,
+          id: Number(m.id),
+          sr_no: (assignedSr !== undefined) ? assignedSr : (parseInt(m.sr_no, 10) || 1),
+          cut_qty: parseInt(m.cut_qty, 10) || 0,
+          received_qty: parseInt(m.received_qty, 10) || 0,
+          dispatch_from_hemb: parseInt(m.dispatch_from_hemb, 10) || 0
+        };
+      });
+      const finalMasterList = [...offlineMasterDrafts, ...cleanMasterRows];
+      finalMasterList.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
       localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(finalMasterList));
 
       if (Array.isArray(rawPayRows)) {
