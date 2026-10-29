@@ -192,6 +192,41 @@ class DatabaseService {
       console.warn("Dummy master cleanup notice:", e);
     }
 
+    // Active Purge: Delete legacy '26-Sep-2026 TO 10-Oct-2026' from localStorage permanently
+    try {
+      const stalePeriodLower = "26-sep-2026 to 10-oct-2026";
+      const rawDistPeriods = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
+      if (rawDistPeriods) {
+        const parsedDP = JSON.parse(rawDistPeriods);
+        if (Array.isArray(parsedDP)) {
+          const cleanedDP = parsedDP.filter(p => (p.period_name || '').trim().toLowerCase() !== stalePeriodLower);
+          localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(cleanedDP));
+        }
+      }
+
+      const dummyStyles = new Set(["JGP-26-1745", "JLS-27-089", "JLS-26-065", "JLS-26-846", "JLS-27-012", "JLS-27-086", "JLS-27-066", "JLS-27-010", "JPS-26-4113", "JPS-IEX-26-3914", "JST-27-2002", "JLS-26-857", "JLS-26-873", "JLS-27-085", "JPS-IEX-26-3912", "JLS-27-090", "JLS-27-087", "JLS-26-859", "JLS-27-011", "JDS-27-1022", "JDS-27-1024", "JPS-IEX-26-3954", "JLS-27-067"]);
+      const rawWD = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION);
+      if (rawWD) {
+        const parsedWD = JSON.parse(rawWD);
+        if (Array.isArray(parsedWD)) {
+          const cleanedWD = parsedWD.filter(w => {
+            const pLower = (w.period || '').trim().toLowerCase();
+            const sCode = (w.style_code || '').trim().toUpperCase();
+            return pLower !== stalePeriodLower && !dummyStyles.has(sCode);
+          });
+          localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(cleanedWD));
+        }
+      }
+
+      const deletedDP = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+      if (!deletedDP.includes(stalePeriodLower)) {
+        deletedDP.push(stalePeriodLower);
+        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDP));
+      }
+    } catch (e) {
+      console.warn("Legacy period cleanup notice:", e);
+    }
+
     // Initialize Work Distribution & Distribution Periods
     if (!localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION)) {
       if (typeof INITIAL_WORK_DISTRIBUTION !== "undefined") {
@@ -1816,7 +1851,7 @@ class DatabaseService {
     });
   }
 
-  // Real-time workload & remaining balance pieces per contractor across Work Distribution & Master Inventory
+  // Real-time workload & remaining balance pieces per contractor from genuine Master Inventory & Production data
   getContractorWorkload() {
     const contractors = this.getContractors();
     const master = this.getMasterInventory();
@@ -1825,69 +1860,37 @@ class DatabaseService {
     return contractors.map(c => {
       const styleMap = new Map();
 
-      // 1. Gather styles from Work Distribution
-      distList.forEach(d => {
-        if (this.doesContractorMatch(d.contractor_name, c.name)) {
-          const styleCode = (d.style_code || "").trim();
-          const category = (d.item || "SHIRT").trim();
-          const key = `${styleCode.toUpperCase()}|${category.toUpperCase()}`;
-
-          // Check if style exists in master inventory
-          const masterMatch = master.find(m => 
-            (m.style_code || "").trim().toUpperCase() === styleCode.toUpperCase() &&
-            (m.category || "").trim().toUpperCase() === category.toUpperCase()
-          );
-
-          let balancePcs = 0;
-          if (masterMatch) {
-            if (masterMatch.balance_from_hemb > 0) {
-              balancePcs = masterMatch.balance_from_hemb;
-            } else if (masterMatch.total_balance > 0) {
-              balancePcs = masterMatch.total_balance;
-            } else if (masterMatch.cut_qty > 0 && masterMatch.dispatch_from_hemb >= masterMatch.cut_qty) {
-              balancePcs = 0; // Completed
-            } else {
-              balancePcs = d.pcs_qty || 0;
-            }
-          } else {
-            balancePcs = d.pcs_qty || 0;
-          }
-
-          if (balancePcs > 0) {
-            styleMap.set(key, {
-              style_code: styleCode,
-              category: category,
-              balance_pcs: balancePcs,
-              rate: d.rate || 0,
-              floor: d.floor || "",
-              assigned_to: d.contractor_name || c.name,
-              period: d.period || "",
-              source: "work_distribution"
-            });
-          }
-        }
-      });
-
-      // 2. Gather / update from Master Inventory
+      // Gather styles strictly from genuine Master Inventory production orders
       master.forEach(m => {
         if (this.doesContractorMatch(m.contractor_name, c.name)) {
           const styleCode = (m.style_code || "").trim();
           const category = (m.category || "Shirt").trim();
           const key = `${styleCode.toUpperCase()}|${category.toUpperCase()}`;
 
-          const bal = (m.balance_from_hemb > 0) 
-            ? m.balance_from_hemb 
-            : ((m.total_balance > 0) ? m.total_balance : 0);
+          // Real WIP pending with contractor in H-Embroidery
+          // Exclusively calculated from received pieces minus dispatched pieces.
+          // Cutting stock balance is never assigned to the contractor.
+          const recQty = parseInt(m.received_qty, 10) || 0;
+          const disQty = parseInt(m.dispatch_from_hemb, 10) || 0;
+          const bal = (m.balance_from_hemb !== null && m.balance_from_hemb !== undefined)
+            ? Math.max(0, parseInt(m.balance_from_hemb, 10) || 0)
+            : Math.max(0, recQty - disQty);
 
           if (bal > 0) {
+            // Find optional rate or floor from work distribution if recorded
+            const distMatch = distList.find(d =>
+              (d.style_code || "").trim().toUpperCase() === styleCode.toUpperCase() &&
+              this.doesContractorMatch(d.contractor_name, c.name)
+            );
+
             styleMap.set(key, {
               style_code: styleCode,
               category: category,
               balance_pcs: bal,
-              rate: 0,
-              floor: "",
+              rate: distMatch ? (distMatch.rate || 0) : 0,
+              floor: distMatch ? (distMatch.floor || "") : "",
               assigned_to: m.contractor_name || c.name,
-              period: "",
+              period: distMatch ? (distMatch.period || "") : "",
               source: "master_inventory"
             });
           }
@@ -2310,7 +2313,7 @@ class DatabaseService {
     const newEntry = {
       id: nextId,
       sr_no: data.sr_no != null && Number(data.sr_no) > 0 ? Number(data.sr_no) : nextSr,
-      period: (data.period || "26-Sep-2026 TO 10-Oct-2026").trim(),
+      period: (data.period || "11-Oct-2026 TO 25-Oct-2026").trim(),
       style_code: (data.style_code || "").trim().toUpperCase(),
       contractor_name: (data.contractor_name || "").trim().toUpperCase(),
       pcs_qty: pcsQty,
@@ -2426,16 +2429,16 @@ class DatabaseService {
     const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
 
     const defaultPeriods = (typeof INITIAL_DISTRIBUTION_PERIODS !== "undefined")
-      ? INITIAL_DISTRIBUTION_PERIODS.filter(p => !deletedPeriods.has(p.period_name.toLowerCase()))
+      ? INITIAL_DISTRIBUTION_PERIODS.filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()) && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026")
       : [
           {
-            id: "dist_period_26sep_10oct_2026",
-            period_name: "26-Sep-2026 TO 10-Oct-2026",
-            start_date: "2026-09-26",
-            end_date: "2026-10-10",
+            id: "dist_period_11oct_25oct_2026",
+            period_name: "11-Oct-2026 TO 25-Oct-2026",
+            start_date: "2026-10-11",
+            end_date: "2026-10-25",
             department: "Hand Embroidery Department",
             status: "Active",
-            notes: "Contractor Work Distribution - Cycle 1"
+            notes: "Contractor Work Distribution"
           }
         ];
 
@@ -2445,31 +2448,19 @@ class DatabaseService {
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed.filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()));
+          list = parsed.filter(p => {
+            const pLower = (p.period_name || "").trim().toLowerCase();
+            return !deletedPeriods.has(pLower) && pLower !== "26-sep-2026 to 10-oct-2026";
+          });
         }
       } catch (e) {
         list = defaultPeriods;
       }
     }
 
-    const distEntries = this.getWorkDistribution();
-    const existingNames = new Set(list.map(p => p.period_name.toLowerCase()));
-    distEntries.forEach(d => {
-      const pName = (d.period || "").trim();
-      const pNameLower = pName.toLowerCase();
-      if (pName && !existingNames.has(pNameLower) && !deletedPeriods.has(pNameLower)) {
-        existingNames.add(pNameLower);
-        list.push({
-          id: `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-          period_name: pName,
-          start_date: "",
-          end_date: "",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Auto-discovered from distribution entries"
-        });
-      }
-    });
+    if (!list || list.length === 0) {
+      list = defaultPeriods;
+    }
 
     localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(list));
     return list;
@@ -4105,11 +4096,11 @@ class DatabaseService {
         localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(filteredPeriods));
       }
 
-      if (distRows.length > 0) {
+      if (Array.isArray(distRows)) {
         localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(distRows));
       }
-      if (rawDistPeriodRows.length > 0) {
-        const filteredDistPeriods = rawDistPeriodRows.filter(p => !deletedDistPeriodsSet.has((p.period_name || "").trim().toLowerCase()));
+      if (Array.isArray(rawDistPeriodRows) && rawDistPeriodRows.length > 0) {
+        const filteredDistPeriods = rawDistPeriodRows.filter(p => !deletedDistPeriodsSet.has((p.period_name || "").trim().toLowerCase()) && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
         localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(filteredDistPeriods));
       }
 

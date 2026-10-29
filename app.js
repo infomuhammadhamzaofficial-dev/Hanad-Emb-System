@@ -748,7 +748,7 @@ function renderDashboardFloorRemarks(finalStyles, master) {
         style_code: styleCode,
         category: category,
         contractor: item.contractor_name || "Contractor",
-        balance: item.balance_from_hemb || item.total_balance || 0,
+        balance: (item.balance_from_hemb != null) ? item.balance_from_hemb : 0,
         remarks: remarks,
         issueType: issueType,
         source: "Daily Sheet"
@@ -992,6 +992,101 @@ function renderDashboardRecentActivity() {
   }).join("");
 }
 
+// ==============================================================
+// DYNAMIC WORK DISTRIBUTION PREVIEW (Next to Search Input)
+// Live Contractor, Pieces, Rate indicator matching Work Distribution table
+// ==============================================================
+function renderWorkDistributionSearchPreview(query, containerId = "master-search-dist-preview") {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+
+  const rawQuery = (query || "").trim();
+  if (!rawQuery || rawQuery.length < 2) {
+    container.style.display = "none";
+    container.innerHTML = "";
+    return;
+  }
+
+  const cleanQuery = rawQuery.toLowerCase();
+  const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+    ? window.db.getWorkDistribution()
+    : [];
+
+  // Match priority:
+  // 1. Exact match on style_code
+  let matches = distList.filter(d => (d.style_code || "").trim().toLowerCase() === cleanQuery);
+
+  // 2. Contains style_code
+  if (matches.length === 0) {
+    matches = distList.filter(d => (d.style_code || "").toLowerCase().includes(cleanQuery));
+  }
+
+  // 3. Fallback: match on contractor if user searched contractor name
+  if (matches.length === 0) {
+    matches = distList.filter(d => (d.contractor_name || "").toLowerCase().includes(cleanQuery));
+  }
+
+  if (matches.length === 0) {
+    if (rawQuery.length >= 3) {
+      container.innerHTML = `
+        <div class="dist-live-card empty-notice" title="Style not recorded in Work Distribution">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="8" x2="12" y2="12"></line>
+            <line x1="12" y1="16" x2="12.01" y2="16"></line>
+          </svg>
+          <span>Dist: <em>Not Found in Distribution</em></span>
+        </div>
+      `;
+      container.style.display = "inline-flex";
+    } else {
+      container.style.display = "none";
+      container.innerHTML = "";
+    }
+    return;
+  }
+
+  // Cap to top 2 matches to prevent toolbar overflow
+  const displayMatches = matches.slice(0, 2);
+  const remainingCount = matches.length - displayMatches.length;
+
+  const cardsHtml = displayMatches.map(m => {
+    const contractor = m.contractor_name || "Unassigned";
+    const pcs = Number(m.pcs_qty) || 0;
+    const rate = Number(m.rate) || 0;
+    const style = m.style_code || "";
+
+    return `
+      <div class="dist-live-card" title="Style: ${escapeHtml(style)} | Contractor: ${escapeHtml(contractor)} | ${pcs.toLocaleString()} Pcs @ Rs ${rate.toLocaleString()}">
+        <span class="dist-live-label">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span>Dist:</span>
+        </span>
+        <span class="dist-live-contractor">
+          <span class="contractor-name">👤 ${escapeHtml(contractor)}</span>
+        </span>
+        <span class="dist-live-chip pcs" title="Distributed Pieces">
+          <span class="chip-lbl">Pcs:</span>
+          <strong>${pcs.toLocaleString()}</strong>
+        </span>
+        <span class="dist-live-chip rate" title="Rate per Piece">
+          <span class="chip-lbl">Rate:</span>
+          <strong>₨ ${rate.toLocaleString()}</strong>
+        </span>
+      </div>
+    `;
+  }).join("");
+
+  const moreBadge = remainingCount > 0
+    ? `<span class="dist-live-more" title="${remainingCount} more entries in Work Distribution">+${remainingCount} more</span>`
+    : "";
+
+  container.innerHTML = cardsHtml + moreBadge;
+  container.style.display = "inline-flex";
+}
+
 // -------------------------------------------------------------
 // TAB 1: MASTER INVENTORY TABLE (Aggregated per Style + Category)
 // -------------------------------------------------------------
@@ -1004,7 +1099,10 @@ function initMasterInventoryView() {
   const debouncedRenderMaster = debounce(() => renderMasterInventory(), 120);
 
   if (searchInput) {
-    searchInput.addEventListener("input", debouncedRenderMaster);
+    searchInput.addEventListener("input", (e) => {
+      renderWorkDistributionSearchPreview(e.target.value, "master-search-dist-preview");
+      debouncedRenderMaster();
+    });
   }
   [contractorFilter, categoryFilter, balanceFilter].forEach(el => {
     if (el) {
@@ -1051,6 +1149,7 @@ function renderMasterInventory() {
   const canCreate = window.db.canUserPerformAction("can_create");
 
   const searchQuery = (document.getElementById("master-search-input")?.value || "").toLowerCase().trim();
+  renderWorkDistributionSearchPreview(searchQuery, "master-search-dist-preview");
   const selectedContractor = document.getElementById("filter-contractor")?.value || "";
   const selectedCategory = document.getElementById("filter-category")?.value || "";
   const selectedBalance = document.getElementById("filter-balance-status")?.value || "";
@@ -1327,7 +1426,10 @@ function initReceivingLogView() {
   const debouncedRenderRec = debounce(() => renderReceivingLog(), 120);
 
   if (searchInput) {
-    searchInput.addEventListener("input", debouncedRenderRec);
+    searchInput.addEventListener("input", (e) => {
+      renderWorkDistributionSearchPreview(e.target.value, "rec-search-dist-preview");
+      debouncedRenderRec();
+    });
   }
   [catFilter, contFilter].forEach(el => {
     if (el) el.addEventListener("change", () => renderReceivingLog());
@@ -1349,6 +1451,7 @@ function renderReceivingLog() {
   const canDelete = window.db.canUserPerformAction("can_delete");
 
   const searchQuery = (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim();
+  renderWorkDistributionSearchPreview(searchQuery, "rec-search-dist-preview");
   const selectedCat = document.getElementById("filter-rec-category")?.value || "";
   const selectedCont = document.getElementById("filter-rec-contractor")?.value || "";
 
@@ -1467,7 +1570,10 @@ function initDispatchLogView() {
   const debouncedRenderDis = debounce(() => renderDispatchLog(), 120);
 
   if (searchInput) {
-    searchInput.addEventListener("input", debouncedRenderDis);
+    searchInput.addEventListener("input", (e) => {
+      renderWorkDistributionSearchPreview(e.target.value, "dis-search-dist-preview");
+      debouncedRenderDis();
+    });
   }
   [catFilter, contFilter].forEach(el => {
     if (el) el.addEventListener("change", () => renderDispatchLog());
@@ -1489,6 +1595,7 @@ function renderDispatchLog() {
   const canDelete = window.db.canUserPerformAction("can_delete");
 
   const searchQuery = (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim();
+  renderWorkDistributionSearchPreview(searchQuery, "dis-search-dist-preview");
   const selectedCat = document.getElementById("filter-dis-category")?.value || "";
   const selectedCont = document.getElementById("filter-dis-contractor")?.value || "";
 
@@ -4876,6 +4983,9 @@ function performInactivityAutoLogout() {
   const overlay = document.getElementById("auth-screen-overlay");
   if (overlay) overlay.style.display = "flex";
 
+  const userInput = document.getElementById("login-username");
+  if (userInput) userInput.value = "";
+
   const passInput = document.getElementById("login-password");
   if (passInput) {
     passInput.value = "";
@@ -4966,10 +5076,16 @@ function initAuthSystem() {
 
     const uInp = document.getElementById("login-username");
     const pInp = document.getElementById("login-password");
-    if (uInp && currentUser && currentUser.username) {
-      uInp.value = currentUser.username;
-    }
+    if (uInp) uInp.value = "";
     if (pInp) pInp.value = "";
+
+    // Clear again after short delay to prevent browser autofill
+    setTimeout(() => {
+      if (sessionStorage.getItem("craftflow_session_active") !== "true") {
+        if (uInp) uInp.value = "";
+        if (pInp) pInp.value = "";
+      }
+    }, 60);
   }
 
   // Handle Login Submission
@@ -7546,7 +7662,7 @@ function getActiveDistributionPeriod() {
   const periods = (window.db && typeof window.db.getDistributionPeriods === "function")
     ? window.db.getDistributionPeriods()
     : [];
-  return periods.length > 0 ? periods[0].period_name : "26-Sep-2026 TO 10-Oct-2026";
+  return periods.length > 0 ? periods[0].period_name : "11-Oct-2026 TO 25-Oct-2026";
 }
 
 function populateDistributionPeriods() {

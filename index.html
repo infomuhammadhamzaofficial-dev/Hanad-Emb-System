@@ -11,10 +11,10 @@
   <meta name="theme-color" content="#0b0f19">
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg?v=16">
-  <link rel="stylesheet" href="style.css?v=16">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=16">
-  <link rel="shortcut icon" href="icon-192.svg?v=16">
+  <link rel="apple-touch-icon" href="icon-192.svg?v=20">
+  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=21">
+  <link rel="shortcut icon" href="icon-192.svg?v=21">
 </head>
 
 <body>
@@ -53,7 +53,7 @@
           <label for="login-username" style="margin-bottom: 0.45rem;">Username:</label>
           <div class="input-icon-wrapper">
             <input type="text" class="app-input" id="login-username" required placeholder="Enter username"
-              autocomplete="off" value="">
+              autocomplete="new-password" value="">
           </div>
         </div>
 
@@ -214,7 +214,6 @@
               <line x1="9" y1="21" x2="9" y2="9"></line>
             </svg>
             <span class="tab-label">Master Inventory</span>
-            <span class="badge-pill" id="badge-master-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="receiving-log">
@@ -223,7 +222,6 @@
               <line x1="12" y1="15" x2="12" y2="3"></line>
             </svg>
             <span class="tab-label">Receiving Log</span>
-            <span class="badge-pill" id="badge-rec-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="dispatch-log">
@@ -232,7 +230,6 @@
               <line x1="12" y1="3" x2="12" y2="15"></line>
             </svg>
             <span class="tab-label">Dispatch Log</span>
-            <span class="badge-pill" id="badge-dis-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="final-style">
@@ -242,7 +239,6 @@
               </polygon>
             </svg>
             <span class="tab-label">Daily Sheet</span>
-            <span class="badge-pill" id="badge-final-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="work-distribution" id="nav-btn-work-distribution">
@@ -253,7 +249,6 @@
               <rect x="3" y="14" width="7" height="7"></rect>
             </svg>
             <span class="tab-label">Work Distribution</span>
-            <span class="badge-pill" id="badge-dist-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="payment-sheet" id="nav-btn-payment-sheet">
@@ -262,7 +257,6 @@
               <line x1="2" y1="10" x2="22" y2="10"></line>
             </svg>
             <span class="tab-label">Payment Sheet</span>
-            <span class="badge-pill" id="badge-payment-count">0</span>
           </button>
 
           <button class="nav-tab-btn" data-tab="contractors">
@@ -733,6 +727,9 @@
             <input type="text" id="master-search-input" placeholder="Search Style Code, Contractor, Challan...">
           </div>
 
+          <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
+          <div id="master-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
+
           <div class="filter-group">
             <select class="app-select" id="filter-contractor">
               <option value="">All Contractors</option>
@@ -863,6 +860,9 @@
             <input type="text" id="rec-search-input" placeholder="Search Style Code, Challan, Contractor...">
           </div>
 
+          <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
+          <div id="rec-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
+
           <select class="app-select" id="filter-rec-category">
             <option value="">All Categories</option>
             <option value="Shirt">Shirt</option>
@@ -967,6 +967,9 @@
             </svg>
             <input type="text" id="dis-search-input" placeholder="Search Style Code, Challan, Contractor...">
           </div>
+
+          <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
+          <div id="dis-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
 
           <select class="app-select" id="filter-dis-category">
             <option value="">All Categories</option>
@@ -3412,7 +3415,7 @@
           <div class="form-group">
             <label for="dist-setup-name">Period Title *:</label>
             <input type="text" class="app-input" id="dist-setup-name" required
-              placeholder="e.g. 26-Sep-2026 TO 10-Oct-2026" style="font-weight: 700; font-family: var(--font-mono);">
+              placeholder="e.g. 11-Oct-2026 TO 25-Oct-2026" style="font-weight: 700; font-family: var(--font-mono);">
             <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
               Automatically generated from Start & End Date, or customize freely.
             </small>
@@ -4010,9 +4013,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=16"></script>
-  <script src="db.js?v=16"></script>
-  <script src="app.js?v=16"></script>
+  <script src="data.js?v=21"></script>
+  <script src="db.js?v=21"></script>
+  <script src="app.js?v=21"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
