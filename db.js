@@ -1449,6 +1449,16 @@ class DatabaseService {
       const s = String(val).trim();
       if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
       if (s.includes("T")) return s.split("T")[0];
+      const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+      if (dmy) {
+        const d = dmy[1].padStart(2, "0");
+        const m = dmy[2].padStart(2, "0");
+        let y = dmy[3];
+        if (y.length === 2) {
+          y = parseInt(y, 10) < 70 ? `20${y}` : `19${y}`;
+        }
+        return `${y}-${m}-${d}`;
+      }
       const dt = new Date(s);
       if (!isNaN(dt.getTime())) {
         const y = dt.getFullYear();

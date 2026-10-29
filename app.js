@@ -3055,8 +3055,53 @@ function initModalHandlers() {
     tab.addEventListener("click", () => {
       const targetMode = tab.getAttribute("data-mode");
       setFormMode(targetMode);
+      setTimeout(() => {
+        const styleInp = document.getElementById("entry-style-code");
+        if (styleInp) {
+          styleInp.focus();
+          styleInp.select();
+        }
+      }, 40);
     });
   });
+
+  // Clicking section heading or modal header focuses Style Code
+  const secTitle = document.getElementById("form-active-section-title");
+  if (secTitle) {
+    secTitle.style.cursor = "pointer";
+    secTitle.title = "Click to focus Style Code";
+    secTitle.addEventListener("click", () => {
+      const styleInp = document.getElementById("entry-style-code");
+      if (styleInp) {
+        styleInp.focus();
+        styleInp.select();
+      }
+    });
+  }
+  const modalHeaderTitle = document.getElementById("modal-entry-title");
+  if (modalHeaderTitle) {
+    modalHeaderTitle.style.cursor = "pointer";
+    modalHeaderTitle.title = "Click to focus Style Code";
+    modalHeaderTitle.addEventListener("click", () => {
+      const styleInp = document.getElementById("entry-style-code");
+      if (styleInp) {
+        styleInp.focus();
+        styleInp.select();
+      }
+    });
+  }
+
+  // Bidirectional date syncing between Receiving and Dispatch forms
+  const dateRecInp = document.getElementById("entry-date-receive");
+  const dateDisInp = document.getElementById("entry-date-dispatch");
+  if (dateRecInp && dateDisInp) {
+    dateRecInp.addEventListener("change", () => {
+      dateDisInp.value = dateRecInp.value;
+    });
+    dateDisInp.addEventListener("change", () => {
+      dateRecInp.value = dateDisInp.value;
+    });
+  }
 
   // Live calculation & auto-fetch listeners
   const styleCodeInput = document.getElementById("entry-style-code");
@@ -3150,7 +3195,7 @@ function initFormKeyboardNavigation() {
 
     if (key === "Enter") {
       if (isTextArea && !e.shiftKey) return;
-      if (el.type === "submit" || (isButton && el.type !== "button")) return;
+      if (isButton || el.type === "submit") return;
       e.preventDefault();
       direction = 1;
       shouldMove = true;
@@ -3220,7 +3265,7 @@ function initFormKeyboardNavigation() {
 
     // Ultra-fast query without forced synchronous layout reflow (NO window.getComputedStyle)
     const elements = form.querySelectorAll(
-      'input:not([type="hidden"]):not([disabled]):not([readonly]), select:not([disabled]):not([readonly]), textarea:not([disabled]):not([readonly]), button:not([disabled]):not([tabindex="-1"])'
+      'input:not([type="hidden"]):not([disabled]):not([readonly]):not([tabindex="-1"]), select:not([disabled]):not([readonly]):not([tabindex="-1"]), textarea:not([disabled]):not([readonly]):not([tabindex="-1"]), button:not([disabled]):not([tabindex="-1"])'
     );
     const focusable = [];
     for (let i = 0; i < elements.length; i++) {
@@ -3229,6 +3274,14 @@ function initFormKeyboardNavigation() {
     }
 
     if (focusable.length <= 1) return;
+
+    // Strict TabIndex sorting so Enter/Arrow navigation follows exact user tab order
+    focusable.sort((a, b) => {
+      const ta = (a.tabIndex > 0) ? a.tabIndex : 9999;
+      const tb = (b.tabIndex > 0) ? b.tabIndex : 9999;
+      return ta - tb;
+    });
+
     const currentIndex = focusable.indexOf(el);
     if (currentIndex === -1) return;
 
@@ -3257,31 +3310,58 @@ function setFormMode(mode) {
   const hiddenMode = document.getElementById("current-form-mode");
   if (hiddenMode) hiddenMode.value = targetMode;
 
-  const recSection = document.getElementById("form-section-receiving");
-  const disSection = document.getElementById("form-section-dispatch");
+  const recSlots = document.querySelectorAll(".form-slot-receiving");
+  const disSlots = document.querySelectorAll(".form-slot-dispatch");
   const saveBtn = document.getElementById("btn-save-master-entry");
+  const modeTitle = document.getElementById("form-section-mode-title");
 
   if (targetMode === "receiving") {
-    if (recSection) recSection.style.display = "block";
-    if (disSection) disSection.style.display = "none";
+    recSlots.forEach(el => el.style.display = "");
+    disSlots.forEach(el => el.style.display = "none");
+    if (modeTitle) modeTitle.innerHTML = `<span style="color: #38bdf8; font-weight: 700;">1. Style & Receiving Information (Stock In)</span>`;
     if (saveBtn) {
       saveBtn.innerHTML = `
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
         Save Receiving Challan & Next
       `;
     }
+    const dDis = document.getElementById("entry-date-dispatch");
+    const dRec = document.getElementById("entry-date-receive");
+    if (dDis && dRec && dDis.value && !dRec.value) dRec.value = dDis.value;
   } else {
-    if (recSection) recSection.style.display = "none";
-    if (disSection) disSection.style.display = "block";
+    recSlots.forEach(el => el.style.display = "none");
+    disSlots.forEach(el => el.style.display = "");
+    if (modeTitle) modeTitle.innerHTML = `<span style="color: #a5b4fc; font-weight: 700;">1. Style & Dispatch Information (H-Emb Out)</span>`;
     if (saveBtn) {
       saveBtn.innerHTML = `
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
         Save Dispatch Challan & Next
       `;
     }
+    const dDis = document.getElementById("entry-date-dispatch");
+    const dRec = document.getElementById("entry-date-receive");
+    if (dDis && dRec && dRec.value && !dDis.value) dDis.value = dRec.value;
   }
 
+  // Backwards compatibility for any legacy section element
+  const recSection = document.getElementById("form-section-receiving");
+  const disSection = document.getElementById("form-section-dispatch");
+  if (recSection) recSection.style.display = (targetMode === "receiving") ? "block" : "none";
+  if (disSection) disSection.style.display = (targetMode === "dispatch") ? "block" : "none";
+
   updateModalPreviewBalances();
+
+  // Mode switch karny per Style Code par selection le ayein
+  const modal = document.getElementById("modal-master-entry");
+  if (modal && modal.classList.contains("open")) {
+    setTimeout(() => {
+      const styleInp = document.getElementById("entry-style-code");
+      if (styleInp) {
+        styleInp.focus();
+        styleInp.select();
+      }
+    }, 40);
+  }
 }
 
 // STRICT Auto-Fetch matching on BOTH Style Code AND Category
@@ -3516,10 +3596,10 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     document.getElementById("entry-contractor").value = itemToEdit.contractor_name || "";
     document.getElementById("entry-cut-qty").value = itemToEdit.cut_qty || 0;
     document.getElementById("entry-received-qty").value = itemToEdit.received_qty || 0;
-    document.getElementById("entry-date-receive").value = itemToEdit.date_receive || "";
+    document.getElementById("entry-date-receive").value = toIsoDateInput(itemToEdit.date_receive);
     document.getElementById("entry-challan-rec").value = itemToEdit.challan_rec || "";
     document.getElementById("entry-dispatch-qty").value = itemToEdit.dispatch_from_hemb || 0;
-    document.getElementById("entry-date-dispatch").value = itemToEdit.date_dispatch || "";
+    document.getElementById("entry-date-dispatch").value = toIsoDateInput(itemToEdit.date_dispatch);
     document.getElementById("entry-challan-dis").value = itemToEdit.challan_dis || "";
     document.getElementById("entry-remarks").value = itemToEdit.remarks || "";
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
@@ -3529,8 +3609,9 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     const list = window.db.getMasterInventory();
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
     document.getElementById("entry-sr").value = maxSr + 1;
-    document.getElementById("entry-date-receive").value = getCurrentDateShort();
-    document.getElementById("entry-date-dispatch").value = getCurrentDateShort();
+    const todayIso = new Date().toISOString().slice(0, 10);
+    document.getElementById("entry-date-receive").value = todayIso;
+    document.getElementById("entry-date-dispatch").value = todayIso;
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
   }
 
@@ -3539,6 +3620,15 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
 
   updateModalPreviewBalances();
   openModal("modal-master-entry");
+
+  // FOCUS DIRECTLY ON STYLE CODE (skipping SR No and Date)
+  setTimeout(() => {
+    const styleInp = document.getElementById("entry-style-code");
+    if (styleInp) {
+      styleInp.focus();
+      styleInp.select();
+    }
+  }, 60);
 }
 
 function showFormError(msg) {
@@ -3604,7 +3694,7 @@ async function saveMasterEntryFromForm() {
   try {
     if (currentMode === "receiving") {
       const recQty = parseInt(document.getElementById("entry-received-qty")?.value, 10) || 0;
-      const dateRec = (document.getElementById("entry-date-receive")?.value || "").trim() || getCurrentDateShort();
+      const dateRec = formatStorageDate(document.getElementById("entry-date-receive")?.value);
       const challanRec = (document.getElementById("entry-challan-rec")?.value || "").trim();
 
       if (recQty <= 0) {
@@ -3661,7 +3751,7 @@ async function saveMasterEntryFromForm() {
 
     } else if (currentMode === "dispatch") {
       const disQty = parseInt(document.getElementById("entry-dispatch-qty")?.value, 10) || 0;
-      const dateDis = (document.getElementById("entry-date-dispatch")?.value || "").trim() || getCurrentDateShort();
+      const dateDis = formatStorageDate(document.getElementById("entry-date-dispatch")?.value);
       const challanDis = (document.getElementById("entry-challan-dis")?.value || "").trim();
 
       if (disQty <= 0) {
@@ -3720,9 +3810,9 @@ async function saveMasterEntryFromForm() {
       // Both / Master Full Edit
       const recQty = parseInt(document.getElementById("entry-received-qty")?.value, 10) || 0;
       const disQty = parseInt(document.getElementById("entry-dispatch-qty")?.value, 10) || 0;
-      const dateRec = (document.getElementById("entry-date-receive")?.value || "").trim();
+      const dateRec = formatStorageDate(document.getElementById("entry-date-receive")?.value);
       const challanRec = (document.getElementById("entry-challan-rec")?.value || "").trim();
-      const dateDis = (document.getElementById("entry-date-dispatch")?.value || "").trim();
+      const dateDis = formatStorageDate(document.getElementById("entry-date-dispatch")?.value);
       const challanDis = (document.getElementById("entry-challan-dis")?.value || "").trim();
 
       if (disQty > recQty) {
@@ -3777,8 +3867,8 @@ async function saveMasterEntryFromForm() {
   renderAll();
 
   // PRESERVE DATES, CONTRACTOR & CHALLAN FOR ULTRA-FAST BATCH ENTRY
-  const preserveDateRec = document.getElementById("entry-date-receive")?.value || getCurrentDateShort();
-  const preserveDateDis = document.getElementById("entry-date-dispatch")?.value || getCurrentDateShort();
+  const preserveDateRec = document.getElementById("entry-date-receive")?.value || new Date().toISOString().slice(0, 10);
+  const preserveDateDis = document.getElementById("entry-date-dispatch")?.value || new Date().toISOString().slice(0, 10);
   const preserveContractor = document.getElementById("entry-contractor")?.value || "";
   const preserveChallanRec = document.getElementById("entry-challan-rec")?.value || "";
   const preserveChallanDis = document.getElementById("entry-challan-dis")?.value || "";
@@ -4405,6 +4495,38 @@ function getCurrentDateShort() {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const year = String(d.getFullYear()).slice(-2);
   return `${day}-${month}-${year}`;
+}
+
+// Convert DD-MM-YY or DD-MM-YYYY or ISO to YYYY-MM-DD for native HTML5 <input type="date">
+function toIsoDateInput(val) {
+  if (!val) return new Date().toISOString().slice(0, 10);
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (dmy) {
+    const day = dmy[1].padStart(2, "0");
+    const month = dmy[2].padStart(2, "0");
+    let year = dmy[3];
+    if (year.length === 2) {
+      year = parseInt(year, 10) < 70 ? `20${year}` : `19${year}`;
+    }
+    return `${year}-${month}-${day}`;
+  }
+  return new Date().toISOString().slice(0, 10);
+}
+
+// Convert YYYY-MM-DD to standard short date DD-MM-YY for table & database storage
+function formatStorageDate(val) {
+  if (!val) return getCurrentDateShort();
+  const s = String(val).trim();
+  const ymd = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (ymd) {
+    const y = ymd[1].slice(-2);
+    const m = ymd[2];
+    const d = ymd[3];
+    return `${d}-${m}-${y}`;
+  }
+  return s;
 }
 
 function escapeHtml(str) {

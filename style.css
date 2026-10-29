@@ -224,45 +224,90 @@ body {
 }
 
 .brand-icon {
-  width: 38px;
-  height: 38px;
-  background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-  border-radius: var(--radius-md);
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #065f46 0%, #059669 45%, #10b981 100%);
+  border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   flex-shrink: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.brand-icon:hover {
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 6px 18px rgba(16, 185, 129, 0.45);
 }
 
 .brand-title-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.55rem;
 }
 
 .brand-text h1 {
-  font-size: 1.15rem;
+  font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.025em;
   color: var(--text-main);
   background: linear-gradient(120deg, var(--text-main) 60%, var(--primary) 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   line-height: 1.2;
   margin: 0;
 }
 
 .brand-badge {
-  display: inline-block;
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--primary);
-  background: var(--primary-glow);
-  padding: 1px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.025em;
+  padding: 3px 10px;
   border-radius: var(--radius-full);
+  line-height: 1.2;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+/* Luxury Hand Embroidery Zari/Silk Golden Badge */
+.brand-badge-emb {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.18) 0%, rgba(217, 119, 6, 0.26) 100%);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.18);
+}
+
+.brand-badge-emb:hover {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.25) 0%, rgba(217, 119, 6, 0.36) 100%);
+  border-color: rgba(245, 158, 11, 0.65);
+  box-shadow: 0 3px 12px rgba(245, 158, 11, 0.28);
+  transform: translateY(-0.5px);
+}
+
+.emb-badge-needle {
+  flex-shrink: 0;
+  opacity: 0.95;
+}
+
+/* Light Theme Variant - Crisp Amber-Gold Zari Seal (High Contrast) */
+[data-theme="light"] .brand-badge-emb {
+  background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%);
+  color: #92400e;
+  border: 1px solid #fcd34d;
+  box-shadow: 0 1px 4px rgba(217, 119, 6, 0.12);
+}
+
+[data-theme="light"] .brand-badge-emb:hover {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #78350f;
+  border-color: #f59e0b;
+  box-shadow: 0 3px 8px rgba(217, 119, 6, 0.2);
 }
 
 .brand-subtitle {
@@ -992,6 +1037,36 @@ select.app-select option {
   color: var(--text-main);
 }
 
+/* Date Input & Native Calendar Picker Styling */
+input[type="date"].app-input {
+  cursor: pointer;
+  position: relative;
+  font-family: var(--font-main);
+}
+
+[data-theme="dark"] input[type="date"].app-input::-webkit-calendar-picker-indicator {
+  filter: invert(0.85);
+  cursor: pointer;
+  opacity: 0.85;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+[data-theme="dark"] input[type="date"].app-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+[data-theme="light"] input[type="date"].app-input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.75;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+[data-theme="light"] input[type="date"].app-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;
@@ -1034,6 +1109,29 @@ select.app-select option {
   color: var(--primary);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 0 0 1px var(--primary);
   transform: translateY(-1px);
+}
+
+.btn:focus,
+.btn:focus-visible {
+  outline: 2.5px solid var(--primary) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px var(--primary-glow) !important;
+}
+
+.modal-footer .btn-primary:focus,
+.modal-footer .btn-primary:focus-visible {
+  outline: 2.5px solid #38bdf8 !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.4) !important;
+  transform: scale(1.02);
+}
+
+.modal-footer .btn-secondary:focus,
+.modal-footer .btn-secondary:focus-visible {
+  outline: 2.5px solid var(--primary) !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 4px var(--primary-glow) !important;
+  transform: scale(1.02);
 }
 
 .btn-success {
@@ -1170,14 +1268,7 @@ select.app-select option {
   font-size: 0.8rem;
 }
 
-/* Table Rows Rendering (Natural table layout without broken containment) */
-.master-table tbody tr,
-.final-style-table tbody tr,
-.distribution-table tbody tr,
-.table-rate-approval tbody tr,
-.table-card table tbody tr {
-  /* content-visibility removed: was causing rows to vanish on mobile scroll */
-}
+/* Table Rows Rendering (Natural table layout without broken containment - content-visibility removed for scroll stability) */
 
 .master-table tfoot td,
 .master-table tfoot th {
@@ -1529,7 +1620,7 @@ body.modal-open {
   margin: auto !important;
 }
 
-.modal-card > form {
+.modal-card>form {
   display: flex !important;
   flex-direction: column !important;
   flex: 1 1 auto !important;
@@ -1919,7 +2010,7 @@ body.modal-open {
   touch-action: none;
 }
 
-#auth-screen-overlay[style*="flex"] ~ .mobile-bottom-nav,
+#auth-screen-overlay[style*="flex"]~.mobile-bottom-nav,
 body.auth-locked .mobile-bottom-nav {
   display: none !important;
 }
@@ -1972,6 +2063,7 @@ body.auth-locked .mobile-bottom-nav {
   margin: 0;
   background: linear-gradient(135deg, #ffffff, #a7f3d0);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
@@ -2126,8 +2218,8 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   .brand-badge {
-    padding: 1px 5px;
-    font-size: 0.575rem;
+    padding: 2px 8px;
+    font-size: 0.72rem;
   }
 
   .nav-tab-btn {
@@ -5952,6 +6044,7 @@ label {
 }
 
 @media (max-width: 767px) {
+
   /* 1. Disable all GPU blur filters */
   .app-header,
   .auth-screen-overlay,

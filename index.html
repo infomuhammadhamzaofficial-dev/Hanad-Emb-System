@@ -11,9 +11,10 @@
   <meta name="theme-color" content="#0b0f19">
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg">
-  <link rel="stylesheet" href="style.css?v=8">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg">
+  <link rel="apple-touch-icon" href="icon-192.svg?v=9">
+  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=9">
+  <link rel="shortcut icon" href="icon-192.svg?v=9">
 </head>
 
 <body>
@@ -25,15 +26,20 @@
     <div class="auth-card">
       <div class="auth-header">
         <div class="auth-brand-logo">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-            <path d="M2 17l10 5 10-5"></path>
-            <path d="M2 12l10 5 10-5"></path>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="13" r="7.5" stroke="#ffffff" stroke-width="1.9" stroke-opacity="0.95" />
+            <path d="M10 4.2h4M12 4.2v1.8" stroke="#fbbf24" stroke-width="1.8" />
+            <path d="M7.5 13.5c1.5 2 3.5 2 5 0s3.5-2 4 0" stroke="#a7f3d0" stroke-width="1.4"
+              stroke-dasharray="1.5 1.5" />
+            <path d="M17 6.5c2-1.5 3.5 1 2 2.5s-4 2-5 4-1 3.5 1 3.5" stroke="#fbbf24" stroke-width="1.7" />
+            <path d="M18.5 5L8.5 15" stroke="#ffffff" stroke-width="2.1" />
+            <circle cx="16.8" cy="6.7" r="0.6" fill="#065f46" />
+            <path d="M6.5 8l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z" fill="#fbbf24" stroke="none" />
           </svg>
         </div>
         <h2>CraftFlow</h2>
-        <span class="brand-badge" style="font-size: 0.72rem; margin-top: 0.2rem; display: inline-block;">Hand Emb
+        <span class="brand-badge brand-badge-emb" style="margin-top: 0.35rem; display: inline-flex;">Hand Embroidery
           System</span>
         <p class="auth-sub" style="font-size: 0.775rem; color: var(--text-muted); margin-top: 0.35rem;">Garment
           Production & Inward/Outward Inventory</p>
@@ -96,18 +102,38 @@
           <span class="hamburger-line"></span>
         </button>
 
-        <div class="brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-            <path d="M2 17l10 5 10-5"></path>
-            <path d="M2 12l10 5 10-5"></path>
+        <div class="brand-icon" title="CraftFlow - Hand Embroidery Production System">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+            stroke-linejoin="round">
+            <!-- Hoop Ring -->
+            <circle cx="12" cy="13" r="7.5" stroke="#ffffff" stroke-width="1.9" stroke-opacity="0.95" />
+            <!-- Hoop Tension Screw Bracket -->
+            <path d="M10 4.2h4M12 4.2v1.8" stroke="#fbbf24" stroke-width="1.8" />
+            <!-- Running Stitches on Fabric -->
+            <path d="M7.5 13.5c1.5 2 3.5 2 5 0s3.5-2 4 0" stroke="#a7f3d0" stroke-width="1.4"
+              stroke-dasharray="1.5 1.5" />
+            <!-- Golden Silk Thread Loop -->
+            <path d="M17 6.5c2-1.5 3.5 1 2 2.5s-4 2-5 4-1 3.5 1 3.5" stroke="#fbbf24" stroke-width="1.7" />
+            <!-- Diagonal Needle -->
+            <path d="M18.5 5L8.5 15" stroke="#ffffff" stroke-width="2.1" />
+            <!-- Needle Eye -->
+            <circle cx="16.8" cy="6.7" r="0.6" fill="#065f46" />
+            <!-- Sitara Sparkle -->
+            <path d="M6.5 8l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z" fill="#fbbf24" stroke="none" />
           </svg>
         </div>
         <div class="brand-text">
           <div class="brand-title-row">
             <h1>CraftFlow</h1>
-            <span class="brand-badge">Hand Emb</span>
+            <span class="brand-badge brand-badge-emb" title="Hand Embroidery Production Unit">
+              <svg class="emb-badge-needle" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 3L11 13"></path>
+                <path d="M11 13C9 15 5 15 3 13C1 11 1 7 3 5C5 3 9 3 11 5"></path>
+                <circle cx="18" cy="6" r="1" fill="currentColor"></circle>
+              </svg>
+              Hand Embroidery
+            </span>
           </div>
           <p class="brand-subtitle">Apparel & Garment Production Suite</p>
         </div>
@@ -285,16 +311,21 @@
     <div class="mobile-drawer-header">
       <div class="mobile-drawer-brand">
         <div class="brand-icon">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-            <path d="M2 17l10 5 10-5"></path>
-            <path d="M2 12l10 5 10-5"></path>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="12" cy="13" r="7.5" stroke="#ffffff" stroke-width="1.9" stroke-opacity="0.95" />
+            <path d="M10 4.2h4M12 4.2v1.8" stroke="#fbbf24" stroke-width="1.8" />
+            <path d="M7.5 13.5c1.5 2 3.5 2 5 0s3.5-2 4 0" stroke="#a7f3d0" stroke-width="1.4"
+              stroke-dasharray="1.5 1.5" />
+            <path d="M17 6.5c2-1.5 3.5 1 2 2.5s-4 2-5 4-1 3.5 1 3.5" stroke="#fbbf24" stroke-width="1.7" />
+            <path d="M18.5 5L8.5 15" stroke="#ffffff" stroke-width="2.1" />
+            <circle cx="16.8" cy="6.7" r="0.6" fill="#065f46" />
+            <path d="M6.5 8l.7 1.3 1.3.7-1.3.7-.7 1.3-.7-1.3-1.3-.7 1.3-.7z" fill="#fbbf24" stroke="none" />
           </svg>
         </div>
         <div>
           <h3 class="mobile-drawer-title">CraftFlow</h3>
-          <span class="brand-badge">Navigation</span>
+          <span class="brand-badge brand-badge-emb">Hand Embroidery</span>
         </div>
       </div>
       <button type="button" id="btn-close-mobile-nav" class="mobile-drawer-close" aria-label="Close Navigation Menu"
@@ -1051,7 +1082,8 @@
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
             <span>📅 Incoming Arrivals Tracker (آمد چیکر)</span>
-            <span class="badge-pill" id="badge-incoming-arrivals-count" style="background: rgba(0,0,0,0.3); color: #fff; font-weight: 800; font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;">0</span>
+            <span class="badge-pill" id="badge-incoming-arrivals-count"
+              style="background: rgba(0,0,0,0.3); color: #fff; font-weight: 800; font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;">0</span>
           </button>
 
           <button class="btn btn-secondary btn-sm" id="btn-auto-populate-active"
@@ -1084,19 +1116,24 @@
       </div>
 
       <!-- Smart Incoming Arrivals Notification Banner -->
-      <div id="daily-sheet-arrivals-banner" style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+      <div id="daily-sheet-arrivals-banner"
+        style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
         <div style="display: flex; align-items: center; gap: 0.65rem;">
           <span style="font-size: 1.25rem;">📦</span>
           <div>
             <span style="color: #f59e0b; font-weight: 800; font-size: 0.85rem;">Date Inward Arrivals:</span>
-            <span id="sheet-arrivals-summary-text" style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.4rem;">Checking incoming styles...</span>
+            <span id="sheet-arrivals-summary-text"
+              style="font-size: 0.8rem; color: var(--text-muted); margin-left: 0.4rem;">Checking incoming
+              styles...</span>
           </div>
         </div>
         <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-          <button type="button" class="btn btn-warning btn-xs" id="btn-banner-open-arrivals" style="font-weight: 800; color: #000; background: #f59e0b; border: none;">
+          <button type="button" class="btn btn-warning btn-xs" id="btn-banner-open-arrivals"
+            style="font-weight: 800; color: #000; background: #f59e0b; border: none;">
             🔍 View All Balances & Details
           </button>
-          <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-auto-add-arrivals" style="font-weight: 700;">
+          <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-auto-add-arrivals"
+            style="font-weight: 700;">
             ⚡ + One-Click Add All to Sheet
           </button>
         </div>
@@ -1969,14 +2006,15 @@
 
           <!-- Form Mode Toggle Bar (Receiving vs Dispatch) -->
           <div class="form-toggle-bar">
-            <button type="button" class="form-toggle-tab active" data-mode="receiving" id="tab-btn-receiving">
+            <button type="button" class="form-toggle-tab active" data-mode="receiving" id="tab-btn-receiving"
+              tabindex="-1">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
               📥 Receiving Form (Stock In)
             </button>
-            <button type="button" class="form-toggle-tab" data-mode="dispatch" id="tab-btn-dispatch">
+            <button type="button" class="form-toggle-tab" data-mode="dispatch" id="tab-btn-dispatch" tabindex="-1">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -1985,28 +2023,58 @@
             </button>
           </div>
 
-          <!-- Section 1: Style & Cutting Information (Always Visible) -->
-          <div class="form-section-title">
+          <!-- Active Form Section Title & Live Search Badge -->
+          <div class="form-section-title" id="form-active-section-title">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
             </svg>
-            1. Style & Cutting Information
+            <span id="form-section-mode-title">1. Style & Production Information</span>
             <span id="style-fetch-status" class="badge-tag"
               style="display: none; margin-left: auto; text-transform: none; font-size: 0.725rem;"></span>
           </div>
 
+          <!-- Row 1: 1. SR No | 2. Date (with Calendar) | 3. Style Code -->
           <div class="form-grid-3">
+            <!-- 1. SR No (Auto generated, skipped on tab) -->
             <div class="form-group">
-              <label for="entry-style-code">Style Code * (Live Search):</label>
-              <input type="text" class="app-input" id="entry-style-code" required
-                placeholder="Type Style Code to fetch..." list="styles-master-datalist" autocomplete="off">
-              <datalist id="styles-master-datalist"></datalist>
+              <label for="entry-sr">SR No: <span
+                  style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">(Auto)</span></label>
+              <input type="number" class="app-input" id="entry-sr" placeholder="e.g. 1" tabindex="-1">
             </div>
 
+            <!-- 2. Date with Calendar (Receiving mode) -->
+            <div class="form-group form-slot-receiving">
+              <label for="entry-date-receive">Date Receive: <span
+                  style="font-size: 0.72rem; color: #38bdf8; font-weight: 600;">📅</span></label>
+              <input type="date" class="app-input" id="entry-date-receive" tabindex="-1"
+                onclick="this.showPicker && this.showPicker()">
+            </div>
+
+            <!-- 2. Date with Calendar (Dispatch mode) -->
+            <div class="form-group form-slot-dispatch" style="display: none;">
+              <label for="entry-date-dispatch">Date Dispatch: <span
+                  style="font-size: 0.72rem; color: #a5b4fc; font-weight: 600;">📅</span></label>
+              <input type="date" class="app-input" id="entry-date-dispatch" tabindex="-1"
+                onclick="this.showPicker && this.showPicker()">
+            </div>
+
+            <!-- 3. Style Code (Live Search & Default Focused) -->
+            <div class="form-group">
+              <label for="entry-style-code" style="color: var(--primary); font-weight: 700;">Style Code * (Live
+                Search):</label>
+              <input type="text" class="app-input" id="entry-style-code" required tabindex="1"
+                placeholder="Type Style Code to fetch..." list="styles-master-datalist" autocomplete="off" autofocus>
+              <datalist id="styles-master-datalist"></datalist>
+            </div>
+          </div>
+
+          <!-- Row 2: 4. Category | 5. Contractor Name | 6. Cut Qty -->
+          <div class="form-grid-3">
+            <!-- 4. Category -->
             <div class="form-group">
               <label for="entry-category">Category *:</label>
-              <select class="app-select" id="entry-category" required>
+              <select class="app-select" id="entry-category" required tabindex="2">
                 <option value="Shirt">Shirt</option>
                 <option value="Dupatta">Dupatta</option>
                 <option value="Trouser">Trouser</option>
@@ -2015,91 +2083,60 @@
               </select>
             </div>
 
+            <!-- 5. Contractor Name -->
             <div class="form-group">
               <label for="entry-contractor">Contractor Name *:</label>
               <input type="text" class="app-input" id="entry-contractor" list="contractors-datalist"
-                placeholder="e.g. Touseef, Asif" required>
+                placeholder="e.g. Touseef, Asif" required tabindex="3">
               <datalist id="contractors-datalist"></datalist>
             </div>
-          </div>
 
-          <div class="form-grid-3">
+            <!-- 6. Cut Qty (Total Order) -->
             <div class="form-group">
               <label for="entry-cut-qty">Cut Qty (Total Order) *:</label>
-              <input type="number" class="app-input" id="entry-cut-qty" min="0" required placeholder="e.g. 1760">
+              <input type="number" class="app-input" id="entry-cut-qty" min="0" required placeholder="e.g. 1760"
+                tabindex="4">
+            </div>
+          </div>
+
+          <!-- Row 3: 7. Total Received/Dispatch Qty | 8. Challan Rec/Dis | 9. Ship / Lot -->
+          <div class="form-grid-3">
+            <!-- 7. Total Received Qty (Receiving mode) -->
+            <div class="form-group form-slot-receiving">
+              <label for="entry-received-qty" style="color: #38bdf8; font-weight: 700;">Total Received Qty:</label>
+              <input type="number" class="app-input" id="entry-received-qty" min="0" value="0" tabindex="5">
             </div>
 
+            <!-- 7. Total Dispatch Qty (Dispatch mode) -->
+            <div class="form-group form-slot-dispatch" style="display: none;">
+              <label for="entry-dispatch-qty" style="color: #a5b4fc; font-weight: 700;">Total Dispatch from
+                H-Emb:</label>
+              <input type="number" class="app-input" id="entry-dispatch-qty" min="0" value="0" tabindex="5">
+            </div>
+
+            <!-- 8. Challan Rec (Receiving mode) -->
+            <div class="form-group form-slot-receiving">
+              <label for="entry-challan-rec">Challan Rec:</label>
+              <input type="text" class="app-input" id="entry-challan-rec" placeholder="e.g. 217264" tabindex="6">
+            </div>
+
+            <!-- 8. Challan Dis (Dispatch mode) -->
+            <div class="form-group form-slot-dispatch" style="display: none;">
+              <label for="entry-challan-dis">Challan Dis:</label>
+              <input type="text" class="app-input" id="entry-challan-dis" placeholder="e.g. 210005" tabindex="6">
+            </div>
+
+            <!-- 9. Ship / Lot (Optional) -->
             <div class="form-group">
               <label for="entry-ship">Ship / Lot (Optional):</label>
-              <input type="text" class="app-input" id="entry-ship" placeholder="e.g. CPC">
-            </div>
-
-            <div class="form-group">
-              <label for="entry-sr">SR No:</label>
-              <input type="number" class="app-input" id="entry-sr" placeholder="e.g. 817">
+              <input type="text" class="app-input" id="entry-ship" placeholder="e.g. CPC" tabindex="7">
             </div>
           </div>
 
-          <!-- Section 2: Receiving Section (Active in Receiving / Full Mode) -->
-          <div id="form-section-receiving">
-            <div class="form-section-title" style="color: #38bdf8;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="7 10 12 15 17 10"></polyline>
-                <line x1="12" y1="15" x2="12" y2="3"></line>
-              </svg>
-              2. Receiving Section (From Stock Into H-Emb)
-            </div>
-
-            <div class="form-grid-3">
-              <div class="form-group">
-                <label for="entry-received-qty">Total Received Qty:</label>
-                <input type="number" class="app-input" id="entry-received-qty" min="0" value="0">
-              </div>
-
-              <div class="form-group">
-                <label for="entry-date-receive">Date Receive:</label>
-                <input type="text" class="app-input" id="entry-date-receive" placeholder="e.g. 17-10-26">
-              </div>
-
-              <div class="form-group">
-                <label for="entry-challan-rec">Challan Rec:</label>
-                <input type="text" class="app-input" id="entry-challan-rec" placeholder="e.g. 217264">
-              </div>
-            </div>
-          </div>
-
-          <!-- Section 3: Dispatch Section (Active in Dispatch / Full Mode) -->
-          <div id="form-section-dispatch">
-            <div class="form-section-title" style="color: #a5b4fc;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="17 8 12 3 7 8"></polyline>
-                <line x1="12" y1="3" x2="12" y2="15"></line>
-              </svg>
-              3. Dispatch Section (From H-Emb Out To Unit)
-            </div>
-
-            <div class="form-grid-3">
-              <div class="form-group">
-                <label for="entry-dispatch-qty">Total Dispatch from H-Emb:</label>
-                <input type="number" class="app-input" id="entry-dispatch-qty" min="0" value="0">
-              </div>
-
-              <div class="form-group">
-                <label for="entry-date-dispatch">Date Dispatch:</label>
-                <input type="text" class="app-input" id="entry-date-dispatch" placeholder="e.g. 17-10-26">
-              </div>
-
-              <div class="form-group">
-                <label for="entry-challan-dis">Challan Dis:</label>
-                <input type="text" class="app-input" id="entry-challan-dis" placeholder="e.g. 210005">
-              </div>
-            </div>
-          </div>
-
-          <!-- Production Remarks / Status (Placed Above KPIs) -->
-          <div class="form-group" style="margin-top: 1rem;">
+          <!-- Row 4: 10. Remarks -->
+          <div class="form-group" style="margin-top: 0.75rem;">
             <label for="entry-remarks">Production Remarks / Status:</label>
-            <input type="text" class="app-input" id="entry-remarks"
+            <input type="text" class="app-input" id="entry-remarks" tabindex="8"
               placeholder="e.g. MATERIAL NOT AVAILABLE, 810 inline hai, ALTER...">
           </div>
 
@@ -2158,9 +2195,10 @@
         </div>
 
         <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-master-entry')">Close /
+          <button type="button" class="btn btn-secondary" id="btn-close-master-entry"
+            onclick="closeModal('modal-master-entry')" tabindex="10">Close /
             Done</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-master-entry">
+          <button type="submit" class="btn btn-primary" id="btn-save-master-entry" tabindex="9">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
               <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
@@ -3683,18 +3721,24 @@
   <!-- ============================================================== -->
   <div class="modal-backdrop" id="modal-daily-arrivals">
     <div class="modal-card" style="max-width: 1100px; width: 96vw;">
-      <div class="modal-header" style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
+      <div class="modal-header"
+        style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
         <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
+          <div
+            style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
             📅
           </div>
           <div>
-            <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+            <h2
+              style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
               <span>Daily Inward Arrivals & Balance Tracker</span>
-              <span class="badge-tag" style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد اسمارٹ ٹریکر</span>
+              <span class="badge-tag"
+                style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد
+                اسمارٹ ٹریکر</span>
             </h2>
             <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
-              Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock balance hai live check karein.
+              Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock balance
+              hai live check karein.
             </p>
           </div>
         </div>
@@ -3703,28 +3747,38 @@
 
       <div class="modal-body" style="padding: 1.15rem; max-height: calc(88dvh - 120px); overflow-y: auto;">
         <!-- Control Bar: Date Selection, Quick Shortcuts & Search -->
-        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+        <div
+          style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
           <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-            <label for="arrivals-modal-date" style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
-            <input type="date" id="arrivals-modal-date" class="app-input" style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
-            
+            <label for="arrivals-modal-date"
+              style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
+            <input type="date" id="arrivals-modal-date" class="app-input"
+              style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
+
             <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap;">
               <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Aaj (Today)</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal (Yesterday)</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest" title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal
+                (Yesterday)</button>
+              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest"
+                title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
             </div>
           </div>
 
           <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <input type="text" id="arrivals-modal-search" class="app-input" placeholder="🔍 Search Style or Contractor..." style="width: 190px; font-size: 0.8rem; padding: 5px 10px;">
-            <button type="button" class="btn btn-warning btn-sm" id="btn-arrivals-bulk-add" style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
+            <input type="text" id="arrivals-modal-search" class="app-input"
+              placeholder="🔍 Search Style or Contractor..."
+              style="width: 190px; font-size: 0.8rem; padding: 5px 10px;">
+            <button type="button" class="btn btn-warning btn-sm" id="btn-arrivals-bulk-add"
+              style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
               ⚡ + Add All to Daily Sheet
             </button>
           </div>
         </div>
 
         <!-- 6 KPI Summary Cards -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;" id="arrivals-kpi-container">
+        <div
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;"
+          id="arrivals-kpi-container">
           <!-- Populated dynamically via JS -->
         </div>
 
@@ -3738,12 +3792,17 @@
                   <th>STYLE CODE</th>
                   <th>CATEGORY</th>
                   <th>CONTRACTOR & CHALLAN</th>
-                  <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR AAYE</th>
+                  <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR AAYE
+                  </th>
                   <th style="text-align: right;">TOTAL CUT</th>
-                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED</th>
-                  <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY (DISPATCH)</th>
-                  <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS (STOCK)</th>
-                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI (PENDING)</th>
+                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED
+                  </th>
+                  <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY (DISPATCH)
+                  </th>
+                  <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS
+                    (STOCK)</th>
+                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI (PENDING)
+                  </th>
                   <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
                 </tr>
               </thead>
@@ -3758,12 +3817,14 @@
         </div>
       </div>
 
-      <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
+      <div class="modal-footer"
+        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
         <div style="font-size: 0.78rem; color: var(--text-muted);" id="arrivals-footer-note">
           💡 <strong>Tip:</strong> Daily Sheet mein style add hone se wo wahan Master balances ke sath link ho jata hai.
         </div>
         <div style="display: flex; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein (Close)</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein
+            (Close)</button>
           <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Daily Sheet Par Jayein 📋</button>
         </div>
       </div>
