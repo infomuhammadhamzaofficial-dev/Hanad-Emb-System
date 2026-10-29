@@ -343,6 +343,10 @@ function switchTab(tabId) {
       console.warn("renderTargetView error:", tabId, err);
     }
   }
+
+  if (tabId === "neon-sync") {
+    try { updateNeonStorageMeter(); } catch (e) {}
+  }
 }
 
 // -------------------------------------------------------------
@@ -2729,6 +2733,7 @@ function initNeonSyncView() {
       showToast("Neon Connection Verified!");
       checkNeonStatus(true);
       startLiveNeonConnection();
+      updateNeonStorageMeter(true);
     } else {
       if (resBox) {
         resBox.innerHTML = `
@@ -2787,6 +2792,7 @@ function initNeonSyncView() {
     if (res.success) {
       showToast(res.message);
       document.getElementById("last-sync-time").textContent = `Last synced: ${new Date().toLocaleString()}`;
+      updateNeonStorageMeter(true);
     } else {
       showToast(`Push failed: ${res.error}`, "error");
     }
@@ -2796,12 +2802,131 @@ function initNeonSyncView() {
   document.getElementById("btn-pull-from-neon")?.addEventListener("click", async () => {
     showToast("Pulling data from Neon...", "info");
     await syncLiveFromNeon(false);
+    updateNeonStorageMeter(true);
   });
 
   // View Schema Modal
   document.getElementById("btn-view-schema-modal")?.addEventListener("click", () => {
     openSchemaModal();
   });
+
+  // Storage Meter Refresh Button
+  document.getElementById("btn-refresh-neon-storage")?.addEventListener("click", () => {
+    updateNeonStorageMeter(true);
+  });
+
+  // Initial load of storage meter
+  setTimeout(() => {
+    updateNeonStorageMeter();
+  }, 350);
+}
+
+// -------------------------------------------------------------
+// NEON CLOUD STORAGE PERCENT DONUT METER CONTROLLER
+// -------------------------------------------------------------
+let isFetchingStorage = false;
+
+async function updateNeonStorageMeter(forceLive = false) {
+  const donutFill = document.getElementById("neon-donut-fill-circle");
+  const pctText = document.getElementById("neon-donut-pct-text");
+  const usedMbEl = document.getElementById("neon-stat-used-mb");
+  const freeMbEl = document.getElementById("neon-stat-free-mb");
+  const totalMbEl = document.getElementById("neon-stat-total-mb");
+  const usedSubEl = document.getElementById("neon-stat-used-sub");
+  const freeSubEl = document.getElementById("neon-stat-free-sub");
+  const linearFill = document.getElementById("neon-linear-fill-bar");
+  const healthTag = document.getElementById("neon-storage-health-tag");
+  const healthText = document.getElementById("neon-storage-health-text");
+  const sourceBadge = document.getElementById("neon-storage-source-badge");
+  const breakdownContainer = document.getElementById("neon-table-breakdown-tags");
+  const refreshIcon = document.getElementById("icon-refresh-storage");
+
+  if (!donutFill || !pctText) return;
+  if (isFetchingStorage) return;
+  isFetchingStorage = true;
+
+  if (refreshIcon) {
+    refreshIcon.style.animation = "spinStorage 0.8s linear infinite";
+  }
+
+  try {
+    const data = await window.db.getNeonStorageMetrics();
+
+    // Circumference of r=56 circle is 2 * PI * 56 = 351.858
+    const circumference = 351.86;
+    const pct = Math.max(0, Math.min(100, data.percentUsed || 0));
+    const offset = circumference - (pct / 100) * circumference;
+
+    // 1. Animate SVG Donut Chart Meter
+    donutFill.style.strokeDashoffset = offset.toFixed(2);
+    pctText.textContent = `${pct.toFixed(1)}%`;
+
+    // Dynamic gradient / color according to storage pressure
+    if (pct >= 85) {
+      donutFill.setAttribute("stroke", "url(#neonDonutCriticalGrad)");
+    } else if (pct >= 60) {
+      donutFill.setAttribute("stroke", "url(#neonDonutWarningGrad)");
+    } else {
+      donutFill.setAttribute("stroke", "url(#neonDonutGradient)");
+    }
+
+    // 2. Update Metric Values
+    if (usedMbEl) usedMbEl.textContent = `${data.usedMb.toFixed(2)} MB`;
+    if (freeMbEl) freeMbEl.textContent = `${data.freeMb.toFixed(2)} MB`;
+    if (totalMbEl) totalMbEl.textContent = `${data.quotaMb.toLocaleString()} MB`;
+
+    if (usedSubEl) usedSubEl.textContent = `${pct.toFixed(1)}% of 1 GB (1,024 MB) Used`;
+    if (freeSubEl) freeSubEl.textContent = `${data.percentFree.toFixed(1)}% Space Baaki Hai`;
+
+    // 3. Update Linear Progress Bar
+    if (linearFill) {
+      linearFill.style.width = `${Math.max(2, pct)}%`;
+      if (pct >= 85) {
+        linearFill.style.background = "linear-gradient(90deg, #f59e0b 0%, #ef4444 100%)";
+      } else if (pct >= 60) {
+        linearFill.style.background = "linear-gradient(90deg, #00e599 0%, #f59e0b 100%)";
+      } else {
+        linearFill.style.background = "linear-gradient(90deg, #00e599 0%, #06b6d4 100%)";
+      }
+    }
+
+    // 4. Source Badge & Health Tag
+    if (sourceBadge) {
+      sourceBadge.textContent = data.isOnline ? "LIVE NEON CLOUD" : "LOCAL ESTIMATE (OFFLINE)";
+      sourceBadge.style.color = data.isOnline ? "#00e599" : "#38bdf8";
+      sourceBadge.style.borderColor = data.isOnline ? "rgba(0, 229, 153, 0.4)" : "rgba(56, 189, 248, 0.4)";
+      sourceBadge.style.background = data.isOnline ? "rgba(0, 229, 153, 0.15)" : "rgba(56, 189, 248, 0.15)";
+    }
+
+    if (healthTag && healthText) {
+      if (pct >= 85) {
+        healthTag.className = "neon-storage-health critical";
+        healthText.textContent = "High Storage Alert (>85%)";
+      } else if (pct >= 60) {
+        healthTag.className = "neon-storage-health warning";
+        healthText.textContent = "Moderate Usage (>60%)";
+      } else {
+        healthTag.className = "neon-storage-health";
+        healthText.textContent = data.isOnline ? "Optimal Neon Storage (<60%)" : "Local Storage Healthy";
+      }
+    }
+
+    // 5. Update Table Breakdown Pills
+    if (breakdownContainer && Array.isArray(data.tables) && data.tables.length > 0) {
+      breakdownContainer.innerHTML = data.tables.map(t => `
+        <span class="table-size-tag">
+          <strong>${escapeHtml(t.name)}:</strong> ${t.mb} MB
+        </span>
+      `).join("");
+    }
+  } catch (err) {
+    console.warn("Storage meter update notice:", err);
+  } finally {
+    isFetchingStorage = false;
+    if (refreshIcon) {
+      refreshIcon.style.animation = "";
+    }
+  }
 }
 
 // -------------------------------------------------------------
@@ -3048,20 +3173,30 @@ function populateDropdowns() {
 // -------------------------------------------------------------
 // MODALS LOGIC & LIVE FORM AUTO-FETCH (Strict Style + Category)
 // -------------------------------------------------------------
+function getActiveDateInput() {
+  const currentMode = document.getElementById("current-form-mode")?.value || "receiving";
+  return currentMode === "dispatch"
+    ? document.getElementById("entry-date-dispatch")
+    : document.getElementById("entry-date-receive");
+}
+
+function focusActiveDateInput() {
+  const dateInp = getActiveDateInput();
+  if (dateInp) {
+    dateInp.focus();
+    if (typeof dateInp.select === "function") {
+      try { dateInp.select(); } catch(e) {}
+    }
+  }
+}
+
 function initModalHandlers() {
   // Mode toggle tabs inside modal (Receiving vs Dispatch vs Both)
   const modeTabs = document.querySelectorAll(".form-toggle-tab");
   modeTabs.forEach(tab => {
     tab.addEventListener("click", () => {
       const targetMode = tab.getAttribute("data-mode");
-      setFormMode(targetMode);
-      setTimeout(() => {
-        const styleInp = document.getElementById("entry-style-code");
-        if (styleInp) {
-          styleInp.focus();
-          styleInp.select();
-        }
-      }, 40);
+      setFormMode(targetMode, true);
     });
   });
 
@@ -3167,7 +3302,7 @@ function initFormKeyboardNavigation() {
   document.addEventListener("keydown", (e) => {
     // Only handle navigation keys
     const key = e.key;
-    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Enter") {
+    if (key !== "ArrowDown" && key !== "ArrowUp" && key !== "ArrowLeft" && key !== "ArrowRight" && key !== "Enter" && key !== "Tab") {
       return;
     }
 
@@ -3178,6 +3313,144 @@ function initFormKeyboardNavigation() {
 
     // Ignore Ctrl/Alt/Meta shortcuts
     if (e.ctrlKey || e.altKey || e.metaKey) return;
+
+    // Check if inside Master Entry Modal (Receiving / Dispatch forms)
+    const masterModal = el.closest("#modal-master-entry");
+    if (masterModal) {
+      const isDateReceive = el.id === "entry-date-receive";
+      const isDateDispatch = el.id === "entry-date-dispatch";
+      const isDateInput = isDateReceive || isDateDispatch;
+      const isRecTab = el.id === "tab-btn-receiving";
+      const isDisTab = el.id === "tab-btn-dispatch";
+      const isTabBtn = isRecTab || isDisTab;
+      const isStyleInp = el.id === "entry-style-code";
+
+      // 1. DATE INPUT HANDLING
+      if (isDateInput) {
+        if (key === "ArrowDown") {
+          // Down arrow opens calendar picker dropdown
+          e.preventDefault();
+          e.stopPropagation();
+          if (typeof el.showPicker === "function") {
+            try { el.showPicker(); } catch (err) {}
+          }
+          return;
+        }
+
+        if (key === "Tab") {
+          if (!e.shiftKey) {
+            // Tab moves to Style Code
+            e.preventDefault();
+            e.stopPropagation();
+            const styleInp = document.getElementById("entry-style-code");
+            if (styleInp) {
+              styleInp.focus();
+              try { styleInp.select(); } catch (err) {}
+            }
+            return;
+          } else {
+            // Shift + Tab moves up to the mode button
+            e.preventDefault();
+            e.stopPropagation();
+            const curMode = document.getElementById("current-form-mode")?.value || "receiving";
+            const targetBtn = (curMode === "dispatch")
+              ? document.getElementById("tab-btn-dispatch")
+              : document.getElementById("tab-btn-receiving");
+            if (targetBtn) targetBtn.focus();
+            return;
+          }
+        }
+
+        if (key === "ArrowUp") {
+          // Up Arrow moves to Receiving or Dispatch button
+          e.preventDefault();
+          e.stopPropagation();
+          const curMode = document.getElementById("current-form-mode")?.value || "receiving";
+          const targetBtn = (curMode === "dispatch")
+            ? document.getElementById("tab-btn-dispatch")
+            : document.getElementById("tab-btn-receiving");
+          if (targetBtn) targetBtn.focus();
+          return;
+        }
+
+        if (key === "Enter") {
+          // Enter moves to Style Code
+          e.preventDefault();
+          e.stopPropagation();
+          const styleInp = document.getElementById("entry-style-code");
+          if (styleInp) {
+            styleInp.focus();
+            try { styleInp.select(); } catch (err) {}
+          }
+          return;
+        }
+      }
+
+      // 2. TOGGLE BUTTONS (Receiving / Dispatch tab buttons)
+      if (isTabBtn) {
+        if (key === "ArrowDown" || (key === "Tab" && !e.shiftKey)) {
+          // Down arrow or Tab moves down to active date input
+          e.preventDefault();
+          e.stopPropagation();
+          focusActiveDateInput();
+          return;
+        }
+
+        if (isRecTab && key === "ArrowRight") {
+          // Right arrow switches to Dispatch form
+          e.preventDefault();
+          e.stopPropagation();
+          setFormMode("dispatch", false);
+          const disBtn = document.getElementById("tab-btn-dispatch");
+          if (disBtn) disBtn.focus();
+          return;
+        }
+
+        if (isDisTab && key === "ArrowLeft") {
+          // Left arrow switches to Receiving form
+          e.preventDefault();
+          e.stopPropagation();
+          setFormMode("receiving", false);
+          const recBtn = document.getElementById("tab-btn-receiving");
+          if (recBtn) recBtn.focus();
+          return;
+        }
+
+        if (key === "Enter" || key === " ") {
+          // Pressing Enter or Space toggles mode and focuses date
+          e.preventDefault();
+          e.stopPropagation();
+          const targetMode = el.getAttribute("data-mode") || (isDisTab ? "dispatch" : "receiving");
+          setFormMode(targetMode, true);
+          return;
+        }
+      }
+
+      // 3. STYLE CODE INPUT
+      if (isStyleInp) {
+        if ((key === "Tab" && e.shiftKey) || key === "ArrowUp") {
+          // Shift+Tab or ArrowUp on Style Code moves back to active Date input
+          e.preventDefault();
+          e.stopPropagation();
+          focusActiveDateInput();
+          return;
+        }
+      }
+    }
+
+    // General Date inputs anywhere in the app (Down Arrow opens calendar dropdown)
+    if (el.tagName === "INPUT" && el.type === "date" && key === "ArrowDown") {
+      e.preventDefault();
+      if (typeof el.showPicker === "function") {
+        try { el.showPicker(); } catch (err) {}
+      }
+      return;
+    }
+
+    // If key is Tab and reached here, let browser handle normal Tab navigation
+    if (key === "Tab") {
+      return;
+    }
 
     // Only active inside forms or modals
     const form = el.closest("form") || el.closest(".modal-card") || el.closest(".modal-body");
@@ -3301,7 +3574,7 @@ function initFormKeyboardNavigation() {
   });
 }
 
-function setFormMode(mode) {
+function setFormMode(mode, autoFocusDate = true) {
   const targetMode = (mode === "dispatch") ? "dispatch" : "receiving";
   document.querySelectorAll(".form-toggle-tab").forEach(tab => {
     tab.classList.toggle("active", tab.getAttribute("data-mode") === targetMode);
@@ -3351,16 +3624,14 @@ function setFormMode(mode) {
 
   updateModalPreviewBalances();
 
-  // Mode switch karny per Style Code par selection le ayein
-  const modal = document.getElementById("modal-master-entry");
-  if (modal && modal.classList.contains("open")) {
-    setTimeout(() => {
-      const styleInp = document.getElementById("entry-style-code");
-      if (styleInp) {
-        styleInp.focus();
-        styleInp.select();
-      }
-    }, 40);
+  // Focus active Date input by default (Receiving or Dispatch)
+  if (autoFocusDate) {
+    const modal = document.getElementById("modal-master-entry");
+    if (modal && modal.classList.contains("open")) {
+      setTimeout(() => {
+        focusActiveDateInput();
+      }, 40);
+    }
   }
 }
 
@@ -3621,13 +3892,9 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
   updateModalPreviewBalances();
   openModal("modal-master-entry");
 
-  // FOCUS DIRECTLY ON STYLE CODE (skipping SR No and Date)
+  // BY DEFAULT FOCUS ACTIVE DATE INPUT (Receiving / Dispatch Date)
   setTimeout(() => {
-    const styleInp = document.getElementById("entry-style-code");
-    if (styleInp) {
-      styleInp.focus();
-      styleInp.select();
-    }
+    focusActiveDateInput();
   }, 60);
 }
 
@@ -3906,18 +4173,10 @@ async function saveMasterEntryFromForm() {
   if (badge) badge.style.display = "none";
   updateModalPreviewBalances();
 
-  // INSTANT FOCUS & SELECT on Style Code for immediate next entry!
-  const styleInp = document.getElementById("entry-style-code");
-  if (styleInp) {
-    styleInp.focus();
-    styleInp.select();
-  }
+  // BY DEFAULT FOCUS ACTIVE DATE INPUT FOR NEXT ENTRY!
   setTimeout(() => {
-    if (styleInp) {
-      styleInp.focus();
-      styleInp.select();
-    }
-  }, 10);
+    focusActiveDateInput();
+  }, 30);
 }
 
 function editMasterEntry(id) {

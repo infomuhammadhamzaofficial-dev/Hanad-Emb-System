@@ -3374,6 +3374,106 @@ class DatabaseService {
     }
   }
 
+  async getNeonStorageMetrics(overrideConn = null) {
+    const quotaMb = 1024; // Neon Free Plan Capacity (1 GB = 1024 MB)
+    const quotaBytes = quotaMb * 1024 * 1024;
+
+    try {
+      // 1. Live Neon PostgreSQL Database Size Query
+      const dbSizeRes = await this.executeNeonQuery(
+        "SELECT pg_database_size(current_database()) AS db_bytes;",
+        [],
+        overrideConn
+      );
+
+      let usedBytes = 0;
+      if (dbSizeRes && dbSizeRes.rows && dbSizeRes.rows.length > 0) {
+        usedBytes = Number(dbSizeRes.rows[0].db_bytes) || 0;
+      }
+
+      // 2. Table breakdown query (user tables)
+      let tableRows = [];
+      try {
+        const tableSizeRes = await this.executeNeonQuery(
+          `SELECT 
+             relname AS table_name,
+             pg_total_relation_size(relid) AS bytes
+           FROM pg_catalog.pg_statio_user_tables
+           ORDER BY bytes DESC
+           LIMIT 8;`,
+          [],
+          overrideConn
+        );
+        if (tableSizeRes && tableSizeRes.rows) {
+          tableRows = tableSizeRes.rows.map(r => ({
+            name: r.table_name,
+            bytes: Number(r.bytes) || 0,
+            mb: ((Number(r.bytes) || 0) / (1024 * 1024)).toFixed(2)
+          }));
+        }
+      } catch (tErr) {
+        console.warn("Table size breakdown notice:", tErr);
+      }
+
+      const freeBytes = Math.max(0, quotaBytes - usedBytes);
+      const usedMb = usedBytes / (1024 * 1024);
+      const freeMb = freeBytes / (1024 * 1024);
+      const percentUsed = Math.min(100, Math.max(0, (usedBytes / quotaBytes) * 100));
+
+      return {
+        isOnline: true,
+        source: 'Neon PostgreSQL Cloud (Live)',
+        usedBytes,
+        freeBytes,
+        quotaBytes,
+        usedMb: Number(usedMb.toFixed(2)),
+        freeMb: Number(freeMb.toFixed(2)),
+        quotaMb,
+        percentUsed: Number(percentUsed.toFixed(1)),
+        percentFree: Number((100 - percentUsed).toFixed(1)),
+        tables: tableRows
+      };
+    } catch (err) {
+      // Offline fallback: calculate local storage dataset size
+      let localBytes = 0;
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith("hand_emb_") || key.startsWith("craftflow_") || key.startsWith("neon_"))) {
+            localBytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+          }
+        }
+      } catch (e) {}
+
+      // Add base catalog estimate (~4 MB)
+      const estimatedUsedBytes = localBytes + (3.8 * 1024 * 1024);
+      const freeBytes = Math.max(0, quotaBytes - estimatedUsedBytes);
+      const usedMb = estimatedUsedBytes / (1024 * 1024);
+      const freeMb = freeBytes / (1024 * 1024);
+      const percentUsed = Math.min(100, Math.max(0, (estimatedUsedBytes / quotaBytes) * 100));
+
+      return {
+        isOnline: false,
+        source: 'Local Cache Estimate (Connect Neon for Live)',
+        error: err.message,
+        usedBytes: estimatedUsedBytes,
+        freeBytes,
+        quotaBytes,
+        usedMb: Number(usedMb.toFixed(2)),
+        freeMb: Number(freeMb.toFixed(2)),
+        quotaMb,
+        percentUsed: Number(percentUsed.toFixed(1)),
+        percentFree: Number((100 - percentUsed).toFixed(1)),
+        tables: [
+          { name: 'master_inventory', mb: Math.max(0.1, (localBytes * 0.35 / (1024*1024))).toFixed(2) },
+          { name: 'receiving_log', mb: Math.max(0.08, (localBytes * 0.25 / (1024*1024))).toFixed(2) },
+          { name: 'dispatch_log', mb: Math.max(0.08, (localBytes * 0.20 / (1024*1024))).toFixed(2) },
+          { name: 'payment_sheet', mb: Math.max(0.05, (localBytes * 0.15 / (1024*1024))).toFixed(2) }
+        ]
+      };
+    }
+  }
+
   async initNeonTables(force = false) {
     if (this._neonTablesReady && !force) {
       return { success: true };

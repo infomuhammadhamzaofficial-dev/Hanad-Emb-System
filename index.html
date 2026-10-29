@@ -11,10 +11,10 @@
   <meta name="theme-color" content="#0b0f19">
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg?v=9">
-  <link rel="stylesheet" href="style.css?v=9">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=9">
-  <link rel="shortcut icon" href="icon-192.svg?v=9">
+  <link rel="apple-touch-icon" href="icon-192.svg?v=12">
+  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=12">
+  <link rel="shortcut icon" href="icon-192.svg?v=12">
 </head>
 
 <body>
@@ -1830,6 +1830,146 @@
     <section id="neon-sync-view" class="tab-view" role="region" aria-label="Neon Cloud Sync" aria-hidden="true">
       <div style="max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem;">
 
+        <!-- ============================================================== -->
+        <!-- NEON CLOUD STORAGE & DATA PERCENT DONUT METER                  -->
+        <!-- ============================================================== -->
+        <div class="contractor-summary-card neon-storage-card" id="neon-storage-card">
+          <div class="neon-storage-header">
+            <div style="display: flex; align-items: center; gap: 0.85rem;">
+              <div class="neon-storage-icon-badge">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                  <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                  <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                </svg>
+              </div>
+              <div>
+                <h3
+                  style="margin: 0; font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                  <span>Neon Database Storage Meter</span>
+                  <span class="badge-tag" id="neon-storage-source-badge"
+                    style="background: rgba(0, 229, 153, 0.15); color: #00e599; border: 1px solid rgba(0, 229, 153, 0.4); font-size: 0.68rem; font-weight: 800;">
+                    LIVE NEON CLOUD
+                  </span>
+                </h3>
+                <p style="margin: 2px 0 0 0; font-size: 0.78rem; color: var(--text-muted);">
+                  Serverless PostgreSQL disk fill percentage, used MBs & free space monitor (1 GB Free Plan).
+                </p>
+              </div>
+            </div>
+
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-neon-storage"
+              title="Re-check live storage size from Neon PostgreSQL"
+              style="padding: 0.35rem 0.85rem; font-weight: 700;">
+              <svg id="icon-refresh-storage" width="14" height="14" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"></polyline>
+                <polyline points="1 20 1 14 7 14"></polyline>
+                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+              </svg>
+              <span>Refresh Meter</span>
+            </button>
+          </div>
+
+          <!-- Donut Chart & Metrics Grid -->
+          <div class="neon-storage-body-grid">
+            <!-- Left: SVG Percent Donut Chart -->
+            <div class="neon-donut-col">
+              <div class="neon-donut-wrapper">
+                <svg class="neon-donut-svg" width="160" height="160" viewBox="0 0 160 160">
+                  <defs>
+                    <linearGradient id="neonDonutGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#00e599" />
+                      <stop offset="60%" stop-color="#10b981" />
+                      <stop offset="100%" stop-color="#06b6d4" />
+                    </linearGradient>
+                    <linearGradient id="neonDonutWarningGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#fbbf24" />
+                      <stop offset="100%" stop-color="#f59e0b" />
+                    </linearGradient>
+                    <linearGradient id="neonDonutCriticalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" stop-color="#f43f5e" />
+                      <stop offset="100%" stop-color="#ef4444" />
+                    </linearGradient>
+                  </defs>
+
+                  <!-- Base Track Circle -->
+                  <circle cx="80" cy="80" r="56" class="neon-donut-track" />
+
+                  <!-- Dynamic Fill Meter Circle (Circumference: 351.86) -->
+                  <circle cx="80" cy="80" r="56" class="neon-donut-meter" id="neon-donut-fill-circle"
+                    stroke="url(#neonDonutGradient)" stroke-dasharray="351.86" stroke-dashoffset="330" />
+                </svg>
+
+                <!-- Center Text Inside Donut -->
+                <div class="neon-donut-center-text">
+                  <span class="neon-donut-pct" id="neon-donut-pct-text">0.0%</span>
+                  <span class="neon-donut-label">FILLED</span>
+                </div>
+              </div>
+
+              <!-- Health Status Pill -->
+              <div class="neon-storage-health" id="neon-storage-health-tag">
+                <span class="health-dot"></span>
+                <span id="neon-storage-health-text">Optimal Storage</span>
+              </div>
+            </div>
+
+            <!-- Right: 3 Metric Cards, Linear Progress Bar, and Tables Breakdown -->
+            <div class="neon-stats-col">
+              <!-- 3 Metric Cards -->
+              <div class="neon-metric-cards-row">
+                <!-- Card 1: Data Fill Hw Chuka -->
+                <div class="neon-stat-box filled">
+                  <div class="stat-box-label">Data Fill Hw Chuka (Used)</div>
+                  <div class="stat-box-value" id="neon-stat-used-mb">0.00 MB</div>
+                  <div class="stat-box-sub" id="neon-stat-used-sub">0.0% of 1 GB</div>
+                </div>
+
+                <!-- Card 2: Space Baaki Hai -->
+                <div class="neon-stat-box free">
+                  <div class="stat-box-label">MB Space Baaki Hai (Free)</div>
+                  <div class="stat-box-value" id="neon-stat-free-mb">1,024.00 MB</div>
+                  <div class="stat-box-sub" id="neon-stat-free-sub">100.0% Available Space</div>
+                </div>
+
+                <!-- Card 3: Total Neon Quota -->
+                <div class="neon-stat-box total">
+                  <div class="stat-box-label">Total Neon Limit</div>
+                  <div class="stat-box-value" id="neon-stat-total-mb">1,024.00 MB</div>
+                  <div class="stat-box-sub">Free Plan 1.0 GB Allowance</div>
+                </div>
+              </div>
+
+              <!-- Linear Progress Bar -->
+              <div class="neon-linear-progress-wrapper">
+                <div class="progress-bar-labels">
+                  <span>0 MB (Empty)</span>
+                  <span id="neon-linear-midpoint">512 MB (50%)</span>
+                  <span>1,024 MB (1 GB Max)</span>
+                </div>
+                <div class="neon-linear-progress-bg">
+                  <div class="neon-linear-progress-fill" id="neon-linear-fill-bar" style="width: 1%;"></div>
+                </div>
+              </div>
+
+              <!-- Table Breakdown Mini Badges -->
+              <div class="neon-table-breakdown-wrapper">
+                <div class="breakdown-title">
+                  <span>📊 Tables Storage Footprint (کون سی ٹیبل کتنی جگہ لے رہی ہے):</span>
+                </div>
+                <div class="breakdown-tags" id="neon-table-breakdown-tags">
+                  <span class="table-size-tag"><strong>master_inventory:</strong> Calculating...</span>
+                  <span class="table-size-tag"><strong>receiving_log:</strong> Calculating...</span>
+                  <span class="table-size-tag"><strong>dispatch_log:</strong> Calculating...</span>
+                  <span class="table-size-tag"><strong>payment_sheet:</strong> Calculating...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Neon Banner Card -->
         <div class="contractor-summary-card" style="padding: 1.75rem;">
           <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
@@ -2007,14 +2147,15 @@
           <!-- Form Mode Toggle Bar (Receiving vs Dispatch) -->
           <div class="form-toggle-bar">
             <button type="button" class="form-toggle-tab active" data-mode="receiving" id="tab-btn-receiving"
-              tabindex="-1">
+              tabindex="0" title="Switch to Receiving Form (Stock In) - Press ArrowRight for Dispatch">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="7 10 12 15 17 10"></polyline>
                 <line x1="12" y1="15" x2="12" y2="3"></line>
               </svg>
               📥 Receiving Form (Stock In)
             </button>
-            <button type="button" class="form-toggle-tab" data-mode="dispatch" id="tab-btn-dispatch" tabindex="-1">
+            <button type="button" class="form-toggle-tab" data-mode="dispatch" id="tab-btn-dispatch" tabindex="0"
+              title="Switch to Dispatch Form (H-Emb Out) - Press ArrowLeft for Receiving">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                 <polyline points="17 8 12 3 7 8"></polyline>
                 <line x1="12" y1="3" x2="12" y2="15"></line>
@@ -2047,24 +2188,26 @@
             <div class="form-group form-slot-receiving">
               <label for="entry-date-receive">Date Receive: <span
                   style="font-size: 0.72rem; color: #38bdf8; font-weight: 600;">📅</span></label>
-              <input type="date" class="app-input" id="entry-date-receive" tabindex="-1"
-                onclick="this.showPicker && this.showPicker()">
+              <input type="date" class="app-input" id="entry-date-receive" tabindex="1"
+                onclick="this.showPicker && this.showPicker()"
+                title="Press Down Arrow to open calendar, Tab for Style Code, Up Arrow for Form Buttons">
             </div>
 
             <!-- 2. Date with Calendar (Dispatch mode) -->
             <div class="form-group form-slot-dispatch" style="display: none;">
               <label for="entry-date-dispatch">Date Dispatch: <span
                   style="font-size: 0.72rem; color: #a5b4fc; font-weight: 600;">📅</span></label>
-              <input type="date" class="app-input" id="entry-date-dispatch" tabindex="-1"
-                onclick="this.showPicker && this.showPicker()">
+              <input type="date" class="app-input" id="entry-date-dispatch" tabindex="1"
+                onclick="this.showPicker && this.showPicker()"
+                title="Press Down Arrow to open calendar, Tab for Style Code, Up Arrow for Form Buttons">
             </div>
 
-            <!-- 3. Style Code (Live Search & Default Focused) -->
+            <!-- 3. Style Code (Live Search) -->
             <div class="form-group">
               <label for="entry-style-code" style="color: var(--primary); font-weight: 700;">Style Code * (Live
                 Search):</label>
-              <input type="text" class="app-input" id="entry-style-code" required tabindex="1"
-                placeholder="Type Style Code to fetch..." list="styles-master-datalist" autocomplete="off" autofocus>
+              <input type="text" class="app-input" id="entry-style-code" required tabindex="2"
+                placeholder="Type Style Code to fetch..." list="styles-master-datalist" autocomplete="off">
               <datalist id="styles-master-datalist"></datalist>
             </div>
           </div>
@@ -3874,9 +4017,9 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=8"></script>
-  <script src="db.js?v=8"></script>
-  <script src="app.js?v=8"></script>
+  <script src="data.js?v=12"></script>
+  <script src="db.js?v=12"></script>
+  <script src="app.js?v=12"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
