@@ -9,6 +9,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#0b0f19">
+  <script>
+    (function () {
+      try {
+        var key = localStorage.getItem("hand_emb_theme_key");
+        var mode = "dark";
+        var palette = "emerald";
+        if (key === "blue-light") { mode = "light"; palette = "blue"; }
+        else if (key === "blue-dark") { mode = "dark"; palette = "blue"; }
+        else if (key === "emerald-light") { mode = "light"; palette = "emerald"; }
+        else if (key === "emerald-dark") { mode = "dark"; palette = "emerald"; }
+        else {
+          mode = localStorage.getItem("hand_emb_theme") || "dark";
+          palette = localStorage.getItem("hand_emb_palette") || "emerald";
+          key = palette + "-" + mode;
+        }
+        document.documentElement.setAttribute("data-theme", mode);
+        document.documentElement.setAttribute("data-palette", palette);
+        document.documentElement.setAttribute("data-app-theme", key);
+      } catch (e) { }
+    })();
+  </script>
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg?v=20">
@@ -147,21 +168,129 @@
           <span class="neon-status-label" id="neon-status-label">Neon Local</span>
         </div>
 
-        <!-- Theme Switcher -->
-        <button class="btn btn-secondary btn-icon" id="btn-theme-toggle" title="Toggle Light/Dark Theme">
-          <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            stroke-width="2">
-            <circle cx="12" cy="12" r="5"></circle>
-            <line x1="12" y1="1" x2="12" y2="3"></line>
-            <line x1="12" y1="21" x2="12" y2="23"></line>
-            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-            <line x1="1" y1="12" x2="3" y2="12"></line>
-            <line x1="21" y1="12" x2="23" y2="12"></line>
-            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-          </svg>
-        </button>
+        <!-- Theme & Palette Switcher -->
+        <div class="theme-switcher-wrapper" id="theme-switcher-wrapper">
+          <button class="btn btn-secondary btn-icon" id="btn-theme-toggle" title="Toggle Light/Dark Mode">
+            <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2">
+              <circle cx="12" cy="12" r="5"></circle>
+              <line x1="12" y1="1" x2="12" y2="3"></line>
+              <line x1="12" y1="21" x2="12" y2="23"></line>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+              <line x1="1" y1="12" x2="3" y2="12"></line>
+              <line x1="21" y1="12" x2="23" y2="12"></line>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+          </button>
+
+          <button type="button" class="btn btn-secondary btn-palette-picker" id="btn-palette-picker"
+            title="Theme Palette & Presets (Emerald Green / Royal Blue)">
+            <span class="palette-indicator-dot" id="palette-indicator-dot"></span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"></circle>
+              <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"></circle>
+              <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"></circle>
+              <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"></circle>
+              <path
+                d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z">
+              </path>
+            </svg>
+            <span class="palette-picker-label" id="palette-picker-label">Green</span>
+            <svg class="palette-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              stroke-width="2.5">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </button>
+
+          <!-- Theme Palette Dropdown Popover -->
+          <div class="theme-palette-menu" id="theme-palette-menu" style="display: none;">
+            <div class="theme-menu-header">
+              <span class="theme-menu-title">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path
+                    d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z">
+                  </path>
+                </svg>
+                Theme & Palette
+              </span>
+              <span class="theme-menu-badge" id="theme-active-label">Emerald Light</span>
+            </div>
+
+            <div class="theme-options-grid">
+              <!-- Royal Blue Suite -->
+              <span class="theme-set-title">🔷 Royal Blue Suite (New)</span>
+              <div class="theme-cards-row">
+                <!-- Royal Blue Light -->
+                <button type="button" class="theme-card-btn" data-theme-id="blue-light"
+                  title="White Canvas with Solid Royal Blue">
+                  <div class="swatch-preview swatch-blue-light">
+                    <span style="font-size: 10px; font-weight: 700; color: #1e3a8a;">WHITE</span>
+                    <span class="dot-accent"></span>
+                  </div>
+                  <strong class="theme-card-title">Blue Light</strong>
+                  <span class="theme-card-sub">White & Royal Blue</span>
+                  <span class="theme-check-pip">✓</span>
+                </button>
+
+                <!-- Royal Blue Dark -->
+                <button type="button" class="theme-card-btn" data-theme-id="blue-dark"
+                  title="Midnight Navy Slate with Royal Blue">
+                  <div class="swatch-preview swatch-blue-dark">
+                    <span style="font-size: 10px; font-weight: 700; color: #94a3b8;">DARK</span>
+                    <span class="dot-accent"></span>
+                  </div>
+                  <strong class="theme-card-title">Blue Dark</strong>
+                  <span class="theme-card-sub">Midnight & Navy Blue</span>
+                  <span class="theme-check-pip">✓</span>
+                </button>
+              </div>
+
+              <!-- Emerald Green Suite -->
+              <span class="theme-set-title">🌿 Emerald Green Suite</span>
+              <div class="theme-cards-row">
+                <!-- Emerald Light -->
+                <button type="button" class="theme-card-btn" data-theme-id="emerald-light"
+                  title="White Canvas with Emerald Green">
+                  <div class="swatch-preview swatch-emerald-light">
+                    <span style="font-size: 10px; font-weight: 700; color: #065f46;">WHITE</span>
+                    <span class="dot-accent"></span>
+                  </div>
+                  <strong class="theme-card-title">Emerald Light</strong>
+                  <span class="theme-card-sub">White & Green</span>
+                  <span class="theme-check-pip">✓</span>
+                </button>
+
+                <!-- Emerald Dark -->
+                <button type="button" class="theme-card-btn" data-theme-id="emerald-dark"
+                  title="Midnight Slate with Emerald Green">
+                  <div class="swatch-preview swatch-emerald-dark">
+                    <span style="font-size: 10px; font-weight: 700; color: #94a3b8;">DARK</span>
+                    <span class="dot-accent"></span>
+                  </div>
+                  <strong class="theme-card-title">Emerald Dark</strong>
+                  <span class="theme-card-sub">Midnight & Green</span>
+                  <span class="theme-check-pip">✓</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Footer Quick Controls -->
+            <div class="theme-menu-footer">
+              <button type="button" class="theme-quick-btn" id="btn-quick-toggle-palette"
+                title="Switch between Emerald Green and Royal Blue">
+                <span>🎨 Switch Palette</span>
+              </button>
+              <button type="button" class="theme-quick-btn" id="btn-quick-toggle-mode"
+                title="Switch between Light and Dark Mode">
+                <span>🌓 Switch Mode</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
 
         <!-- Current User Profile & Management (RBAC) -->
         <div class="user-header-profile" id="user-header-profile">
@@ -1269,14 +1398,14 @@
             <span style="font-weight: 700;">Date on Distribute Pcs</span>
             <div
               style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
-              <select id="select-distribution-period" class="app-select"
-                style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 270px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
+              <select id="select-distribution-period" class="app-select period-control-pill"
+                style="width: auto; min-width: 270px; display: inline-block; padding: 4px 12px;">
                 <!-- Dynamic Periods populated from db.getDistributionPeriods() -->
               </select>
 
-              <input type="text" id="input-distribution-period" class="app-input" list="datalist-distribution-periods"
-                placeholder="Type period name..."
-                style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
+              <input type="text" id="input-distribution-period" class="app-input period-control-pill"
+                list="datalist-distribution-periods" placeholder="Type period name..."
+                style="display: none; width: 280px; text-align: center; padding: 4px 8px;">
               <datalist id="datalist-distribution-periods"></datalist>
 
               <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-dist-period-input"
@@ -1347,10 +1476,10 @@
 
       <!-- KPI Summary Cards Banner -->
       <section class="kpi-grid" style="margin-bottom: 1.25rem;">
-        <div class="kpi-card emerald" style="border: 2px solid #10b981;">
-          <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Distributed Pieces</span>
-          <div class="kpi-value" id="kpi-dist-total-pcs" style="font-size: 1.6rem; color: #34d399;">0</div>
-          <span class="kpi-sub" style="color: #6ee7b7;">Total pieces allocated to contractors</span>
+        <div class="kpi-card emerald" id="kpi-card-dist-total-pcs">
+          <span class="kpi-label">Total Distributed Pieces</span>
+          <div class="kpi-value" id="kpi-dist-total-pcs">0</div>
+          <span class="kpi-sub">Total pieces allocated to contractors</span>
         </div>
 
         <div class="kpi-card cyan">
@@ -1477,14 +1606,14 @@
             <span style="font-weight: 700;">For The Period Of</span>
             <div
               style="position: relative; display: inline-flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; justify-content: center;">
-              <select id="select-rate-approval-period" class="app-select"
-                style="font-weight: 800; font-family: var(--font-mono); width: auto; min-width: 260px; display: inline-block; padding: 4px 12px; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); border-radius: var(--radius-sm); font-size: 0.85rem; cursor: pointer;">
+              <select id="select-rate-approval-period" class="app-select period-control-pill"
+                style="width: auto; min-width: 260px; display: inline-block; padding: 4px 12px;">
                 <!-- Populated dynamically from db.getRateApprovalPeriods() -->
               </select>
 
-              <input type="text" id="input-rate-approval-period" class="app-input" list="datalist-rate-approval-periods"
-                placeholder="Type period name..."
-                style="display: none; width: 280px; font-weight: 800; font-family: var(--font-mono); text-align: center; font-size: 0.85rem; padding: 4px 8px; color: #10b981; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.4);">
+              <input type="text" id="input-rate-approval-period" class="app-input period-control-pill"
+                list="datalist-rate-approval-periods" placeholder="Type period name..."
+                style="display: none; width: 280px; text-align: center; padding: 4px 8px;">
               <datalist id="datalist-rate-approval-periods"></datalist>
 
               <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-period-input"
@@ -1582,10 +1711,10 @@
           <span class="kpi-sub">Received from previous sheets</span>
         </div>
 
-        <div class="kpi-card emerald" style="border: 2px solid #10b981;">
-          <span class="kpi-label" style="font-weight: 800; color: #34d399;">Total Pcs Qt (Approved)</span>
-          <div class="kpi-value" id="kpi-pay-cumulative-total" style="font-size: 1.6rem; color: #34d399;">0</div>
-          <span class="kpi-sub" style="color: #6ee7b7;">Cumulative Approved (Current + Past)</span>
+        <div class="kpi-card emerald" id="kpi-card-pay-cumulative">
+          <span class="kpi-label">Total Pcs Qt (Approved)</span>
+          <div class="kpi-value" id="kpi-pay-cumulative-total">0</div>
+          <span class="kpi-sub">Cumulative Approved (Current + Past)</span>
         </div>
 
         <div class="kpi-card rose">
@@ -1973,10 +2102,9 @@
         </div>
 
         <!-- Neon Banner Card -->
-        <div class="contractor-summary-card" style="padding: 1.75rem;">
+        <div class="contractor-summary-card neon-cloud-sync-card" style="padding: 1.75rem;">
           <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem;">
-            <div
-              style="width: 48px; height: 48px; border-radius: var(--radius-md); background: #00e599; display: flex; align-items: center; justify-content: center; color: black; font-weight: 900; font-size: 1.3rem;">
+            <div class="neon-sync-logo-badge" id="neon-sync-logo-badge">
               N
             </div>
             <div>
@@ -1987,10 +2115,8 @@
           </div>
 
           <!-- Step-by-Step Neon Guide Alert -->
-          <div
-            style="background: rgba(0, 229, 153, 0.08); border: 1px solid rgba(0, 229, 153, 0.3); border-radius: var(--radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; font-size: 0.825rem; line-height: 1.6;">
-            <div
-              style="font-weight: 700; color: #00e599; margin-bottom: 0.35rem; display: flex; align-items: center; gap: 0.4rem;">
+          <div class="neon-guide-alert-box" id="neon-guide-alert-box">
+            <div class="neon-guide-title">
               <span>🔑 How to Connect Neon in 3 Simple Steps:</span>
             </div>
             <ol
@@ -3334,19 +3460,19 @@
 
           <div class="form-grid-3">
             <div class="form-group">
-              <label for="dist-entry-pcs-qty">PCS QTY (Pieces) *:</label>
-              <input type="number" class="app-input" id="dist-entry-pcs-qty" min="1" required placeholder="e.g. 830"
+              <label for="dist-entry-pcs-qty">PCS QTY (Pieces):</label>
+              <input type="number" class="app-input" id="dist-entry-pcs-qty" min="0" placeholder="e.g. 830 (Optional)"
                 style="font-weight: 700; font-family: var(--font-mono);">
             </div>
             <div class="form-group">
-              <label for="dist-entry-rate">RATE (Per Piece) *:</label>
-              <input type="number" class="app-input" id="dist-entry-rate" min="0" step="any" required
-                placeholder="e.g. 182" style="font-weight: 700; font-family: var(--font-mono);">
+              <label for="dist-entry-rate">RATE (Per Piece):</label>
+              <input type="number" class="app-input" id="dist-entry-rate" min="0" step="any"
+                placeholder="e.g. 182 (Optional)" style="font-weight: 700; font-family: var(--font-mono);">
             </div>
             <div class="form-group">
               <label for="dist-entry-total">TOTAL AMOUNT (Auto):</label>
               <input type="text" class="app-input" id="dist-entry-total" readonly
-                style="font-weight: 800; font-family: var(--font-mono); color: #10b981; background: var(--bg-surface);">
+                style="font-weight: 800; font-family: var(--font-mono); color: var(--primary); background: var(--bg-surface);">
             </div>
           </div>
 

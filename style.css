@@ -134,30 +134,763 @@
   --table-col-header-bg: #f8fafc;
   --table-col-header-text: #475569;
   --table-border: #cbd5e1;
-  --rec-header-bg: #ecfdf5;
-  --rec-header-text: #047857;
-  --dis-header-bg: #f0fdfa;
-  --dis-header-text: #0d9488;
-  --challan-rec-color: #047857;
-  --challan-dis-color: #0d9488;
-  --qty-rec-bg: #ecfdf5;
-  --qty-rec-text: #047857;
-  --qty-dis-bg: #f0fdfa;
-  --qty-dis-text: #0d9488;
+  --rec-header-bg: #f8fafc;
+  --rec-header-text: #475569;
+  --dis-header-bg: #f8fafc;
+  --dis-header-text: #475569;
+  --challan-rec-color: #0f172a;
+  --challan-dis-color: #0f172a;
+  --qty-rec-bg: transparent;
+  --qty-rec-text: #0f172a;
+  --qty-dis-bg: transparent;
+  --qty-dis-text: #0f172a;
 
-  --badge-style-bg: #f1f5f9;
-  --badge-style-text: #059669;
-  --badge-style-border: #cbd5e1;
+  --badge-style-bg: #ecfdf5;
+  --badge-style-text: #047857;
+  --badge-style-border: #a7f3d0;
 
-  --badge-inline-bg: #f0f9ff;
-  --badge-inline-text: #0284c7;
-  --badge-inline-border: #bae6fd;
+  --badge-inline-bg: #ecfdf5;
+  --badge-inline-text: #047857;
+  --badge-inline-border: #a7f3d0;
 
   --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
   --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
   --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
   --shadow-glow: 0 0 20px rgba(5, 150, 105, 0.15);
 }
+
+/* ====================================================================
+   ROYAL BLUE THEME SET (Light & Dark)
+   Solid Executive Sapphire & Deep Royal Blue Palette
+   High-contrast, authoritative, crisp - NOT washed out or light blue
+   ==================================================================== */
+
+/* 1. ROYAL BLUE - DARK THEME (Midnight Sapphire & Solid Royal Blue) */
+[data-palette="blue"],
+[data-app-theme="blue-dark"],
+[data-palette="blue"][data-theme="dark"] {
+  --bg-app: #080d1a;
+  --bg-card: #0f172a;
+  --bg-card-hover: #16223b;
+  --bg-surface: #0f172a;
+  --bg-input: #0b1322;
+  --bg-header: rgba(8, 13, 26, 0.94);
+  --bg-nav-row: #0b1322;
+
+  --border-color: #1e2e4a;
+  --border-subtle: #17243b;
+  --border-hover-card: #334d77;
+  --border-hover-input: #3b537e;
+  --btn-border: #283d63;
+
+  --text-main: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-faint: #64748b;
+
+  /* Primary Accent: Solid Vivid Royal Blue (Solid Sapphire, NOT light/washed out) */
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-glow: rgba(37, 99, 235, 0.35);
+
+  --accent-cyan: #0284c7;
+  --accent-emerald: #10b981;
+  --accent-amber: #f59e0b;
+  --accent-rose: #f43f5e;
+  --accent-blue: #3b82f6;
+
+  /* Excel Highlight Non-Zero Balances */
+  --excel-pink-bg: rgba(244, 63, 94, 0.18);
+  --excel-pink-text: #fda4af;
+  --excel-pink-border: rgba(244, 63, 94, 0.4);
+
+  --excel-green-bg: rgba(37, 99, 235, 0.16);
+  --excel-green-text: #93c5fd;
+
+  /* Table Specific Semantic Colors */
+  --table-group-bg: #111c33;
+  --table-group-text: #e2e8f0;
+  --table-col-header-bg: #0b1426;
+  --table-col-header-text: #94a3b8;
+  --table-border: #1e2e4a;
+  --rec-header-bg: rgba(37, 99, 235, 0.18);
+  --rec-header-text: #60a5fa;
+  --dis-header-bg: rgba(14, 165, 233, 0.16);
+  --dis-header-text: #38bdf8;
+  --challan-rec-color: #60a5fa;
+  --challan-dis-color: #38bdf8;
+  --qty-rec-bg: rgba(37, 99, 235, 0.14);
+  --qty-rec-text: #60a5fa;
+  --qty-dis-bg: rgba(14, 165, 233, 0.12);
+  --qty-dis-text: #38bdf8;
+
+  --badge-style-bg: rgba(37, 99, 235, 0.16);
+  --badge-style-text: #60a5fa;
+  --badge-style-border: rgba(37, 99, 235, 0.35);
+
+  --badge-inline-bg: rgba(56, 189, 248, 0.12);
+  --badge-inline-text: #7dd3fc;
+  --badge-inline-border: rgba(56, 189, 248, 0.3);
+
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 4px 10px -1px rgba(0, 0, 0, 0.55);
+  --shadow-lg: 0 12px 24px -3px rgba(0, 0, 0, 0.65);
+  --shadow-glow: 0 0 25px rgba(37, 99, 235, 0.28);
+}
+
+/* 2. ROYAL BLUE - LIGHT THEME (White Background & Deep Solid Royal Blue) */
+[data-palette="blue"][data-theme="light"],
+[data-app-theme="blue-light"] {
+  --bg-app: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-surface: #f1f5f9;
+  --bg-input: #ffffff;
+  --bg-header: rgba(255, 255, 255, 0.95);
+  --bg-nav-row: #f1f5f9;
+
+  --border-color: #cbd5e1;
+  --border-subtle: #cbd5e1;
+  --border-hover-card: #94a3b8;
+  --border-hover-input: #94a3b8;
+  --btn-border: #94a3b8;
+
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --text-faint: #94a3b8;
+
+  /* Primary Accent: Deep Crisp Royal Blue (Solid, rich, 5.5:1 WCAG AAA on white - NOT light!) */
+  --primary: #1d4ed8;
+  --primary-hover: #1e40af;
+  --primary-glow: rgba(29, 78, 216, 0.22);
+
+  --accent-cyan: #0284c7;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-rose: #e11d48;
+  --accent-blue: #1d4ed8;
+
+  --excel-pink-bg: #fee2e2;
+  --excel-pink-text: #b91c1c;
+  --excel-pink-border: #fca5a5;
+
+  --excel-green-bg: #dbeafe;
+  --excel-green-text: #1e40af;
+
+  /* Table Specific Semantic Colors - Crisp White with Neutral Dark Grey & Black Data */
+  --table-group-bg: #f1f5f9;
+  --table-group-text: #1e293b;
+  --table-col-header-bg: #f8fafc;
+  --table-col-header-text: #475569;
+  --table-border: #cbd5e1;
+  --rec-header-bg: #f8fafc;
+  --rec-header-text: #475569;
+  --dis-header-bg: #f8fafc;
+  --dis-header-text: #475569;
+  --challan-rec-color: #0f172a;
+  --challan-dis-color: #0f172a;
+  --qty-rec-bg: transparent;
+  --qty-rec-text: #0f172a;
+  --qty-dis-bg: transparent;
+  --qty-dis-text: #0f172a;
+
+  --badge-style-bg: #eff6ff;
+  --badge-style-text: #1d4ed8;
+  --badge-style-border: #bfdbfe;
+
+  --badge-inline-bg: #eff6ff;
+  --badge-inline-text: #0284c7;
+  --badge-inline-border: #bfdbfe;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-glow: 0 0 20px rgba(29, 78, 216, 0.2);
+}
+
+/* -------------------------------------------------------------
+   ROYAL BLUE COMPONENT OVERRIDES
+   ------------------------------------------------------------- */
+
+/* Brand Icon */
+[data-palette="blue"] .brand-icon {
+  background: linear-gradient(135deg, #172554 0%, #1e40af 50%, #2563eb 100%) !important;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4), inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+}
+[data-palette="blue"] .brand-icon:hover {
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5) !important;
+}
+[data-palette="blue"][data-theme="light"] .brand-icon,
+[data-app-theme="blue-light"] .brand-icon {
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 55%, #2563eb 100%) !important;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.3) !important;
+}
+
+/* Brand Text Title */
+[data-palette="blue"] .brand-text h1 {
+  background: linear-gradient(120deg, var(--text-main) 60%, #3b82f6 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+[data-palette="blue"][data-theme="light"] .brand-text h1,
+[data-app-theme="blue-light"] .brand-text h1 {
+  color: #0f172a !important;
+  background: linear-gradient(120deg, #0f172a 65%, #1d4ed8 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+
+/* New Entry Button */
+[data-palette="blue"] .btn-new-entry {
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(37, 99, 235, 0.35) !important;
+}
+[data-palette="blue"] .btn-new-entry:hover {
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.5) !important;
+  border-color: #60a5fa !important;
+}
+[data-palette="blue"][data-theme="light"] .btn-new-entry,
+[data-app-theme="blue-light"] .btn-new-entry {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+  border-color: #1e40af !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(29, 78, 216, 0.28) !important;
+}
+[data-palette="blue"][data-theme="light"] .btn-new-entry:hover,
+[data-app-theme="blue-light"] .btn-new-entry:hover {
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.4) !important;
+  border-color: #172554 !important;
+}
+
+/* Master Inventory Action Buttons in Blue Light Mode */
+[data-palette="blue"][data-theme="light"] #btn-quick-receiving {
+  border: 1.5px solid #1d4ed8 !important;
+  color: #1e40af !important;
+  background: #ffffff !important;
+}
+[data-palette="blue"][data-theme="light"] #btn-quick-receiving:hover {
+  background: #eff6ff !important;
+  box-shadow: 0 4px 12px rgba(29, 78, 216, 0.18), 0 0 0 1px #1d4ed8 !important;
+}
+
+/* Auth Modal Overrides */
+[data-palette="blue"] .auth-brand-logo {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+  box-shadow: 0 8px 24px rgba(37, 99, 235, 0.4) !important;
+}
+[data-palette="blue"] .auth-header h2 {
+  background: linear-gradient(135deg, #ffffff 40%, #93c5fd 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+[data-palette="blue"][data-theme="light"] .auth-header h2,
+[data-app-theme="blue-light"] .auth-header h2 {
+  color: #1e3a8a !important;
+  background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 65%, #1e40af 100%) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  -webkit-text-fill-color: transparent !important;
+}
+[data-palette="blue"][data-theme="light"] .auth-card,
+[data-app-theme="blue-light"] .auth-card {
+  border: 1px solid rgba(29, 78, 216, 0.28) !important;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.12), 0 0 24px rgba(29, 78, 216, 0.08) !important;
+}
+
+/* Dashboard Quick Actions */
+[data-palette="blue"] .dash-action-btn.primary {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.06)) !important;
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  color: #60a5fa !important;
+}
+[data-palette="blue"] .dash-action-btn.primary:hover {
+  border-color: #2563eb !important;
+  background: rgba(37, 99, 235, 0.25) !important;
+}
+[data-palette="blue"][data-theme="light"] .dash-action-btn.primary,
+[data-app-theme="blue-light"] .dash-action-btn.primary {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+[data-palette="blue"][data-theme="light"] .dash-action-btn.primary:hover,
+[data-app-theme="blue-light"] .dash-action-btn.primary:hover {
+  background: #dbeafe !important;
+  border-color: #1d4ed8 !important;
+  box-shadow: 0 3px 10px rgba(29, 78, 216, 0.15) !important;
+}
+
+/* Production Progress Track */
+[data-palette="blue"] .dash-track-bar.bar-dispatched {
+  background: linear-gradient(90deg, #1d4ed8 0%, #2563eb 100%) !important;
+}
+[data-palette="blue"] .dash-metric-tag:not(.wip) {
+  background: rgba(37, 99, 235, 0.15) !important;
+  color: #60a5fa !important;
+  border-color: rgba(37, 99, 235, 0.35) !important;
+}
+[data-palette="blue"][data-theme="light"] .dash-metric-tag:not(.wip),
+[data-app-theme="blue-light"] .dash-metric-tag:not(.wip) {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border-color: #bfdbfe !important;
+}
+[data-palette="blue"] .dash-legend-dot.dispatched {
+  background: #2563eb !important;
+}
+[data-palette="blue"][data-theme="light"] .dash-legend-dot.dispatched,
+[data-app-theme="blue-light"] .dash-legend-dot.dispatched {
+  background: #1d4ed8 !important;
+}
+
+/* Contractor Work Distribution Chip */
+[data-palette="blue"] .contractor-chip .chip-val {
+  background: rgba(37, 99, 235, 0.16) !important;
+  color: #3b82f6 !important;
+}
+[data-palette="blue"][data-theme="light"] .contractor-chip .chip-val,
+[data-app-theme="blue-light"] .contractor-chip .chip-val {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+/* User Avatar MH / AG Badge in Blue Palette */
+[data-palette="blue"] .user-avatar-badge {
+  background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.4) !important;
+}
+
+/* Daily Sheet Header Banner Card in Blue Theme */
+[data-palette="blue"] .report-header-banner {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.15) 0%, rgba(30, 58, 138, 0.08) 100%) !important;
+  border: 1.5px solid rgba(37, 99, 235, 0.35) !important;
+}
+[data-palette="blue"][data-theme="light"] .report-header-banner,
+[data-app-theme="blue-light"] .report-header-banner {
+  background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%) !important;
+  border: 1.5px solid #bfdbfe !important;
+}
+
+/* Neon Cloud Storage & Sync Cards in Blue Theme */
+[data-palette="blue"] .neon-storage-card {
+  border: 1.5px solid rgba(37, 99, 235, 0.35) !important;
+  background: linear-gradient(145deg, var(--bg-card) 0%, rgba(37, 99, 235, 0.05) 100%) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25), 0 0 15px rgba(37, 99, 235, 0.1) !important;
+}
+[data-palette="blue"][data-theme="light"] .neon-storage-card,
+[data-app-theme="blue-light"] .neon-storage-card {
+  background: linear-gradient(145deg, #ffffff 0%, #eff6ff 100%) !important;
+  border: 1.5px solid #93c5fd !important;
+  box-shadow: 0 4px 16px rgba(29, 78, 216, 0.06) !important;
+}
+
+[data-palette="blue"] .neon-storage-icon-badge {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.25), rgba(30, 58, 138, 0.3)) !important;
+  border-color: rgba(37, 99, 235, 0.5) !important;
+  color: #60a5fa !important;
+}
+[data-palette="blue"][data-theme="light"] .neon-storage-icon-badge,
+[data-app-theme="blue-light"] .neon-storage-icon-badge {
+  background: #dbeafe !important;
+  border-color: #93c5fd !important;
+  color: #1d4ed8 !important;
+}
+
+[data-palette="blue"] #neon-storage-source-badge,
+[data-palette="blue"] .badge-tag.neon-live-badge {
+  background: rgba(37, 99, 235, 0.18) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(37, 99, 235, 0.45) !important;
+}
+[data-palette="blue"][data-theme="light"] #neon-storage-source-badge,
+[data-palette="blue"][data-theme="light"] .badge-tag.neon-live-badge {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #bfdbfe !important;
+}
+
+[data-palette="blue"] .neon-storage-health:not(.warning):not(.critical) {
+  background: rgba(37, 99, 235, 0.15) !important;
+  color: #60a5fa !important;
+  border-color: rgba(37, 99, 235, 0.4) !important;
+}
+[data-palette="blue"][data-theme="light"] .neon-storage-health:not(.warning):not(.critical) {
+  background: #eff6ff !important;
+  color: #1e40af !important;
+  border-color: #bfdbfe !important;
+}
+
+[data-palette="blue"] .neon-stat-box.filled {
+  border-left: 3.5px solid #2563eb !important;
+}
+[data-palette="blue"][data-theme="light"] .neon-stat-box.filled {
+  border-left: 3.5px solid #1d4ed8 !important;
+}
+
+[data-palette="blue"] .neon-linear-progress-fill {
+  background: linear-gradient(90deg, #1d4ed8, #2563eb, #38bdf8) !important;
+}
+
+[data-palette="blue"] .neon-sync-logo-badge {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #1d4ed8, #2563eb) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff !important;
+  font-weight: 900;
+  font-size: 1.3rem;
+  box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+  flex-shrink: 0;
+}
+
+[data-palette="blue"] .neon-guide-alert-box {
+  background: rgba(37, 99, 235, 0.08) !important;
+  border: 1px solid rgba(37, 99, 235, 0.3) !important;
+  border-radius: var(--radius-md);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  font-size: 0.825rem;
+  line-height: 1.6;
+}
+[data-palette="blue"][data-theme="light"] .neon-guide-alert-box {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+[data-palette="blue"] .neon-guide-title {
+  font-weight: 700;
+  color: #60a5fa !important;
+  margin-bottom: 0.35rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+[data-palette="blue"][data-theme="light"] .neon-guide-title {
+  color: #1d4ed8 !important;
+}
+
+/* Dashboard Hero Card & Badges in Blue Theme */
+[data-palette="blue"] .dash-hero-badge {
+  background: rgba(37, 99, 235, 0.15) !important;
+  border-color: rgba(37, 99, 235, 0.35) !important;
+  color: #60a5fa !important;
+}
+[data-palette="blue"][data-theme="light"] .dash-hero-badge {
+  background: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+[data-palette="blue"] .dash-pulse-dot {
+  background: #2563eb !important;
+  box-shadow: 0 0 8px #2563eb !important;
+}
+[data-palette="blue"] .dash-hero-card::before {
+  background: radial-gradient(circle, rgba(37, 99, 235, 0.2) 0%, transparent 70%) !important;
+}
+
+/* ====================================================================
+   THEME & PALETTE SWITCHER UI
+   ==================================================================== */
+.theme-switcher-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-palette-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.38rem 0.65rem;
+  font-size: 0.775rem;
+  font-weight: 600;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-color);
+  background: var(--bg-card);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+}
+
+.btn-palette-picker:hover {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+  box-shadow: 0 0 0 1px var(--primary);
+}
+
+.palette-indicator-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--primary);
+  box-shadow: 0 0 8px var(--primary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.palette-chevron {
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+
+.btn-palette-picker.active .palette-chevron {
+  transform: rotate(180deg);
+}
+
+/* Theme Dropdown Menu Popover */
+.theme-palette-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 320px;
+  background: var(--bg-card);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg), 0 12px 32px -4px rgba(0, 0, 0, 0.35);
+  padding: 0.85rem;
+  z-index: 1000;
+  animation: themeMenuFadeIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+@keyframes themeMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.theme-menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.6rem;
+  margin-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.theme-menu-title {
+  font-size: 0.825rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+  color: var(--text-main);
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.theme-menu-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: var(--primary-glow);
+  color: var(--primary);
+  border: 1px solid var(--primary);
+}
+
+/* Theme Options Grid */
+.theme-options-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.theme-set-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  margin-bottom: 0.2rem;
+  padding-left: 0.25rem;
+}
+
+.theme-cards-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.theme-card-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--border-subtle);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: left;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-card-btn:hover {
+  border-color: var(--border-hover-card);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.theme-card-btn.active {
+  border-color: var(--primary);
+  background: var(--bg-card);
+  box-shadow: 0 0 0 1.5px var(--primary), 0 4px 12px var(--primary-glow);
+}
+
+.theme-card-btn .swatch-preview {
+  width: 100%;
+  height: 26px;
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  position: relative;
+}
+
+/* Swatch Presets */
+.swatch-emerald-dark {
+  background: #0b0f19;
+  border-color: #2b3b55;
+}
+.swatch-emerald-dark .dot-accent {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+}
+
+.swatch-emerald-light {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+.swatch-emerald-light .dot-accent {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #059669;
+}
+
+.swatch-blue-dark {
+  background: #080d1a;
+  border-color: #1e2e4a;
+}
+.swatch-blue-dark .dot-accent {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #2563eb;
+  box-shadow: 0 0 6px #2563eb;
+}
+
+.swatch-blue-light {
+  background: #ffffff;
+  border-color: #cbd5e1;
+}
+.swatch-blue-light .dot-accent {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #1d4ed8;
+}
+
+.theme-card-title {
+  font-size: 0.775rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.theme-card-sub {
+  font-size: 0.675rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
+.theme-check-pip {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 900;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: all 0.15s ease;
+}
+
+.theme-card-btn.active .theme-check-pip {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* Theme Menu Quick Actions Footer */
+.theme-menu-footer {
+  margin-top: 0.7rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.theme-quick-btn {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.725rem;
+  font-weight: 650;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-main);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.theme-quick-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary);
+}
+
+@media (max-width: 680px) {
+  .palette-picker-label {
+    display: none;
+  }
+}
+
 
 /* Base Styles */
 * {
@@ -1402,15 +2135,10 @@ input[type="date"].app-input {
   text-transform: uppercase;
 }
 
-.group-header th.rec-section {
-  background: var(--rec-header-bg) !important;
-  color: var(--rec-header-text) !important;
-  border: 1px solid var(--table-border) !important;
-}
-
+.group-header th.rec-section,
 .group-header th.dis-section {
-  background: var(--dis-header-bg) !important;
-  color: var(--dis-header-text) !important;
+  background: var(--table-group-bg) !important;
+  color: var(--table-group-text) !important;
   border: 1px solid var(--table-border) !important;
 }
 
@@ -1426,13 +2154,10 @@ input[type="date"].app-input {
   line-height: 1.15;
 }
 
-.column-header th.rec-section {
-  color: var(--rec-header-text) !important;
-  border: 1px solid var(--table-border) !important;
-}
-
+.column-header th.rec-section,
 .column-header th.dis-section {
-  color: var(--dis-header-text) !important;
+  color: var(--table-col-header-text) !important;
+  background: var(--table-col-header-bg) !important;
   border: 1px solid var(--table-border) !important;
 }
 
@@ -6726,4 +7451,264 @@ input.app-input {
 select.app-select:hover,
 input.app-input:hover {
   transform: none !important;
+}
+
+/* ====================================================================
+   THEME ENHANCEMENTS & USER CUSTOMIZATIONS
+   ==================================================================== */
+
+/* 1. NEON CLOUD - Push Local Data to Neon Cloud Button in Blue Palette */
+[data-palette="blue"] #btn-push-to-neon,
+[data-app-theme="blue-dark"] #btn-push-to-neon,
+[data-app-theme="blue-light"] #btn-push-to-neon {
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%) !important;
+  border-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(29, 78, 216, 0.35) !important;
+}
+[data-palette="blue"] #btn-push-to-neon:hover,
+[data-app-theme="blue-dark"] #btn-push-to-neon:hover,
+[data-app-theme="blue-light"] #btn-push-to-neon:hover {
+  background: linear-gradient(135deg, #1e40af 0%, #1d4ed8 100%) !important;
+  border-color: #1e40af !important;
+  box-shadow: 0 4px 14px rgba(29, 78, 216, 0.45) !important;
+}
+
+/* 2. WORK DISTRIBUTION & PAYMENT SHEET - Time Period Controls (.period-control-pill) */
+.period-control-pill {
+  font-weight: 800 !important;
+  font-family: var(--font-mono) !important;
+  border-radius: var(--radius-sm) !important;
+  font-size: 0.85rem !important;
+  cursor: pointer;
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  transition: all 0.2s ease;
+}
+[data-theme="light"] .period-control-pill {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+}
+[data-palette="blue"] .period-control-pill,
+[data-app-theme="blue-dark"] .period-control-pill {
+  background: rgba(37, 99, 235, 0.15) !important;
+  color: #60a5fa !important;
+  border: 1px solid rgba(37, 99, 235, 0.45) !important;
+}
+[data-palette="blue"][data-theme="light"] .period-control-pill,
+[data-app-theme="blue-light"] .period-control-pill {
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #93c5fd !important;
+}
+
+/* 3. ALL KPI CARDS - Inner Text & Numbers in Light Theme MUST Be Crisp Solid Black */
+[data-theme="light"] .kpi-card .kpi-value,
+[data-theme="light"] .kpi-value,
+[data-theme="light"] #kpi-dist-total-pcs,
+[data-theme="light"] #kpi-pay-cumulative-total,
+[data-theme="light"] #kpi-dist-total-amount,
+[data-theme="light"] #kpi-dist-total-styles,
+[data-theme="light"] #kpi-pay-total-cut,
+[data-theme="light"] #kpi-pay-prod-pcs,
+[data-theme="light"] #kpi-pay-prev-receive,
+[data-theme="light"] #kpi-pay-total-balance,
+[data-theme="light"] .dash-kpi-num,
+[data-theme="light"] .stat-box-value,
+[data-theme="light"] .dashboard-kpi-val,
+[data-theme="light"] .kpi-val,
+[data-theme="light"] .kpi-card .kpi-value * {
+  color: #0f172a !important; /* solid deep black */
+}
+
+[data-theme="light"] .kpi-card .kpi-label,
+[data-theme="light"] .kpi-label,
+[data-theme="light"] .dash-kpi-label,
+[data-theme="light"] .stat-box-label {
+  color: #1e293b !important; /* solid dark slate/black */
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .kpi-card .kpi-sub,
+[data-theme="light"] .kpi-sub,
+[data-theme="light"] .dash-kpi-hint,
+[data-theme="light"] .stat-box-sub {
+  color: #475569 !important; /* clear dark grey */
+}
+
+/* Ensure left accent border in blue theme is royal blue instead of green */
+[data-palette="blue"] .kpi-card.emerald,
+[data-app-theme="blue-dark"] .kpi-card.emerald,
+[data-app-theme="blue-light"] .kpi-card.emerald {
+  --accent-line: var(--primary) !important;
+}
+
+/* 4. ALL TABLE DATA CELLS - Black or Dark Grey in Light Theme */
+[data-theme="light"] .master-table tbody td,
+[data-theme="light"] .master-table td,
+[data-theme="light"] .master-table tbody tr td {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .cell-rec-qty,
+[data-theme="light"] .cell-dis-qty {
+  color: #0f172a !important;
+  background: transparent !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .cell-challan-rec,
+[data-theme="light"] .cell-challan-dis {
+  color: #1e293b !important;
+  font-weight: 700 !important;
+}
+
+/* Style Code & Category Highlighting: Green theme on green, Blue theme on blue */
+
+/* 1. Green Theme (Default / Light & Dark) */
+.style-code-badge {
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  font-weight: 700 !important;
+}
+
+.badge-tag.inline,
+td .badge-tag {
+  color: #34d399 !important;
+  background: rgba(16, 185, 129, 0.15) !important;
+  border: 1px solid rgba(16, 185, 129, 0.35) !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .style-code-badge {
+  color: #047857 !important;
+  background: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .badge-tag.inline,
+[data-theme="light"] td .badge-tag {
+  color: #047857 !important;
+  background: #ecfdf5 !important;
+  border: 1px solid #a7f3d0 !important;
+  font-weight: 700 !important;
+}
+
+/* 2. Blue Theme (Light & Dark) */
+[data-palette="blue"] .style-code-badge,
+[data-app-theme="blue-dark"] .style-code-badge {
+  color: #60a5fa !important;
+  background: rgba(37, 99, 235, 0.18) !important;
+  border: 1px solid rgba(37, 99, 235, 0.4) !important;
+  font-weight: 700 !important;
+}
+
+[data-palette="blue"] .badge-tag.inline,
+[data-palette="blue"] td .badge-tag,
+[data-app-theme="blue-dark"] .badge-tag.inline,
+[data-app-theme="blue-dark"] td .badge-tag {
+  color: #38bdf8 !important;
+  background: rgba(14, 165, 233, 0.16) !important;
+  border: 1px solid rgba(14, 165, 233, 0.35) !important;
+  font-weight: 700 !important;
+}
+
+[data-palette="blue"][data-theme="light"] .style-code-badge,
+[data-app-theme="blue-light"] .style-code-badge {
+  color: #1d4ed8 !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  font-weight: 700 !important;
+}
+
+[data-palette="blue"][data-theme="light"] .badge-tag.inline,
+[data-palette="blue"][data-theme="light"] td .badge-tag,
+[data-app-theme="blue-light"] .badge-tag.inline,
+[data-app-theme="blue-light"] td .badge-tag {
+  color: #0284c7 !important;
+  background: #eff6ff !important;
+  border: 1px solid #bfdbfe !important;
+  font-weight: 700 !important;
+}
+
+/* Semantic Status Tags inside tables (Exceptions that retain warning colors) */
+.badge-tag.issue,
+[data-theme="light"] .badge-tag.issue {
+  background: #fee2e2 !important;
+  color: #991b1b !important;
+  border: 1px solid #fca5a5 !important;
+}
+
+.badge-tag.alter,
+[data-theme="light"] .badge-tag.alter {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border: 1px solid #fcd34d !important;
+}
+
+[data-theme="light"] .contractor-tag {
+  color: #0f172a !important;
+  font-weight: 600 !important;
+}
+
+[data-theme="light"] .contractor-tag .avatar-dot {
+  background: var(--primary);
+}
+
+[data-theme="light"] .balance-zero-green {
+  background: #f8fafc !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 700 !important;
+}
+
+[data-theme="light"] .multi-cell-scroll {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .multi-cell-badge {
+  color: #475569 !important;
+  background: #f1f5f9 !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-theme="light"] .master-table tfoot th,
+[data-theme="light"] .master-table tfoot td {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+
+/* 5. MASTER INVENTORY TABLE HEADINGS - Strictly Match STYLE CODE Header */
+.master-table thead tr.group-header th,
+.group-header th.rec-section,
+.group-header th.dis-section {
+  background: var(--table-group-bg) !important;
+  color: var(--table-group-text) !important;
+}
+
+.master-table thead tr.column-header th,
+.column-header th.rec-section,
+.column-header th.dis-section {
+  background: var(--table-col-header-bg) !important;
+  color: var(--table-col-header-text) !important;
+}
+
+[data-theme="light"] table tbody td,
+[data-theme="light"] .table-dist-sheet tbody td,
+[data-theme="light"] .table-rate-approval tbody td {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .contractor-chip .chip-val {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+[data-theme="light"] .contractor-chip.active .chip-val {
+  background: rgba(37, 99, 235, 0.15) !important;
+  color: #1d4ed8 !important;
 }

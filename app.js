@@ -108,22 +108,206 @@ function showToast(message, type = "success") {
 }
 
 // -------------------------------------------------------------
-// Theme Management (Dark / Light)
+// Comprehensive Theme Management (Emerald Green & Royal Blue Sets)
+// Presets:
+// 1. emerald-dark : Midnight Slate & Vivid Emerald Green
+// 2. emerald-light: Crisp White & Rich Emerald Green
+// 3. blue-dark   : Midnight Sapphire Navy & Vivid Solid Royal Blue
+// 4. blue-light  : Crisp White & Solid Deep Royal Blue (NOT pale/washed out)
 // -------------------------------------------------------------
-function initTheme() {
-  const savedTheme = localStorage.getItem("hand_emb_theme") || "dark";
-  document.documentElement.setAttribute("data-theme", savedTheme);
-  updateThemeIcon(savedTheme);
 
+function getStoredThemeSettings() {
+  const storedThemeKey = localStorage.getItem("hand_emb_theme_key");
+  if (storedThemeKey) {
+    if (storedThemeKey === "blue-light") return { mode: "light", palette: "blue", key: "blue-light" };
+    if (storedThemeKey === "blue-dark") return { mode: "dark", palette: "blue", key: "blue-dark" };
+    if (storedThemeKey === "emerald-light") return { mode: "light", palette: "emerald", key: "emerald-light" };
+    if (storedThemeKey === "emerald-dark") return { mode: "dark", palette: "emerald", key: "emerald-dark" };
+  }
+
+  // Fallback to legacy keys
+  const legacyMode = localStorage.getItem("hand_emb_theme") || "dark";
+  const legacyPalette = localStorage.getItem("hand_emb_palette") || "emerald";
+  const key = `${legacyPalette}-${legacyMode}`;
+  return { mode: legacyMode, palette: legacyPalette, key };
+}
+
+function applyThemeSettings(themeKey, showToastMsg = false) {
+  let mode = "dark";
+  let palette = "emerald";
+
+  if (themeKey === "blue-light") {
+    mode = "light";
+    palette = "blue";
+    themeKey = "blue-light";
+  } else if (themeKey === "blue-dark") {
+    mode = "dark";
+    palette = "blue";
+    themeKey = "blue-dark";
+  } else if (themeKey === "emerald-light" || themeKey === "light") {
+    mode = "light";
+    palette = "emerald";
+    themeKey = "emerald-light";
+  } else {
+    mode = "dark";
+    palette = "emerald";
+    themeKey = "emerald-dark";
+  }
+
+  // Set DOM attributes
+  document.documentElement.setAttribute("data-theme", mode);
+  document.documentElement.setAttribute("data-palette", palette);
+  document.documentElement.setAttribute("data-app-theme", themeKey);
+
+  // Save to localStorage
+  localStorage.setItem("hand_emb_theme_key", themeKey);
+  localStorage.setItem("hand_emb_theme", mode);
+  localStorage.setItem("hand_emb_palette", palette);
+
+  // Update icons and UI indicators
+  updateThemeControlsUI(mode, palette, themeKey);
+
+  // Update meta theme-color for browser address bar
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) {
+    if (themeKey === "blue-dark") metaTheme.setAttribute("content", "#080d1a");
+    else if (themeKey === "blue-light") metaTheme.setAttribute("content", "#f8fafc");
+    else if (themeKey === "emerald-light") metaTheme.setAttribute("content", "#f8fafc");
+    else metaTheme.setAttribute("content", "#0b0f19");
+  }
+
+  if (showToastMsg && typeof showToast === "function") {
+    const labels = {
+      "blue-light": "Royal Blue (Light) Theme Lag Gaya Hai",
+      "blue-dark": "Royal Blue (Dark) Theme Lag Gaya Hai",
+      "emerald-light": "Emerald Green (Light) Theme Lag Gaya Hai",
+      "emerald-dark": "Emerald Green (Dark) Theme Lag Gaya Hai",
+    };
+    showToast(labels[themeKey] || `Theme: ${themeKey}`, "info");
+  }
+}
+
+function updateThemeControlsUI(mode, palette, themeKey) {
+  // Update Mode Icon in header toggle button
+  updateThemeIcon(mode);
+
+  // Update Palette Indicator Dot & Label
+  const dot = document.getElementById("palette-indicator-dot");
+  if (dot) {
+    dot.style.background = palette === "blue" ? "#2563eb" : "#10b981";
+    dot.style.boxShadow = palette === "blue" ? "0 0 8px rgba(37, 99, 235, 0.7)" : "0 0 8px rgba(16, 185, 129, 0.7)";
+  }
+
+  const label = document.getElementById("palette-picker-label");
+  if (label) {
+    label.textContent = palette === "blue" ? "Blue" : "Green";
+  }
+
+  const activeBadge = document.getElementById("theme-active-label");
+  if (activeBadge) {
+    const titles = {
+      "blue-light": "Royal Blue Light",
+      "blue-dark": "Royal Blue Dark",
+      "emerald-light": "Emerald Light",
+      "emerald-dark": "Emerald Dark",
+    };
+    activeBadge.textContent = titles[themeKey] || themeKey;
+  }
+
+  // Update active state on menu theme cards
+  document.querySelectorAll(".theme-card-btn").forEach((card) => {
+    const cardId = card.getAttribute("data-theme-id");
+    if (cardId === themeKey) {
+      card.classList.add("active");
+    } else {
+      card.classList.remove("active");
+    }
+  });
+}
+
+function initTheme() {
+  const current = getStoredThemeSettings();
+  applyThemeSettings(current.key, false);
+
+  // 1. Light/Dark Mode Quick Toggle (retains currently chosen palette!)
   const toggleBtn = document.getElementById("btn-theme-toggle");
   if (toggleBtn) {
     toggleBtn.addEventListener("click", () => {
-      const current = document.documentElement.getAttribute("data-theme") || "dark";
-      const next = current === "dark" ? "light" : "dark";
-      document.documentElement.setAttribute("data-theme", next);
-      localStorage.setItem("hand_emb_theme", next);
-      updateThemeIcon(next);
-      showToast(`Switched to ${next} theme`, "info");
+      const active = getStoredThemeSettings();
+      const nextMode = active.mode === "dark" ? "light" : "dark";
+      const nextKey = `${active.palette}-${nextMode}`;
+      applyThemeSettings(nextKey, true);
+    });
+  }
+
+  // 2. Palette Picker Button (Toggles Popover Menu)
+  const palettePickerBtn = document.getElementById("btn-palette-picker");
+  const paletteMenu = document.getElementById("theme-palette-menu");
+
+  if (palettePickerBtn && paletteMenu) {
+    palettePickerBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isOpen = paletteMenu.style.display !== "none";
+      if (isOpen) {
+        paletteMenu.style.display = "none";
+        palettePickerBtn.classList.remove("active");
+      } else {
+        paletteMenu.style.display = "block";
+        palettePickerBtn.classList.add("active");
+      }
+    });
+
+    // Close when clicking outside
+    document.addEventListener("click", (e) => {
+      if (!paletteMenu.contains(e.target) && !palettePickerBtn.contains(e.target)) {
+        paletteMenu.style.display = "none";
+        palettePickerBtn.classList.remove("active");
+      }
+    });
+
+    // Close on Escape key
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && paletteMenu.style.display !== "none") {
+        paletteMenu.style.display = "none";
+        palettePickerBtn.classList.remove("active");
+      }
+    });
+  }
+
+  // 3. Theme Card Options in Menu
+  document.querySelectorAll(".theme-card-btn").forEach((card) => {
+    card.addEventListener("click", () => {
+      const selectedKey = card.getAttribute("data-theme-id");
+      if (selectedKey) {
+        applyThemeSettings(selectedKey, true);
+        if (paletteMenu) {
+          paletteMenu.style.display = "none";
+        }
+        if (palettePickerBtn) {
+          palettePickerBtn.classList.remove("active");
+        }
+      }
+    });
+  });
+
+  // 4. Quick Footer Buttons inside Menu
+  const btnQuickPalette = document.getElementById("btn-quick-toggle-palette");
+  if (btnQuickPalette) {
+    btnQuickPalette.addEventListener("click", () => {
+      const active = getStoredThemeSettings();
+      const nextPalette = active.palette === "blue" ? "emerald" : "blue";
+      const nextKey = `${nextPalette}-${active.mode}`;
+      applyThemeSettings(nextKey, true);
+    });
+  }
+
+  const btnQuickMode = document.getElementById("btn-quick-toggle-mode");
+  if (btnQuickMode) {
+    btnQuickMode.addEventListener("click", () => {
+      const active = getStoredThemeSettings();
+      const nextMode = active.mode === "dark" ? "light" : "dark";
+      const nextKey = `${active.palette}-${nextMode}`;
+      applyThemeSettings(nextKey, true);
     });
   }
 }
@@ -8094,6 +8278,14 @@ function openDistributionEntryModal(id) {
   }
 
   openModal("modal-distribution-entry");
+
+  // Form open hotay hi by default Style Code wala text box hi select/focus ho
+  setTimeout(() => {
+    if (styleInput) {
+      styleInput.focus();
+      styleInput.select();
+    }
+  }, 80);
 }
 
 function saveDistributionEntryAction(e) {
@@ -8121,12 +8313,20 @@ function saveDistributionEntryAction(e) {
   const floor = (document.getElementById("dist-entry-floor")?.value || "").trim();
   const remarks = (document.getElementById("dist-entry-remarks")?.value || "").trim();
 
+  // 1. Mandatory Validations: Time Period, Style Code, and Contractor Name
+  if (!period) {
+    showToast("Please select a Distribution Period", "error");
+    document.getElementById("dist-entry-period")?.focus();
+    return;
+  }
   if (!style_code) {
     showToast("Please enter a Style Code", "error");
+    document.getElementById("dist-entry-style-code")?.focus();
     return;
   }
   if (!contractor_name) {
     showToast("Please enter a Contractor Name", "error");
+    document.getElementById("dist-entry-contractor")?.focus();
     return;
   }
   if (!window.db.isValidContractorName(contractor_name)) {
@@ -8135,12 +8335,16 @@ function saveDistributionEntryAction(e) {
     document.getElementById("dist-entry-contractor")?.focus();
     return;
   }
-  if (pcs_qty <= 0) {
-    showToast("Please enter valid PCS QTY (> 0)", "error");
+
+  // 2. PCS QTY and RATE are OPTIONAL (can be 0 or empty)
+  if (pcs_qty < 0) {
+    showToast("PCS QTY cannot be negative", "error");
+    document.getElementById("dist-entry-pcs-qty")?.focus();
     return;
   }
   if (rate < 0) {
     showToast("Rate cannot be negative", "error");
+    document.getElementById("dist-entry-rate")?.focus();
     return;
   }
 
@@ -8163,16 +8367,41 @@ function saveDistributionEntryAction(e) {
     if (isEdit) {
       window.db.updateWorkDistributionEntry(parseInt(idVal, 10), payload);
       showToast(`✓ Distribution entry for ${style_code} (${contractor_name}) updated!`);
+      closeModal("modal-distribution-entry");
+      renderAll();
     } else {
       window.db.addWorkDistributionEntry(payload);
-      showToast(`✓ Allocated ${pcs_qty} pcs of ${style_code} to ${contractor_name}!`);
+      showToast(`✓ Style ${style_code} (${contractor_name}) save ho gaya! Agli entry ke liye Style Code par cursor ready hai.`);
+
+      // Render updated list in background
+      renderAll();
+
+      // Form close nahi hoga, continuous entry ke liye fields reset aur focus Style Code par
+      const styleInput = document.getElementById("dist-entry-style-code");
+      const pcsInput = document.getElementById("dist-entry-pcs-qty");
+      const rateInput = document.getElementById("dist-entry-rate");
+      const totalInput = document.getElementById("dist-entry-total");
+      const remarksInput = document.getElementById("dist-entry-remarks");
+      const srInput = document.getElementById("dist-entry-sr");
+
+      if (styleInput) styleInput.value = "";
+      if (pcsInput) pcsInput.value = "";
+      if (rateInput) rateInput.value = "";
+      if (totalInput) totalInput.value = "Rs. 0";
+      if (remarksInput) remarksInput.value = "";
+
+      // Auto-increment SR NO for the next entry
+      if (srInput) {
+        const activePeriod = getActiveDistributionPeriod();
+        const currentList = window.db.getWorkDistribution().filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+        srInput.value = currentList.length + 1;
+      }
+
+      // Next entry ke liye Style Code text box par focus
+      if (styleInput) {
+        styleInput.focus();
+      }
     }
-
-    closeModal("modal-distribution-entry");
-
-    // CRITICAL: Re-render ALL views so contractor name is auto-linked across
-    // Master Inventory, Receiving, Dispatch, Daily Sheet, and Payment Sheet!
-    renderAll();
   } catch (err) {
     showToast(`Error: ${err.message}`, "error");
   }
