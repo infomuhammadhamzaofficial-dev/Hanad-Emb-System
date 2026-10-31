@@ -147,3 +147,17 @@ CREATE INDEX IF NOT EXISTS idx_payment_style_cat ON payment_sheet(style_code, ca
 CREATE INDEX IF NOT EXISTS idx_payment_period ON payment_sheet(period);
 CREATE INDEX IF NOT EXISTS idx_payment_channel ON payment_sheet(payment_channel);
 
+-- 9. Trash & Recycle Bin (Soft Delete Audit & Instant Recovery)
+CREATE TABLE IF NOT EXISTS trash_items (
+    id VARCHAR(100) PRIMARY KEY,
+    original_id VARCHAR(100),
+    entity_type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    subtitle TEXT,
+    item_data JSONB NOT NULL,
+    meta JSONB,
+    deleted_by VARCHAR(100),
+    deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
+

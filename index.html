@@ -404,6 +404,17 @@
             </svg>
             <span class="tab-label">Neon Cloud</span>
           </button>
+
+          <button class="nav-tab-btn" data-tab="trash" id="nav-btn-trash" title="Trash & Recycle Bin">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              <line x1="10" y1="11" x2="10" y2="17"></line>
+              <line x1="14" y1="11" x2="14" y2="17"></line>
+            </svg>
+            <span class="tab-label">Trash</span>
+            <span class="trash-nav-badge" id="nav-trash-count" style="display: none;">0</span>
+          </button>
         </nav>
       </div>
     </div>
@@ -523,6 +534,12 @@
       <button type="button" class="mobile-nav-item" data-tab="neon-sync">
         <span class="nav-item-icon">☁️</span>
         <span class="nav-item-text">Neon Cloud Sync</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="trash" id="mobile-nav-btn-trash">
+        <span class="nav-item-icon">🗑️</span>
+        <span class="nav-item-text">Trash & Bin</span>
+        <span class="trash-nav-badge" id="mobile-nav-trash-count" style="display: none;">0</span>
       </button>
     </nav>
 
@@ -1282,7 +1299,7 @@
           Select Style to Add:
         </span>
 
-        <select class="app-select" id="quick-style-select" style="min-width: 200px;">
+        <select class="app-select" id="quick-style-select">
           <option value="">-- Choose Style Code --</option>
         </select>
 
@@ -1294,7 +1311,7 @@
           <option value="Sleeve">Sleeve</option>
         </select>
 
-        <div style="display: flex; align-items: center; gap: 0.4rem; flex: 1; min-width: 220px;">
+        <div class="quick-add-remarks-wrapper" style="display: flex; align-items: center; gap: 0.4rem; flex: 1;">
           <input type="text" class="app-input" id="quick-remarks-input"
             placeholder="Time / Status / Remarks (e.g. MATERIAL NOT AVAILABLE)" style="width: 100%;">
 
@@ -1329,6 +1346,7 @@
                   <th>CUT QTY</th>
                   <th>RECEIVED QTY</th>
                   <th style="background: rgba(244, 63, 94, 0.1);">BALANCE FROM STOCK</th>
+                  <th style="background: rgba(99, 102, 241, 0.12); color: #818cf8;">DISPATCH HAND EMB</th>
                   <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
                   <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
                   <th style="width: 60px; text-align: center;">ACTION</th>
@@ -1438,7 +1456,7 @@
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            <span>+ New Distribution Entry</span>
+            <span> New Distribution Entry</span>
           </button>
 
           <button class="btn btn-secondary btn-sm" id="btn-open-dist-setup-toolbar"
@@ -1645,7 +1663,18 @@
               <line x1="12" y1="5" x2="12" y2="19"></line>
               <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
-            <span>+ New Entry</span>
+            <span> New Entry</span>
+          </button>
+
+          <button class="btn btn-primary" id="btn-auto-import-dispatches"
+            style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); border-color: #059669; font-weight: 700; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);"
+            title="Current time period (26-10 / 11-25) k tamam dispatched styles aur total maal payment sheet may auto-add karein">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            <span>⚡ Auto-Add Dispatches</span>
           </button>
 
           <button class="btn btn-secondary btn-sm" id="btn-toggle-view-mode"
@@ -2239,6 +2268,110 @@
           </p>
         </div>
 
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 9: TRASH & RECYCLE BIN (SOFT DELETE, RECOVERY & PURGE)     -->
+    <!-- ============================================================== -->
+    <section id="trash-view" class="tab-view" role="region" aria-label="Trash Bin" aria-hidden="true">
+      <div class="view-toolbar" style="margin-bottom: 1.25rem;">
+        <div>
+          <h2 style="font-size: 1.35rem; font-weight: 800; display: flex; align-items: center; gap: 0.6rem;">
+            <span>🗑️ Trash & Recycle Bin</span>
+            <span class="badge-tag inline" id="trash-kpi-count-badge" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); border: 1px solid rgba(244, 63, 94, 0.35);">0 Items</span>
+          </h2>
+          <p style="font-size: 0.825rem; color: var(--text-muted); margin-top: 3px;">
+            Software say delete hua koi bhi record yahan mehfooz rehta hai. Aap kisi bhi waqt usay wapas Restore kar saktay hain ya Permanent Destroy kar saktay hain.
+          </p>
+        </div>
+
+        <div style="display: flex; gap: 0.6rem; align-items: center; flex-wrap: wrap;">
+          <div class="search-box" style="min-width: 250px;">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="trash-search-input" placeholder="Search by Style, Challan #, Contractor...">
+          </div>
+
+          <select class="app-select" id="filter-trash-type" style="min-width: 170px;">
+            <option value="all">📁 All Modules (Sub)</option>
+            <option value="receiving">📥 Receiving Challans (Inward)</option>
+            <option value="dispatch">📤 Dispatch Challans (Outward)</option>
+            <option value="master">📦 Master Inventory Styles</option>
+            <option value="final_style">📋 Daily Final Sheet Rows</option>
+            <option value="distribution">📑 Work Distribution</option>
+            <option value="payment">💰 Payment Sheet Entries</option>
+            <option value="period">🗓️ Sheet & Distribution Periods</option>
+            <option value="user">👤 User Accounts</option>
+          </select>
+
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-restore-all" style="font-weight: 700; color: var(--primary); border-color: rgba(16, 185, 129, 0.4);">
+            ↩️ Restore All
+          </button>
+
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-empty" style="font-weight: 700; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4);">
+            🗑️ Empty Trash
+          </button>
+        </div>
+      </div>
+
+      <!-- Trash Mini KPI Banner -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 1.25rem;">
+        <div class="kpi-card rose">
+          <span class="kpi-label">Total Trashed Items</span>
+          <div class="kpi-value" id="trash-kpi-total">0</div>
+          <span class="kpi-sub">Items in recycle bin</span>
+        </div>
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Inward Challans</span>
+          <div class="kpi-value" id="trash-kpi-receiving">0</div>
+          <span class="kpi-sub">Receiving log items</span>
+        </div>
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Outward Challans</span>
+          <div class="kpi-value" id="trash-kpi-dispatch">0</div>
+          <span class="kpi-sub">Dispatch log items</span>
+        </div>
+        <div class="kpi-card amber">
+          <span class="kpi-label">Master & Daily</span>
+          <div class="kpi-value" id="trash-kpi-master-daily">0</div>
+          <span class="kpi-sub">Styles & Sheet rows</span>
+        </div>
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Payment & Work Dist.</span>
+          <div class="kpi-value" id="trash-kpi-payment-dist">0</div>
+          <span class="kpi-sub">Financial & distribution</span>
+        </div>
+      </div>
+
+      <!-- Trash Items Table Card -->
+      <div class="table-card">
+        <div class="table-responsive">
+          <table class="master-table" id="table-trash-items">
+            <thead>
+              <tr class="column-header">
+                <th style="width: 140px;">Module Type</th>
+                <th>Item / Description</th>
+                <th>Key Details & Summary</th>
+                <th style="width: 170px;">Deleted Time</th>
+                <th style="width: 130px;">Deleted By</th>
+                <th style="width: 220px; text-align: center;">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="trash-table-body">
+              <!-- Rendered via renderTrashView() -->
+            </tbody>
+          </table>
+        </div>
+        <div id="trash-empty-state" style="display: none; padding: 3.5rem 1.5rem; text-align: center;">
+          <div style="font-size: 3.5rem; margin-bottom: 0.6rem; opacity: 0.7;">🗑️</div>
+          <h3 style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.35rem;">Trash is Completely Empty</h3>
+          <p style="font-size: 0.85rem; color: var(--text-muted); max-width: 440px; margin: 0 auto; line-height: 1.5;">
+            Software say jo bhi entry delete hogi wo yahan mehfooz rahegi. Aap kisi bhi waqt usay wapas restore kar saktay hain ya hamesha ke liye permanently destroy kar saktay hain.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -3374,783 +3507,991 @@
   </div>
 
   <!-- ============================================================== -->
-  <!-- MODAL: IMAGE PREVIEW LIGHTBOX                                  -->
+  <!-- MODAL: AUTO-IMPORT CURRENT PERIOD DISPATCHES INTO PAYMENT SHEET -->
   <!-- ============================================================== -->
-  <div class="modal-backdrop lightbox-backdrop" id="modal-image-preview">
-    <div class="modal-card lightbox-card" style="max-width: 720px; overflow: hidden; padding: 0;">
-      <div class="lightbox-header">
-        <div style="display: flex; align-items: center; gap: 0.6rem;">
-          <span class="style-code-badge" id="lightbox-style-badge">STYLE</span>
-          <span style="font-weight: 700; font-size: 0.85rem;" id="lightbox-category-text">Category</span>
-          <span id="lightbox-channel-badge"></span>
-        </div>
-        <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal('modal-image-preview')"
-          style="color: #fff;">✕</button>
-      </div>
-
-      <div class="lightbox-image-container">
-        <img id="lightbox-full-img" src="" alt="Full Style Photo">
-      </div>
-
-      <div class="lightbox-details-bar" id="lightbox-details-bar">
-        <!-- Dynamically populated stats -->
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: ADD / EDIT WORK DISTRIBUTION ENTRY                      -->
-  <!-- ============================================================== -->
-  <div class="modal-backdrop" id="modal-distribution-entry">
-    <div class="modal-card" style="max-width: 680px;">
-      <div class="modal-header">
-        <div>
-          <h2 id="dist-entry-modal-title">📦 Work Distribution Entry</h2>
-          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Allocate style pieces and rate to
-            contractor for this distribution period</p>
-        </div>
-        <button type="button" class="btn btn-secondary btn-icon"
-          onclick="closeModal('modal-distribution-entry')">✕</button>
-      </div>
-
-      <form id="form-distribution-entry">
-        <input type="hidden" id="dist-entry-id" value="">
-        <div class="modal-body">
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-entry-period">Distribution Period *:</label>
-              <select class="app-select" id="dist-entry-period" required>
-                <!-- Populated dynamically -->
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="dist-entry-sr">SR NO:</label>
-              <input type="number" class="app-input" id="dist-entry-sr" placeholder="Auto-generated if blank">
-            </div>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-entry-style-code">Style Code *:</label>
-              <input type="text" class="app-input" id="dist-entry-style-code" required placeholder="e.g. JLS-27-010"
-                list="master-styles-datalist" autocomplete="off"
-                style="font-weight: 700; font-family: var(--font-mono); text-transform: uppercase;">
-            </div>
-            <div class="form-group">
-              <label for="dist-entry-contractor">Contractor Name *:</label>
-              <input type="text" class="app-input" id="dist-entry-contractor" required placeholder="e.g. IMT/ASIM, ASIF"
-                list="dist-contractors-datalist" autocomplete="off"
-                style="font-weight: 700; text-transform: uppercase;">
-              <datalist id="dist-contractors-datalist">
-                <option value="IMTIAZ">
-                <option value="ASIM">
-                <option value="ASIF">
-                <option value="NAVEED">
-                <option value="TOUSEEF">
-                <option value="SHOAIB">
-                <option value="IMT/ASIM">
-                <option value="IMT/ASIF/ASIM">
-                <option value="NAV/ASIF">
-                <option value="ASIF/SHO">
-                <option value="TOU/SHO/NAV">
-                <option value="TOUS/SHO">
-              </datalist>
-            </div>
-          </div>
-
-          <div class="form-grid-3">
-            <div class="form-group">
-              <label for="dist-entry-pcs-qty">PCS QTY (Pieces):</label>
-              <input type="number" class="app-input" id="dist-entry-pcs-qty" min="0" placeholder="e.g. 830 (Optional)"
-                style="font-weight: 700; font-family: var(--font-mono);">
-            </div>
-            <div class="form-group">
-              <label for="dist-entry-rate">RATE (Per Piece):</label>
-              <input type="number" class="app-input" id="dist-entry-rate" min="0" step="any"
-                placeholder="e.g. 182 (Optional)" style="font-weight: 700; font-family: var(--font-mono);">
-            </div>
-            <div class="form-group">
-              <label for="dist-entry-total">TOTAL AMOUNT (Auto):</label>
-              <input type="text" class="app-input" id="dist-entry-total" readonly
-                style="font-weight: 800; font-family: var(--font-mono); color: var(--primary); background: var(--bg-surface);">
-            </div>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-entry-item">ITEM / Working:</label>
-              <select class="app-select" id="dist-entry-item">
-                <option value="SHIRT" selected>SHIRT</option>
-                <option value="DUPATTA">DUPATTA</option>
-                <option value="TROUSER">TROUSER</option>
-                <option value="GALA">GALA</option>
-                <option value="SLEEVE">SLEEVE</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label for="dist-entry-floor">Floor:</label>
-              <input type="text" class="app-input" id="dist-entry-floor" placeholder="e.g. 3B, 2, 4, 5">
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="dist-entry-remarks">Remarks (Optional):</label>
-            <input type="text" class="app-input" id="dist-entry-remarks"
-              placeholder="Any special instructions or notes">
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary"
-            onclick="closeModal('modal-distribution-entry')">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-dist-entry">✓ Save Distribution Entry</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: WORK DISTRIBUTION PERIOD SETUP                          -->
-  <!-- ============================================================== -->
-  <div class="modal-backdrop" id="modal-dist-period-setup">
-    <div class="modal-card" style="max-width: 620px;">
-      <div class="modal-header">
-        <div>
-          <h2>📅 Distribution Sheet Period Setup</h2>
-          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Configure bi-monthly distribution periods
-            and production cycles</p>
-        </div>
-        <button type="button" class="btn btn-secondary btn-icon"
-          onclick="closeModal('modal-dist-period-setup')">✕</button>
-      </div>
-
-      <form id="form-dist-period-setup">
-        <input type="hidden" id="dist-setup-id" value="">
-        <div class="modal-body">
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-setup-start-date">Period Start Date *:</label>
-              <input type="date" class="app-input" id="dist-setup-start-date" required>
-            </div>
-            <div class="form-group">
-              <label for="dist-setup-end-date">Period End Date *:</label>
-              <input type="date" class="app-input" id="dist-setup-end-date" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="dist-setup-name">Period Title *:</label>
-            <input type="text" class="app-input" id="dist-setup-name" required
-              placeholder="e.g. 11-Oct-2026 TO 25-Oct-2026" style="font-weight: 700; font-family: var(--font-mono);">
-            <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
-              Automatically generated from Start & End Date, or customize freely.
-            </small>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-setup-dept">Department:</label>
-              <input type="text" class="app-input" id="dist-setup-dept" value="Hand Embroidery Department">
-            </div>
-            <div class="form-group">
-              <label for="dist-setup-status">Status:</label>
-              <select class="app-select" id="dist-setup-status">
-                <option value="Active">Active (Open for Entries)</option>
-                <option value="Locked">Locked (Completed)</option>
-                <option value="Closed">Closed</option>
-              </select>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="dist-setup-notes">Notes / Cycle Info:</label>
-            <input type="text" class="app-input" id="dist-setup-notes" placeholder="e.g. Cycle 1 work distribution">
-          </div>
-
-          <!-- Existing Distribution Periods List -->
-          <div style="margin-top: 1.25rem;">
-            <div
-              style="font-size: 0.8rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-              <span>Existing Distribution Period Sheets</span>
-              <span id="dist-setup-count-badge" class="badge-tag inline">1 Period</span>
-            </div>
-            <div id="dist-setup-list-box"
-              style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
-              <!-- Populated dynamically -->
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary"
-            onclick="closeModal('modal-dist-period-setup')">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-dist-setup">✓ Save & Open Period</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: SMART PRINT STUDIO & EXCEL ALIGNMENT MANAGER             -->
-  <!-- ============================================================== -->
-  <div class="modal-backdrop" id="modal-print-studio" style="z-index: 300;">
-    <div class="modal-card modal-card-print-studio">
-      <div class="modal-header"
-        style="background: var(--bg-card-hover); border-bottom: 1.5px solid var(--border-color);">
-        <div style="display: flex; align-items: center; gap: 0.65rem;">
-          <div
-            style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
-            🖨️
-          </div>
-          <div>
-            <h2
-              style="font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
-              <span>Smart Print Studio & Column Customizer</span>
-              <span class="badge-tag inline" style="font-size: 0.72rem; text-transform: uppercase;">A4 Excel
-                Layout</span>
-            </h2>
-            <p style="font-size: 0.775rem; color: var(--text-muted); margin: 2px 0 0 0;">
-              Select printable columns, adjust Excel-like widths, save multiple layout alignments, and preview live A4
-              output.
-            </p>
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-print-studio')"
-          title="Close Print Studio">✕</button>
-      </div>
-
-      <div class="modal-body print-studio-body">
-        <!-- LEFT PANEL: SETTINGS & COLUMN CONTROLS -->
-        <div class="print-studio-sidebar">
-
-          <!-- 1. Target Sheet Selector -->
-          <div class="print-control-box">
-            <label class="print-control-label">1. Sheet to Print (شیٹ منتخب کریں):</label>
-            <select id="print-sheet-selector" class="app-select" style="width: 100%; font-weight: 700;">
-              <option value="daily">📋 Daily Running Style Status Sheet</option>
-              <option value="distribution">📦 Work Distribution & Allocation Sheet</option>
-              <option value="payment">💰 Rate Approval & Payment Summary Sheet</option>
-            </select>
-          </div>
-
-          <!-- 2. Saved Alignments / Presets Manager -->
-          <div class="print-control-box"
-            style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25);">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-              <label class="print-control-label" style="color: #38bdf8; margin-bottom: 0;">2. Saved Layout Alignment
-                (محفوظ الائنمنٹس):</label>
-              <span id="print-preset-badge" class="badge-tag inline" style="font-size: 0.68rem;">Saved Presets</span>
-            </div>
-
-            <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
-              <select id="print-preset-selector" class="app-select"
-                style="flex: 1; font-weight: 700; font-size: 0.825rem;">
-                <!-- Populated dynamically -->
-              </select>
-            </div>
-
-            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-save-current-preset"
-                title="Save changes to active alignment preset">
-                💾 Save Alignment
-              </button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-save-new-preset"
-                title="Save as a new named alignment">
-                ➕ New Alignment
-              </button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-delete-preset"
-                style="color: var(--accent-rose);" title="Delete this alignment preset">
-                🗑️ Delete
-              </button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-reset-preset-defaults"
-                title="Reset to standard defaults">
-                ↺ Defaults
-              </button>
-            </div>
-
-            <!-- Instant Status Confirmation Message (Side Me Visible) -->
-            <div id="print-preset-status-msg" class="print-preset-status-box"
-              style="display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981;">
-            </div>
-          </div>
-
-          <!-- 3. Page Orientation & Layout Sizing Controls -->
-          <div class="print-control-box">
-            <label class="print-control-label">3. Page Format & Orientation (پیج فارمیٹ):</label>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.65rem;">
-              <button type="button" class="btn-orientation-toggle active" id="btn-orient-landscape">
-                <span style="font-size: 1.1rem;">📑</span>
-                <span style="font-weight: 800; font-size: 0.8rem;">Landscape (افقی)</span>
-                <span style="font-size: 0.68rem; color: var(--text-muted);">(Wide Tables)</span>
-              </button>
-              <button type="button" class="btn-orientation-toggle" id="btn-orient-portrait">
-                <span style="font-size: 1.1rem;">📄</span>
-                <span style="font-weight: 800; font-size: 0.8rem;">Portrait (عمودی)</span>
-                <span style="font-size: 0.68rem; color: var(--text-muted);">(Standard A4)</span>
-              </button>
-            </div>
-
-            <!-- Text Alignment Controls (Auto, Left, Center, Right) -->
-            <div
-              style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; margin-bottom: 0.55rem;">
-              <label
-                style="font-size: 0.725rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">
-                Table Text Align (ٹیکسٹ الائنمنٹ):
-              </label>
-              <div style="display: flex; gap: 0.3rem;">
-                <button type="button" class="btn-align-toggle active" id="btn-align-auto"
-                  title="Default column alignment">
-                  Auto
-                </button>
-                <button type="button" class="btn-align-toggle" id="btn-align-left" title="Align all text to left">
-                  ⫷ Left
-                </button>
-                <button type="button" class="btn-align-toggle" id="btn-align-center" title="Align all text to center">
-                  ⬌ Center
-                </button>
-                <button type="button" class="btn-align-toggle" id="btn-align-right" title="Align all text to right">
-                  Right ⫸
-                </button>
-              </div>
-            </div>
-
-            <!-- Heading Customization Box -->
-            <div
-              style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem; margin-bottom: 0.55rem;">
-              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
-                <label
-                  style="font-size: 0.725rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0;">Heading
-                  Row (ہیڈنگ فارمیٹ و اونچائی):</label>
-                <button type="button" class="btn btn-secondary btn-xs active" id="btn-toggle-header-bold"
-                  style="padding: 2px 8px; font-weight: 800; font-size: 0.75rem; border-color: #38bdf8; color: #38bdf8;">
-                  𝐁 Bold
-                </button>
-              </div>
-
-              <!-- Heading Row Height -->
-              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Head Height:</span>
-                <input type="range" id="print-header-padding" min="0" max="24" value="8" step="1"
-                  class="print-col-slider" style="flex: 1;">
-                <span id="val-header-padding"
-                  style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">8px</span>
-              </div>
-
-              <!-- Heading Font Size -->
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Heading Font:</span>
-                <input type="range" id="print-header-font-size" min="6" max="16" value="10" step="0.5"
-                  class="print-col-slider" style="flex: 1;">
-                <span id="val-header-font-size"
-                  style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">10pt</span>
-              </div>
-            </div>
-
-            <!-- Row Heights & Cell Font Box -->
-            <div
-              style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem; margin-bottom: 0.55rem;">
-              <label
-                style="font-size: 0.725rem; font-weight: 700; color: #10b981; text-transform: uppercase; margin-bottom: 0.4rem; display: block;">Row
-                Heights & Data Font (رو کی اونچائی و سائز):</label>
-
-              <!-- Data Row Height -->
-              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Data Height:</span>
-                <input type="range" id="print-row-padding" min="0" max="24" value="6" step="1" class="print-col-slider"
-                  style="flex: 1;">
-                <span id="val-row-padding"
-                  style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">6px</span>
-              </div>
-
-              <!-- Total Row Height -->
-              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Total Height:</span>
-                <input type="range" id="print-total-padding" min="0" max="24" value="8" step="1"
-                  class="print-col-slider" style="flex: 1;">
-                <span id="val-total-padding"
-                  style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">8px</span>
-              </div>
-
-              <!-- Data Font Size -->
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Data Font:</span>
-                <input type="range" id="print-body-font-size" min="5" max="14" value="9" step="0.5"
-                  class="print-col-slider" style="flex: 1;">
-                <span id="val-body-font-size"
-                  style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">9pt</span>
-              </div>
-            </div>
-
-            <!-- Width Fit Toggle -->
-            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.15rem 0.2rem;">
-              <label
-                style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.775rem; font-weight: 700; cursor: pointer;">
-                <input type="checkbox" id="print-auto-fit-toggle" checked>
-                <span>100% Page Fit (Zero Cut-Off)</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- 4. Column Visibility & Excel-Like Width Sizing -->
-          <div class="print-control-box" style="flex: 1; display: flex; flex-direction: column;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-              <label class="print-control-label" style="margin-bottom: 0;">4. Columns, Widths & Bold (کالم، چوڑائی و
-                بولڈ):</label>
-              <div style="display: flex; gap: 0.35rem;">
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-print-select-all"
-                  style="padding: 2px 6px; font-size: 0.7rem;">Select All</button>
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-print-deselect-all"
-                  style="padding: 2px 6px; font-size: 0.7rem;">Deselect All</button>
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-print-equalize-widths"
-                  style="padding: 2px 6px; font-size: 0.7rem;" title="Normalize selected column widths to 100%">⚖️
-                  100%</button>
-              </div>
-            </div>
-
-            <div id="print-columns-list-container" class="print-columns-scroll-list">
-              <!-- Dynamically populated column checkboxes + width sliders -->
-            </div>
-          </div>
-
-        </div>
-
-        <!-- RIGHT PANEL: REALISTIC LIVE A4 SHEET PREVIEW -->
-        <div class="print-studio-preview-pane">
-          <div class="preview-toolbar-header">
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span class="pulse-indicator"></span>
-              <strong style="font-size: 0.85rem;">👁️ Live Print Preview (براہ راست پرنٹ پریویو)</strong>
-              <span id="preview-col-count-badge" class="badge-tag inline" style="font-size: 0.7rem;">9 Columns
-                Selected</span>
-            </div>
-
-            <div style="display: flex; align-items: center; gap: 0.4rem;">
-              <span style="font-size: 0.75rem; color: #94a3b8;">Scale:</span>
-              <select id="preview-zoom-select" class="app-select"
-                style="font-size: 0.75rem; padding: 2px 6px; width: auto; background: #1e293b; color: #fff; border-color: #475569;">
-                <option value="fit">Fit Container</option>
-                <option value="0.75">75%</option>
-                <option value="0.9" selected>90%</option>
-                <option value="1">100% (Actual)</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- Realistic A4 Paper Viewport Container -->
-          <div class="preview-paper-viewport" id="preview-paper-viewport">
-            <div class="a4-sheet-preview orientation-landscape" id="a4-sheet-preview">
-              <!-- Dynamically rendered printable report -->
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer" style="background: var(--bg-card-hover); justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-          <span style="font-size: 0.8rem; color: var(--text-muted);">
-            ✨ <strong>Zero Clipping Guarantee:</strong> Selected columns are locked to A4 sheet boundaries.
-          </span>
-          <div id="print-modal-footer-msg"
-            style="display: none; align-items: center; gap: 0.45rem; font-size: 0.8rem; font-weight: 800; color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 4px 12px; border-radius: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);">
-            <span>✓</span> <span id="print-modal-footer-text">Layout Saved Successfully!</span>
-          </div>
-        </div>
-
-        <div style="display: flex; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-print-studio')">Cancel</button>
-          <button type="button" class="btn btn-primary" id="btn-execute-studio-print"
-            style="font-weight: 800; padding: 0.65rem 1.4rem;">
-            🖨️ Print Document / Save PDF (پرنٹ کریں)
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: QUICK VIEW CHALLAN & DATE HISTORY (Mini-Window)         -->
-  <!-- ============================================================== -->
-  <div class="modal-backdrop" id="modal-challan-history" style="z-index: 350;">
-    <div class="modal-card" style="max-width: 580px; width: 95%;">
-      <div class="modal-header"
-        style="background: var(--bg-card-hover); border-bottom: 1.5px solid var(--border-color); padding: 0.85rem 1.15rem;">
-        <div style="display: flex; align-items: center; gap: 0.65rem;">
-          <div id="challan-history-icon-box"
-            style="width: 38px; height: 38px; border-radius: 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
-            📦
-          </div>
-          <div>
-            <h2 id="challan-history-title"
-              style="font-size: 1.05rem; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 0.45rem;">
-              <span>Inward Receiving Challan History</span>
-            </h2>
-            <div id="challan-history-subtitle" style="font-size: 0.775rem; color: var(--text-muted); margin-top: 2px;">
-              Style Code: <strong id="challan-history-style-tag" style="color: var(--primary);">J6F261962</strong> |
-              Category: <span id="challan-history-cat-tag">SHIRT</span>
-            </div>
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-challan-history')"
-          title="Close Window">✕</button>
-      </div>
-
-      <div class="modal-body" style="padding: 1rem 1.15rem; max-height: 70vh; overflow-y: auto;">
-        <!-- Summary Stats Banner -->
-        <div
-          style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding: 0.6rem 0.85rem; background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-          <div style="display: flex; gap: 1rem; align-items: center;">
+  <div class="modal-backdrop" id="modal-import-dispatches" style="z-index: 250;">
+        <div class="modal-card"
+          style="max-width: 980px; width: 95%; max-height: 92vh; display: flex; flex-direction: column;">
+          <div class="modal-header"
+            style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 78, 59, 0.3) 100%); border-bottom: 1.5px solid rgba(16, 185, 129, 0.3); padding: 1rem 1.25rem;">
             <div>
-              <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total
-                Challans:</span>
-              <div id="challan-history-count-badge"
-                style="font-weight: 800; font-family: var(--font-mono); color: var(--primary); font-size: 1rem;">3
-                Entries</div>
+              <h2
+                style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.2rem; font-weight: 800; color: #10b981; margin: 0;">
+                <span>⚡</span>
+                <span>Auto-Import Dispatched Styles</span>
+                <span class="badge-tag inline" id="import-cycle-badge"
+                  style="font-size: 0.725rem; text-transform: none; background: rgba(16, 185, 129, 0.2); color: #34d399; border-color: rgba(52, 211, 153, 0.4);">
+                  Bi-Monthly Cycle
+                </span>
+              </h2>
+              <p style="font-size: 0.775rem; color: var(--text-muted); margin: 3px 0 0 0;">
+                Current date ko deakhtay huai time period (26-10 / 11-25) ka sara dispatch maal auto-sum karke payment
+                sheet may jama karein
+              </p>
             </div>
-            <div style="border-left: 1px solid var(--border-color); padding-left: 1rem;">
-              <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total
-                Quantity:</span>
-              <div id="challan-history-total-qty"
-                style="font-weight: 800; font-family: var(--font-mono); color: #10b981; font-size: 1rem;">1,310 pcs
+            <button type="button" class="btn btn-secondary btn-icon"
+              onclick="closeModal('modal-import-dispatches')">✕</button>
+          </div>
+
+          <div class="modal-body" style="padding: 1.15rem; overflow-y: auto; flex: 1 1 auto;">
+            <!-- Top Status Bar & Date Controls -->
+            <div
+              style="background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem;">
+              <div
+                style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.85rem;">
+
+                <!-- Date & Scope Filter -->
+                <div style="display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap;">
+                  <div>
+                    <label for="import-target-date"
+                      style="font-size: 0.75rem; font-weight: 700; color: #38bdf8; display: block; margin-bottom: 4px;">
+                      📅 As-of Date / Current Date:
+                    </label>
+                    <input type="date" id="import-target-date" class="app-input"
+                      style="padding: 5px 10px; font-size: 0.85rem; font-weight: 700; width: 160px;">
+                  </div>
+
+                  <div>
+                    <label for="import-scope-select"
+                      style="font-size: 0.75rem; font-weight: 700; color: #a78bfa; display: block; margin-bottom: 4px;">
+                      🔍 Filter Scope:
+                    </label>
+                    <select id="import-scope-select" class="app-select"
+                      style="padding: 5px 10px; font-size: 0.85rem; font-weight: 600;">
+                      <option value="up_to_date">Cycle Start to Current Date (e.g. 26 to 31)</option>
+                      <option value="full_cycle">Full Cycle Period (26 to 10 / 11 to 25)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <button type="button" class="btn btn-secondary btn-sm" id="btn-refresh-import-preview"
+                      style="padding: 5px 12px; font-size: 0.8rem; height: 35px;">
+                      🔄 Refresh
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Target Sheet Pill -->
+                <div style="text-align: right;">
+                  <span style="font-size: 0.725rem; color: var(--text-muted); display: block;">Target Payment
+                    Sheet:</span>
+                  <span id="import-sheet-target-label"
+                    style="font-size: 0.925rem; font-weight: 800; font-family: var(--font-mono); color: #10b981;">
+                    --
+                  </span>
+                </div>
+
+              </div>
+
+              <!-- Date Range Explanation Banner -->
+              <div id="import-range-banner"
+                style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(56, 189, 248, 0.08); border-left: 3px solid #38bdf8; border-radius: 4px; font-size: 0.8rem; color: var(--text-main);">
+                <!-- Populated dynamically -->
               </div>
             </div>
-          </div>
-          <div id="challan-history-contractor"
-            style="font-size: 0.775rem; color: var(--text-muted); text-align: right;">
-            Contractor: <strong style="color: var(--text-main);">Imtiaz</strong>
-          </div>
-        </div>
 
-        <!-- Table of Individual Challans -->
-        <div
-          style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1rem;">
-          <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
-            <thead>
-              <tr style="background: var(--table-col-header-bg); border-bottom: 1px solid var(--table-border);">
-                <th
-                  style="padding: 6px 10px; text-align: center; width: 40px; font-weight: 700; color: var(--text-muted);">
-                  SR</th>
-                <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-main);">Challan #
-                </th>
-                <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-main);">Date</th>
-                <th style="padding: 6px 10px; text-align: right; font-weight: 700; color: var(--text-main);">Quantity
-                </th>
-                <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-muted);">Remarks
-                </th>
-              </tr>
-            </thead>
-            <tbody id="challan-history-tbody">
-              <!-- Dynamically populated rows -->
-            </tbody>
-          </table>
-        </div>
+            <!-- KPI Mini Strip -->
+            <div
+              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.65rem; margin-bottom: 1rem;">
+              <div
+                style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: var(--radius-md); padding: 0.6rem 0.8rem;">
+                <div style="font-size: 0.725rem; color: var(--text-muted); font-weight: 600;">Styles Found</div>
+                <div id="import-kpi-styles"
+                  style="font-size: 1.25rem; font-weight: 800; color: #10b981; font-family: var(--font-mono);">0</div>
+              </div>
+              <div
+                style="background: rgba(56, 189, 248, 0.08); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: var(--radius-md); padding: 0.6rem 0.8rem;">
+                <div style="font-size: 0.725rem; color: var(--text-muted); font-weight: 600;">Period Dispatched Pcs
+                </div>
+                <div id="import-kpi-pcs"
+                  style="font-size: 1.25rem; font-weight: 800; color: #38bdf8; font-family: var(--font-mono);">0</div>
+              </div>
+              <div
+                style="background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: var(--radius-md); padding: 0.6rem 0.8rem;">
+                <div style="font-size: 0.725rem; color: var(--text-muted); font-weight: 600;">Total Cut Pieces</div>
+                <div id="import-kpi-cut"
+                  style="font-size: 1.25rem; font-weight: 800; color: #f59e0b; font-family: var(--font-mono);">0</div>
+              </div>
+              <div
+                style="background: rgba(168, 85, 247, 0.08); border: 1px solid rgba(168, 85, 247, 0.3); border-radius: var(--radius-md); padding: 0.6rem 0.8rem;">
+                <div style="font-size: 0.725rem; color: var(--text-muted); font-weight: 600;">Total Cumulative Paid
+                </div>
+                <div id="import-kpi-paid"
+                  style="font-size: 1.25rem; font-weight: 800; color: #c084fc; font-family: var(--font-mono);">0</div>
+              </div>
+            </div>
 
-        <!-- Excel Multi-Value Copy Fields -->
-        <div
-          style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem;">
-          <div
-            style="font-size: 0.75rem; font-weight: 700; color: #10b981; display: flex; justify-content: space-between; align-items: center;">
-            <span>📋 Combined String for Excel (Click to Copy):</span>
-            <span style="font-size: 0.68rem; color: var(--text-muted);">Chronological order (Earliest first)</span>
-          </div>
-
-          <div style="display: flex; gap: 0.4rem; align-items: center;">
-            <span style="font-size: 0.725rem; color: var(--text-muted); width: 80px; flex-shrink: 0;">Challans:</span>
-            <input type="text" id="challan-history-copy-challans" readonly class="app-input"
-              style="font-family: var(--font-mono); font-size: 0.775rem; padding: 4px 8px; flex: 1; height: 32px; background: var(--bg-card);">
-            <button type="button" class="btn btn-secondary btn-xs"
-              onclick="copyChallanHistoryString('challan-history-copy-challans', 'Challan Numbers')"
-              title="Copy Challan String">Copy</button>
-          </div>
-
-          <div style="display: flex; gap: 0.4rem; align-items: center;">
-            <span style="font-size: 0.725rem; color: var(--text-muted); width: 80px; flex-shrink: 0;">Dates:</span>
-            <input type="text" id="challan-history-copy-dates" readonly class="app-input"
-              style="font-family: var(--font-mono); font-size: 0.775rem; padding: 4px 8px; flex: 1; height: 32px; background: var(--bg-card);">
-            <button type="button" class="btn btn-secondary btn-xs"
-              onclick="copyChallanHistoryString('challan-history-copy-dates', 'Dates')"
-              title="Copy Dates String">Copy</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="modal-footer"
-        style="background: var(--bg-card-hover); padding: 0.65rem 1.15rem; justify-content: flex-end;">
-        <button type="button" class="btn btn-secondary btn-sm"
-          onclick="closeModal('modal-challan-history')">Close</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ============================================================== -->
-  <!-- MODAL: DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر)      -->
-  <!-- ============================================================== -->
-  <div class="modal-backdrop" id="modal-daily-arrivals">
-    <div class="modal-card" style="max-width: 1100px; width: 96vw;">
-      <div class="modal-header"
-        style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
-        <div style="display: flex; align-items: center; gap: 0.75rem;">
-          <div
-            style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
-            📅
-          </div>
-          <div>
-            <h2
-              style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-              <span>Daily Inward Arrivals & Balance Tracker</span>
-              <span class="badge-tag"
-                style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد
-                اسمارٹ ٹریکر</span>
-            </h2>
-            <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
-              Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock balance
-              hai live check karein.
-            </p>
-          </div>
-        </div>
-        <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal('modal-daily-arrivals')">✕</button>
-      </div>
-
-      <div class="modal-body" style="padding: 1.15rem; max-height: calc(88dvh - 120px); overflow-y: auto;">
-        <!-- Control Bar: Date Selection, Quick Shortcuts & Search -->
-        <div
-          style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
-          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
-            <label for="arrivals-modal-date"
-              style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
-            <input type="date" id="arrivals-modal-date" class="app-input"
-              style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
-
-            <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap;">
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Aaj (Today)</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal
-                (Yesterday)</button>
-              <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest"
-                title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
+            <!-- Preview Table Container -->
+            <div
+              style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; max-height: 360px; overflow-y: auto;">
+              <table class="master-table" style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                <thead style="position: sticky; top: 0; background: #1e293b; z-index: 2;">
+                  <tr style="background: rgba(30, 41, 59, 0.95); border-bottom: 2px solid var(--border-color);">
+                    <th style="padding: 8px 10px; text-align: center; width: 45px;">SR</th>
+                    <th style="padding: 8px 10px; text-align: left;">STYLE CODE</th>
+                    <th style="padding: 8px 10px; text-align: center;">WORKING</th>
+                    <th style="padding: 8px 10px; text-align: left;">CONTRACTOR</th>
+                    <th style="padding: 8px 10px; text-align: right;">CUT QTY</th>
+                    <th style="padding: 8px 10px; text-align: right; color: #10b981;">PERIOD DISPATCHED</th>
+                    <th style="padding: 8px 10px; text-align: left;">DATES BREAKDOWN</th>
+                    <th style="padding: 8px 10px; text-align: left;">REMARKS (PAID / REMAINING)</th>
+                    <th style="padding: 8px 10px; text-align: center;">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-import-preview">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
             </div>
           </div>
 
-          <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-            <input type="text" id="arrivals-modal-search" class="app-input"
-              placeholder="🔍 Search Style or Contractor..."
-              style="width: 190px; font-size: 0.8rem; padding: 5px 10px;">
-            <button type="button" class="btn btn-warning btn-sm" id="btn-arrivals-bulk-add"
-              style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
-              ⚡ + Add All to Daily Sheet
+          <div class="modal-footer"
+            style="padding: 0.85rem 1.25rem; display: flex; justify-content: space-between; align-items: center; background: rgba(15, 23, 42, 0.7); border-top: 1px solid var(--border-color);">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-import-dispatches')">
+              ✕ Cancel
+            </button>
+            <button type="button" class="btn btn-primary" id="btn-confirm-import-dispatches"
+              style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); font-weight: 800; padding: 0.55rem 1.4rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+              <span id="btn-confirm-import-label">✓ Add All Styles to Payment Sheet</span>
             </button>
           </div>
         </div>
+      </div>
 
-        <!-- 6 KPI Summary Cards -->
-        <div
-          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;"
-          id="arrivals-kpi-container">
-          <!-- Populated dynamically via JS -->
-        </div>
+      <!-- ============================================================== -->
+      <!-- MODAL: IMAGE PREVIEW LIGHTBOX                                  -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop lightbox-backdrop" id="modal-image-preview">
+        <div class="modal-card lightbox-card" style="max-width: 720px; overflow: hidden; padding: 0;">
+          <div class="lightbox-header">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <span class="style-code-badge" id="lightbox-style-badge">STYLE</span>
+              <span style="font-weight: 700; font-size: 0.85rem;" id="lightbox-category-text">Category</span>
+              <span id="lightbox-channel-badge"></span>
+            </div>
+            <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal('modal-image-preview')"
+              style="color: #fff;">✕</button>
+          </div>
 
-        <!-- Arrivals Table Card -->
-        <div class="table-card" style="box-shadow: none; border: 1px solid var(--border-color);">
-          <div class="table-responsive">
-            <table class="master-table" id="table-daily-arrivals">
-              <thead>
-                <tr class="column-header">
-                  <th style="width: 45px; text-align: center;">S#</th>
-                  <th>STYLE CODE</th>
-                  <th>CATEGORY</th>
-                  <th>CONTRACTOR & CHALLAN</th>
-                  <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR AAYE
-                  </th>
-                  <th style="text-align: right;">TOTAL CUT</th>
-                  <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED
-                  </th>
-                  <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY (DISPATCH)
-                  </th>
-                  <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS
-                    (STOCK)</th>
-                  <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI (PENDING)
-                  </th>
-                  <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-daily-arrivals">
-                <!-- Dynamically populated rows -->
-              </tbody>
-              <tfoot id="tfoot-daily-arrivals" style="font-weight: 800; background: var(--bg-card-hover);">
-                <!-- Dynamic Totals -->
-              </tfoot>
-            </table>
+          <div class="lightbox-image-container">
+            <img id="lightbox-full-img" src="" alt="Full Style Photo">
+          </div>
+
+          <div class="lightbox-details-bar" id="lightbox-details-bar">
+            <!-- Dynamically populated stats -->
           </div>
         </div>
       </div>
 
-      <div class="modal-footer"
-        style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
-        <div style="font-size: 0.78rem; color: var(--text-muted);" id="arrivals-footer-note">
-          💡 <strong>Tip:</strong> Daily Sheet mein style add hone se wo wahan Master balances ke sath link ho jata hai.
-        </div>
-        <div style="display: flex; gap: 0.5rem;">
-          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein
-            (Close)</button>
-          <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Daily Sheet Par Jayein 📋</button>
+      <!-- ============================================================== -->
+      <!-- MODAL: ADD / EDIT WORK DISTRIBUTION ENTRY                      -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-distribution-entry">
+        <div class="modal-card" style="max-width: 680px;">
+          <div class="modal-header">
+            <div>
+              <h2 id="dist-entry-modal-title">📦 Work Distribution Entry</h2>
+              <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Allocate style pieces and rate to
+                contractor for this distribution period</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-icon"
+              onclick="closeModal('modal-distribution-entry')">✕</button>
+          </div>
+
+          <form id="form-distribution-entry">
+            <input type="hidden" id="dist-entry-id" value="">
+            <div class="modal-body">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="dist-entry-period">Distribution Period *:</label>
+                  <select class="app-select" id="dist-entry-period" required>
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="dist-entry-sr">SR NO:</label>
+                  <input type="number" class="app-input" id="dist-entry-sr" placeholder="Auto-generated if blank">
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="dist-entry-style-code">Style Code *:</label>
+                  <input type="text" class="app-input" id="dist-entry-style-code" required placeholder="e.g. JLS-27-010"
+                    list="master-styles-datalist" autocomplete="off"
+                    style="font-weight: 700; font-family: var(--font-mono); text-transform: uppercase;">
+                </div>
+                <div class="form-group">
+                  <label for="dist-entry-contractor">Contractor Name *:</label>
+                  <input type="text" class="app-input" id="dist-entry-contractor" required
+                    placeholder="e.g. IMT/ASIM, ASIF" list="dist-contractors-datalist" autocomplete="off"
+                    style="font-weight: 700; text-transform: uppercase;">
+                  <datalist id="dist-contractors-datalist">
+                    <option value="IMTIAZ">
+                    <option value="ASIM">
+                    <option value="ASIF">
+                    <option value="NAVEED">
+                    <option value="TOUSEEF">
+                    <option value="SHOAIB">
+                    <option value="IMT/ASIM">
+                    <option value="IMT/ASIF/ASIM">
+                    <option value="NAV/ASIF">
+                    <option value="ASIF/SHO">
+                    <option value="TOU/SHO/NAV">
+                    <option value="TOUS/SHO">
+                  </datalist>
+                </div>
+              </div>
+
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label for="dist-entry-pcs-qty">PCS QTY (Pieces):</label>
+                  <input type="number" class="app-input" id="dist-entry-pcs-qty" min="0"
+                    placeholder="e.g. 830 (Optional)" style="font-weight: 700; font-family: var(--font-mono);">
+                </div>
+                <div class="form-group">
+                  <label for="dist-entry-rate">RATE (Per Piece):</label>
+                  <input type="number" class="app-input" id="dist-entry-rate" min="0" step="any"
+                    placeholder="e.g. 182 (Optional)" style="font-weight: 700; font-family: var(--font-mono);">
+                </div>
+                <div class="form-group">
+                  <label for="dist-entry-total">TOTAL AMOUNT (Auto):</label>
+                  <input type="text" class="app-input" id="dist-entry-total" readonly
+                    style="font-weight: 800; font-family: var(--font-mono); color: var(--primary); background: var(--bg-surface);">
+                </div>
+              </div>
+
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="dist-entry-item">ITEM / Working:</label>
+                  <select class="app-select" id="dist-entry-item">
+                    <option value="SHIRT" selected>SHIRT</option>
+                    <option value="DUPATTA">DUPATTA</option>
+                    <option value="TROUSER">TROUSER</option>
+                    <option value="GALA">GALA</option>
+                    <option value="SLEEVE">SLEEVE</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="dist-entry-floor">Floor:</label>
+                  <input type="text" class="app-input" id="dist-entry-floor" placeholder="e.g. 3B, 2, 4, 5">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="dist-entry-remarks">Remarks (Optional):</label>
+                <input type="text" class="app-input" id="dist-entry-remarks"
+                  placeholder="Any special instructions or notes">
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary"
+                onclick="closeModal('modal-distribution-entry')">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="btn-save-dist-entry">✓ Save Distribution Entry</button>
+            </div>
+          </form>
         </div>
       </div>
-    </div>
-  </div>
 
-  <!-- ============================================================== -->
-  <!-- MOBILE BOTTOM STICKY NAVIGATION DOCK                           -->
+      <!-- ============================================================== -->
+      <!-- MODAL: WORK DISTRIBUTION PERIOD SETUP                          -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-dist-period-setup">
+        <div class="modal-card" style="max-width: 620px;">
+          <div class="modal-header">
+            <div>
+              <h2>📅 Distribution Sheet Period Setup</h2>
+              <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Configure bi-monthly distribution
+                periods
+                and production cycles</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-icon"
+              onclick="closeModal('modal-dist-period-setup')">✕</button>
+          </div>
 
-  <!-- Direct 1-tap switching for Master, Daily Sheet, Logs & Dashboard -->
-  <!-- ============================================================== -->
-  <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation Dock">
-    <button type="button" class="mobile-bottom-nav-item active" data-tab="dashboard">
-      <span class="bottom-nav-icon">⚡</span>
-      <span class="bottom-nav-label">Dashboard</span>
-    </button>
-    <button type="button" class="mobile-bottom-nav-item" data-tab="master-inventory">
-      <span class="bottom-nav-icon">📦</span>
-      <span class="bottom-nav-label">Master</span>
-      <span class="bottom-nav-badge" id="mobile-bottom-badge-master">0</span>
-    </button>
-    <button type="button" class="mobile-bottom-nav-item" data-tab="receiving-log">
-      <span class="bottom-nav-icon">📥</span>
-      <span class="bottom-nav-label">Receiving</span>
-      <span class="bottom-nav-badge" id="mobile-bottom-badge-rec">0</span>
-    </button>
-    <button type="button" class="mobile-bottom-nav-item" data-tab="dispatch-log">
-      <span class="bottom-nav-icon">📤</span>
-      <span class="bottom-nav-label">Dispatch</span>
-      <span class="bottom-nav-badge" id="mobile-bottom-badge-dis">0</span>
-    </button>
-    <button type="button" class="mobile-bottom-nav-item" data-tab="final-style">
-      <span class="bottom-nav-icon">📋</span>
-      <span class="bottom-nav-label">Daily Sheet</span>
-      <span class="bottom-nav-badge" id="mobile-bottom-badge-final">0</span>
-    </button>
-    <button type="button" class="mobile-bottom-nav-item" data-tab="payment-sheet">
-      <span class="bottom-nav-icon">💰</span>
-      <span class="bottom-nav-label">Payment</span>
-    </button>
-  </nav>
+          <form id="form-dist-period-setup">
+            <input type="hidden" id="dist-setup-id" value="">
+            <div class="modal-body">
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="dist-setup-start-date">Period Start Date *:</label>
+                  <input type="date" class="app-input" id="dist-setup-start-date" required>
+                </div>
+                <div class="form-group">
+                  <label for="dist-setup-end-date">Period End Date *:</label>
+                  <input type="date" class="app-input" id="dist-setup-end-date" required>
+                </div>
+              </div>
 
-  <!-- Isolated Dedicated DOM Root for Clean window.print() Output -->
-  <div id="print-studio-paper-root" class="print-studio-paper-root" style="display: none;"></div>
+              <div class="form-group">
+                <label for="dist-setup-name">Period Title *:</label>
+                <input type="text" class="app-input" id="dist-setup-name" required
+                  placeholder="e.g. 11-Oct-2026 TO 25-Oct-2026"
+                  style="font-weight: 700; font-family: var(--font-mono);">
+                <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
+                  Automatically generated from Start & End Date, or customize freely.
+                </small>
+              </div>
 
-  <!-- Toast Container -->
-  <div class="toast-container" id="toast-container"></div>
+              <div class="form-grid-2">
+                <div class="form-group">
+                  <label for="dist-setup-dept">Department:</label>
+                  <input type="text" class="app-input" id="dist-setup-dept" value="Hand Embroidery Department">
+                </div>
+                <div class="form-group">
+                  <label for="dist-setup-status">Status:</label>
+                  <select class="app-select" id="dist-setup-status">
+                    <option value="Active">Active (Open for Entries)</option>
+                    <option value="Locked">Locked (Completed)</option>
+                    <option value="Closed">Closed</option>
+                  </select>
+                </div>
+              </div>
 
-  <!-- Scripts -->
-  <script src="data.js?v=21"></script>
-  <script src="db.js?v=21"></script>
-  <script src="app.js?v=21"></script>
-  <script>
-    if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => {
-          console.log('SW registration note:', err.message);
-        });
-      });
-    }
-  </script>
+              <div class="form-group">
+                <label for="dist-setup-notes">Notes / Cycle Info:</label>
+                <input type="text" class="app-input" id="dist-setup-notes" placeholder="e.g. Cycle 1 work distribution">
+              </div>
+
+              <!-- Existing Distribution Periods List -->
+              <div style="margin-top: 1.25rem;">
+                <div
+                  style="font-size: 0.8rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                  <span>Existing Distribution Period Sheets</span>
+                  <span id="dist-setup-count-badge" class="badge-tag inline">1 Period</span>
+                </div>
+                <div id="dist-setup-list-box"
+                  style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
+                  <!-- Populated dynamically -->
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-footer">
+              <button type="button" class="btn btn-secondary"
+                onclick="closeModal('modal-dist-period-setup')">Cancel</button>
+              <button type="submit" class="btn btn-primary" id="btn-save-dist-setup">✓ Save & Open Period</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MODAL: SMART PRINT STUDIO & EXCEL ALIGNMENT MANAGER             -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-print-studio" style="z-index: 300;">
+        <div class="modal-card modal-card-print-studio">
+          <div class="modal-header"
+            style="background: var(--bg-card-hover); border-bottom: 1.5px solid var(--border-color);">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <div
+                style="width: 38px; height: 38px; border-radius: 10px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.3rem;">
+                🖨️
+              </div>
+              <div>
+                <h2
+                  style="font-size: 1.15rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem; margin: 0;">
+                  <span>Smart Print Studio & Column Customizer</span>
+                  <span class="badge-tag inline" style="font-size: 0.72rem; text-transform: uppercase;">A4 Excel
+                    Layout</span>
+                </h2>
+                <p style="font-size: 0.775rem; color: var(--text-muted); margin: 2px 0 0 0;">
+                  Select printable columns, adjust Excel-like widths, save multiple layout alignments, and preview live
+                  A4
+                  output.
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-print-studio')"
+              title="Close Print Studio">✕</button>
+          </div>
+
+          <div class="modal-body print-studio-body">
+            <!-- LEFT PANEL: SETTINGS & COLUMN CONTROLS -->
+            <div class="print-studio-sidebar">
+
+              <!-- 1. Target Sheet Selector -->
+              <div class="print-control-box">
+                <label class="print-control-label">1. Sheet to Print (شیٹ منتخب کریں):</label>
+                <select id="print-sheet-selector" class="app-select" style="width: 100%; font-weight: 700;">
+                  <option value="daily">📋 Daily Running Style Status Sheet</option>
+                  <option value="distribution">📦 Work Distribution & Allocation Sheet</option>
+                  <option value="payment">💰 Rate Approval & Payment Summary Sheet</option>
+                </select>
+              </div>
+
+              <!-- 2. Saved Alignments / Presets Manager -->
+              <div class="print-control-box"
+                style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25);">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                  <label class="print-control-label" style="color: #38bdf8; margin-bottom: 0;">2. Saved Layout Alignment
+                    (محفوظ الائنمنٹس):</label>
+                  <span id="print-preset-badge" class="badge-tag inline" style="font-size: 0.68rem;">Saved
+                    Presets</span>
+                </div>
+
+                <div style="display: flex; gap: 0.4rem; margin-bottom: 0.5rem;">
+                  <select id="print-preset-selector" class="app-select"
+                    style="flex: 1; font-weight: 700; font-size: 0.825rem;">
+                    <!-- Populated dynamically -->
+                  </select>
+                </div>
+
+                <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-save-current-preset"
+                    title="Save changes to active alignment preset">
+                    💾 Save Alignment
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-save-new-preset"
+                    title="Save as a new named alignment">
+                    ➕ New Alignment
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-delete-preset"
+                    style="color: var(--accent-rose);" title="Delete this alignment preset">
+                    🗑️ Delete
+                  </button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-reset-preset-defaults"
+                    title="Reset to standard defaults">
+                    ↺ Defaults
+                  </button>
+                </div>
+
+                <!-- Instant Status Confirmation Message (Side Me Visible) -->
+                <div id="print-preset-status-msg" class="print-preset-status-box"
+                  style="display: none; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; color: #10b981;">
+                </div>
+              </div>
+
+              <!-- 3. Page Orientation & Layout Sizing Controls -->
+              <div class="print-control-box">
+                <label class="print-control-label">3. Page Format & Orientation (پیج فارمیٹ):</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.65rem;">
+                  <button type="button" class="btn-orientation-toggle active" id="btn-orient-landscape">
+                    <span style="font-size: 1.1rem;">📑</span>
+                    <span style="font-weight: 800; font-size: 0.8rem;">Landscape (افقی)</span>
+                    <span style="font-size: 0.68rem; color: var(--text-muted);">(Wide Tables)</span>
+                  </button>
+                  <button type="button" class="btn-orientation-toggle" id="btn-orient-portrait">
+                    <span style="font-size: 1.1rem;">📄</span>
+                    <span style="font-weight: 800; font-size: 0.8rem;">Portrait (عمودی)</span>
+                    <span style="font-size: 0.68rem; color: var(--text-muted);">(Standard A4)</span>
+                  </button>
+                </div>
+
+                <!-- Text Alignment Controls (Auto, Left, Center, Right) -->
+                <div
+                  style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; margin-bottom: 0.55rem;">
+                  <label
+                    style="font-size: 0.725rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">
+                    Table Text Align (ٹیکسٹ الائنمنٹ):
+                  </label>
+                  <div style="display: flex; gap: 0.3rem;">
+                    <button type="button" class="btn-align-toggle active" id="btn-align-auto"
+                      title="Default column alignment">
+                      Auto
+                    </button>
+                    <button type="button" class="btn-align-toggle" id="btn-align-left" title="Align all text to left">
+                      ⫷ Left
+                    </button>
+                    <button type="button" class="btn-align-toggle" id="btn-align-center"
+                      title="Align all text to center">
+                      ⬌ Center
+                    </button>
+                    <button type="button" class="btn-align-toggle" id="btn-align-right" title="Align all text to right">
+                      Right ⫸
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Heading Customization Box -->
+                <div
+                  style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem; margin-bottom: 0.55rem;">
+                  <div
+                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+                    <label
+                      style="font-size: 0.725rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0;">Heading
+                      Row (ہیڈنگ فارمیٹ و اونچائی):</label>
+                    <button type="button" class="btn btn-secondary btn-xs active" id="btn-toggle-header-bold"
+                      style="padding: 2px 8px; font-weight: 800; font-size: 0.75rem; border-color: #38bdf8; color: #38bdf8;">
+                      𝐁 Bold
+                    </button>
+                  </div>
+
+                  <!-- Heading Row Height -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Head Height:</span>
+                    <input type="range" id="print-header-padding" min="0" max="24" value="8" step="1"
+                      class="print-col-slider" style="flex: 1;">
+                    <span id="val-header-padding"
+                      style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">8px</span>
+                  </div>
+
+                  <!-- Heading Font Size -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Heading Font:</span>
+                    <input type="range" id="print-header-font-size" min="6" max="16" value="10" step="0.5"
+                      class="print-col-slider" style="flex: 1;">
+                    <span id="val-header-font-size"
+                      style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">10pt</span>
+                  </div>
+                </div>
+
+                <!-- Row Heights & Cell Font Box -->
+                <div
+                  style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem; margin-bottom: 0.55rem;">
+                  <label
+                    style="font-size: 0.725rem; font-weight: 700; color: #10b981; text-transform: uppercase; margin-bottom: 0.4rem; display: block;">Row
+                    Heights & Data Font (رو کی اونچائی و سائز):</label>
+
+                  <!-- Data Row Height -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Data Height:</span>
+                    <input type="range" id="print-row-padding" min="0" max="24" value="6" step="1"
+                      class="print-col-slider" style="flex: 1;">
+                    <span id="val-row-padding"
+                      style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">6px</span>
+                  </div>
+
+                  <!-- Total Row Height -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Total Height:</span>
+                    <input type="range" id="print-total-padding" min="0" max="24" value="8" step="1"
+                      class="print-col-slider" style="flex: 1;">
+                    <span id="val-total-padding"
+                      style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">8px</span>
+                  </div>
+
+                  <!-- Data Font Size -->
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <span style="font-size: 0.7rem; color: var(--text-muted); width: 78px;">Data Font:</span>
+                    <input type="range" id="print-body-font-size" min="5" max="14" value="9" step="0.5"
+                      class="print-col-slider" style="flex: 1;">
+                    <span id="val-body-font-size"
+                      style="font-family: var(--font-mono); font-size: 0.75rem; font-weight: 800; width: 34px; text-align: right; color: var(--text-main);">9pt</span>
+                  </div>
+                </div>
+
+                <!-- Width Fit Toggle -->
+                <div
+                  style="display: flex; justify-content: space-between; align-items: center; padding: 0.15rem 0.2rem;">
+                  <label
+                    style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.775rem; font-weight: 700; cursor: pointer;">
+                    <input type="checkbox" id="print-auto-fit-toggle" checked>
+                    <span>100% Page Fit (Zero Cut-Off)</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- 4. Column Visibility & Excel-Like Width Sizing -->
+              <div class="print-control-box" style="flex: 1; display: flex; flex-direction: column;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <label class="print-control-label" style="margin-bottom: 0;">4. Columns, Widths & Bold (کالم، چوڑائی و
+                    بولڈ):</label>
+                  <div style="display: flex; gap: 0.35rem;">
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-print-select-all"
+                      style="padding: 2px 6px; font-size: 0.7rem;">Select All</button>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-print-deselect-all"
+                      style="padding: 2px 6px; font-size: 0.7rem;">Deselect All</button>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-print-equalize-widths"
+                      style="padding: 2px 6px; font-size: 0.7rem;" title="Normalize selected column widths to 100%">⚖️
+                      100%</button>
+                  </div>
+                </div>
+
+                <div id="print-columns-list-container" class="print-columns-scroll-list">
+                  <!-- Dynamically populated column checkboxes + width sliders -->
+                </div>
+              </div>
+
+            </div>
+
+            <!-- RIGHT PANEL: REALISTIC LIVE A4 SHEET PREVIEW -->
+            <div class="print-studio-preview-pane">
+              <div class="preview-toolbar-header">
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <span class="pulse-indicator"></span>
+                  <strong style="font-size: 0.85rem;">👁️ Live Print Preview (براہ راست پرنٹ پریویو)</strong>
+                  <span id="preview-col-count-badge" class="badge-tag inline" style="font-size: 0.7rem;">9 Columns
+                    Selected</span>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.4rem;">
+                  <span style="font-size: 0.75rem; color: #94a3b8;">Scale:</span>
+                  <select id="preview-zoom-select" class="app-select"
+                    style="font-size: 0.75rem; padding: 2px 6px; width: auto; background: #1e293b; color: #fff; border-color: #475569;">
+                    <option value="fit">Fit Container</option>
+                    <option value="0.75">75%</option>
+                    <option value="0.9" selected>90%</option>
+                    <option value="1">100% (Actual)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Realistic A4 Paper Viewport Container -->
+              <div class="preview-paper-viewport" id="preview-paper-viewport">
+                <div class="a4-sheet-preview orientation-landscape" id="a4-sheet-preview">
+                  <!-- Dynamically rendered printable report -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="background: var(--bg-card-hover); justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+              <span style="font-size: 0.8rem; color: var(--text-muted);">
+                ✨ <strong>Zero Clipping Guarantee:</strong> Selected columns are locked to A4 sheet boundaries.
+              </span>
+              <div id="print-modal-footer-msg"
+                style="display: none; align-items: center; gap: 0.45rem; font-size: 0.8rem; font-weight: 800; color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 4px 12px; border-radius: 4px; box-shadow: 0 2px 8px rgba(16, 185, 129, 0.2);">
+                <span>✓</span> <span id="print-modal-footer-text">Layout Saved Successfully!</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-print-studio')">Cancel</button>
+              <button type="button" class="btn btn-primary" id="btn-execute-studio-print"
+                style="font-weight: 800; padding: 0.65rem 1.4rem;">
+                🖨️ Print Document / Save PDF (پرنٹ کریں)
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MODAL: QUICK VIEW CHALLAN & DATE HISTORY (Mini-Window)         -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-challan-history" style="z-index: 350;">
+        <div class="modal-card" style="max-width: 580px; width: 95%;">
+          <div class="modal-header"
+            style="background: var(--bg-card-hover); border-bottom: 1.5px solid var(--border-color); padding: 0.85rem 1.15rem;">
+            <div style="display: flex; align-items: center; gap: 0.65rem;">
+              <div id="challan-history-icon-box"
+                style="width: 38px; height: 38px; border-radius: 10px; background: rgba(56, 189, 248, 0.15); border: 1px solid rgba(56, 189, 248, 0.4); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                📦
+              </div>
+              <div>
+                <h2 id="challan-history-title"
+                  style="font-size: 1.05rem; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 0.45rem;">
+                  <span>Inward Receiving Challan History</span>
+                </h2>
+                <div id="challan-history-subtitle"
+                  style="font-size: 0.775rem; color: var(--text-muted); margin-top: 2px;">
+                  Style Code: <strong id="challan-history-style-tag" style="color: var(--primary);">J6F261962</strong> |
+                  Category: <span id="challan-history-cat-tag">SHIRT</span>
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-challan-history')"
+              title="Close Window">✕</button>
+          </div>
+
+          <div class="modal-body" style="padding: 1rem 1.15rem; max-height: 70vh; overflow-y: auto;">
+            <!-- Summary Stats Banner -->
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.85rem; padding: 0.6rem 0.85rem; background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <div style="display: flex; gap: 1rem; align-items: center;">
+                <div>
+                  <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total
+                    Challans:</span>
+                  <div id="challan-history-count-badge"
+                    style="font-weight: 800; font-family: var(--font-mono); color: var(--primary); font-size: 1rem;">3
+                    Entries</div>
+                </div>
+                <div style="border-left: 1px solid var(--border-color); padding-left: 1rem;">
+                  <span style="font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase;">Total
+                    Quantity:</span>
+                  <div id="challan-history-total-qty"
+                    style="font-weight: 800; font-family: var(--font-mono); color: #10b981; font-size: 1rem;">1,310 pcs
+                  </div>
+                </div>
+              </div>
+              <div id="challan-history-contractor"
+                style="font-size: 0.775rem; color: var(--text-muted); text-align: right;">
+                Contractor: <strong style="color: var(--text-main);">Imtiaz</strong>
+              </div>
+            </div>
+
+            <!-- Table of Individual Challans -->
+            <div
+              style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 1rem;">
+              <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem;">
+                <thead>
+                  <tr style="background: var(--table-col-header-bg); border-bottom: 1px solid var(--table-border);">
+                    <th
+                      style="padding: 6px 10px; text-align: center; width: 40px; font-weight: 700; color: var(--text-muted);">
+                      SR</th>
+                    <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-main);">Challan
+                      #
+                    </th>
+                    <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-main);">Date
+                    </th>
+                    <th style="padding: 6px 10px; text-align: right; font-weight: 700; color: var(--text-main);">
+                      Quantity
+                    </th>
+                    <th style="padding: 6px 10px; text-align: left; font-weight: 700; color: var(--text-muted);">Remarks
+                    </th>
+                  </tr>
+                </thead>
+                <tbody id="challan-history-tbody">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+
+            <!-- Excel Multi-Value Copy Fields -->
+            <div
+              style="background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: var(--radius-md); padding: 0.75rem; display: flex; flex-direction: column; gap: 0.6rem;">
+              <div
+                style="font-size: 0.75rem; font-weight: 700; color: #10b981; display: flex; justify-content: space-between; align-items: center;">
+                <span>📋 Combined String for Excel (Click to Copy):</span>
+                <span style="font-size: 0.68rem; color: var(--text-muted);">Chronological order (Earliest first)</span>
+              </div>
+
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <span
+                  style="font-size: 0.725rem; color: var(--text-muted); width: 80px; flex-shrink: 0;">Challans:</span>
+                <input type="text" id="challan-history-copy-challans" readonly class="app-input"
+                  style="font-family: var(--font-mono); font-size: 0.775rem; padding: 4px 8px; flex: 1; height: 32px; background: var(--bg-card);">
+                <button type="button" class="btn btn-secondary btn-xs"
+                  onclick="copyChallanHistoryString('challan-history-copy-challans', 'Challan Numbers')"
+                  title="Copy Challan String">Copy</button>
+              </div>
+
+              <div style="display: flex; gap: 0.4rem; align-items: center;">
+                <span style="font-size: 0.725rem; color: var(--text-muted); width: 80px; flex-shrink: 0;">Dates:</span>
+                <input type="text" id="challan-history-copy-dates" readonly class="app-input"
+                  style="font-family: var(--font-mono); font-size: 0.775rem; padding: 4px 8px; flex: 1; height: 32px; background: var(--bg-card);">
+                <button type="button" class="btn btn-secondary btn-xs"
+                  onclick="copyChallanHistoryString('challan-history-copy-dates', 'Dates')"
+                  title="Copy Dates String">Copy</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer"
+            style="background: var(--bg-card-hover); padding: 0.65rem 1.15rem; justify-content: flex-end;">
+            <button type="button" class="btn btn-secondary btn-sm"
+              onclick="closeModal('modal-challan-history')">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MODAL: DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر)      -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-daily-arrivals">
+        <div class="modal-card" style="max-width: 1100px; width: 96vw;">
+          <div class="modal-header"
+            style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(15, 23, 42, 0.95)); border-bottom: 1px solid rgba(245, 158, 11, 0.35);">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div
+                style="width: 44px; height: 44px; border-radius: 10px; background: rgba(245, 158, 11, 0.2); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.4); flex-shrink: 0;">
+                📅
+              </div>
+              <div>
+                <h2
+                  style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                  <span>Daily Inward Arrivals & Balance Tracker</span>
+                  <span class="badge-tag"
+                    style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد
+                    اسمارٹ ٹریکر</span>
+                </h2>
+                <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
+                  Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock
+                  balance
+                  hai live check karein.
+                </p>
+              </div>
+            </div>
+            <button type="button" class="btn btn-secondary btn-icon"
+              onclick="closeModal('modal-daily-arrivals')">✕</button>
+          </div>
+
+          <div class="modal-body" style="padding: 1.15rem; max-height: calc(88dvh - 120px); overflow-y: auto;">
+            <!-- Control Bar: Date Selection, Quick Shortcuts & Search -->
+            <div
+              style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
+              <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+                <label for="arrivals-modal-date"
+                  style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
+                <input type="date" id="arrivals-modal-date" class="app-input"
+                  style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
+
+                <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap;">
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Aaj
+                    (Today)</button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal
+                    (Yesterday)</button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest"
+                    title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                <input type="text" id="arrivals-modal-search" class="app-input"
+                  placeholder="🔍 Search Style or Contractor..."
+                  style="width: 190px; font-size: 0.8rem; padding: 5px 10px;">
+                <button type="button" class="btn btn-warning btn-sm" id="btn-arrivals-bulk-add"
+                  style="font-weight: 800; color: #000; background: linear-gradient(135deg, #f59e0b, #d97706); border: none; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">
+                  ⚡ + Add All to Daily Sheet
+                </button>
+              </div>
+            </div>
+
+            <!-- 6 KPI Summary Cards -->
+            <div
+              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; margin-bottom: 1.15rem;"
+              id="arrivals-kpi-container">
+              <!-- Populated dynamically via JS -->
+            </div>
+
+            <!-- Arrivals Table Card -->
+            <div class="table-card" style="box-shadow: none; border: 1px solid var(--border-color);">
+              <div class="table-responsive">
+                <table class="master-table" id="table-daily-arrivals">
+                  <thead>
+                    <tr class="column-header">
+                      <th style="width: 45px; text-align: center;">S#</th>
+                      <th>STYLE CODE</th>
+                      <th>CATEGORY</th>
+                      <th>CONTRACTOR & CHALLAN</th>
+                      <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR
+                        AAYE
+                      </th>
+                      <th style="text-align: right;">TOTAL CUT</th>
+                      <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED
+                      </th>
+                      <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY
+                        (DISPATCH)
+                      </th>
+                      <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS
+                        (STOCK)</th>
+                      <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI
+                        (PENDING)
+                      </th>
+                      <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="tbody-daily-arrivals">
+                    <!-- Dynamically populated rows -->
+                  </tbody>
+                  <tfoot id="tfoot-daily-arrivals" style="font-weight: 800; background: var(--bg-card-hover);">
+                    <!-- Dynamic Totals -->
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer"
+            style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
+            <div style="font-size: 0.78rem; color: var(--text-muted);" id="arrivals-footer-note">
+              💡 <strong>Tip:</strong> Daily Sheet mein style add hone se wo wahan Master balances ke sath link ho jata
+              hai.
+            </div>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein
+                (Close)</button>
+              <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Daily Sheet Par Jayein
+                📋</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MODAL: TRASH ITEM FULL DETAILS INSPECTOR                       -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-trash-details" style="z-index: 400;">
+        <div class="modal-card" style="max-width: 650px;">
+          <div class="modal-header">
+            <div>
+              <h2 id="trash-detail-title" style="display: flex; align-items: center; gap: 0.5rem; font-size: 1.2rem;">
+                <span>🗑️ Trashed Item Details</span>
+              </h2>
+              <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Inspect deleted record attributes before restoring or permanently destroying.</p>
+            </div>
+            <button class="btn btn-secondary btn-icon" onclick="closeModal('modal-trash-details')">✕</button>
+          </div>
+          <div class="modal-body" style="padding: 1.25rem;">
+            <div id="trash-detail-meta-box" style="background: var(--bg-card-hover); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem; display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.825rem;">
+              <!-- Dynamic Meta Info -->
+            </div>
+            <div style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.4rem; letter-spacing: 0.05em;">Record Data Snapshot:</div>
+            <div id="trash-detail-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.6rem; max-height: 320px; overflow-y: auto; padding: 0.5rem; background: var(--bg-main); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
+              <!-- Dynamic Field Cards -->
+            </div>
+          </div>
+          <div class="modal-footer" style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.25rem; background: var(--bg-card-hover);">
+            <button type="button" class="btn btn-secondary" onclick="closeModal('modal-trash-details')">Close</button>
+            <div style="display: flex; gap: 0.5rem;">
+              <button type="button" class="btn btn-secondary" id="btn-trash-detail-destroy" style="color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4); font-weight: 700;">🗑️ Destroy</button>
+              <button type="button" class="btn btn-primary" id="btn-trash-detail-restore" style="font-weight: 700;">↩️ Restore Record</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MOBILE BOTTOM STICKY NAVIGATION DOCK                           -->
+
+      <!-- Direct 1-tap switching for Master, Daily Sheet, Logs & Dashboard -->
+      <!-- ============================================================== -->
+      <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation Dock">
+        <button type="button" class="mobile-bottom-nav-item active" data-tab="dashboard">
+          <span class="bottom-nav-icon">⚡</span>
+          <span class="bottom-nav-label">Dashboard</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav-item" data-tab="master-inventory">
+          <span class="bottom-nav-icon">📦</span>
+          <span class="bottom-nav-label">Master</span>
+          <span class="bottom-nav-badge" id="mobile-bottom-badge-master">0</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav-item" data-tab="receiving-log">
+          <span class="bottom-nav-icon">📥</span>
+          <span class="bottom-nav-label">Receiving</span>
+          <span class="bottom-nav-badge" id="mobile-bottom-badge-rec">0</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav-item" data-tab="dispatch-log">
+          <span class="bottom-nav-icon">📤</span>
+          <span class="bottom-nav-label">Dispatch</span>
+          <span class="bottom-nav-badge" id="mobile-bottom-badge-dis">0</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav-item" data-tab="final-style">
+          <span class="bottom-nav-icon">📋</span>
+          <span class="bottom-nav-label">Daily Sheet</span>
+          <span class="bottom-nav-badge" id="mobile-bottom-badge-final">0</span>
+        </button>
+        <button type="button" class="mobile-bottom-nav-item" data-tab="payment-sheet">
+          <span class="bottom-nav-icon">💰</span>
+          <span class="bottom-nav-label">Payment</span>
+        </button>
+      </nav>
+
+      <!-- Isolated Dedicated DOM Root for Clean window.print() Output -->
+      <div id="print-studio-paper-root" class="print-studio-paper-root" style="display: none;"></div>
+
+      <!-- Toast Container -->
+      <div class="toast-container" id="toast-container"></div>
+
+      <!-- Scripts -->
+      <script src="data.js?v=21"></script>
+      <script src="db.js?v=21"></script>
+      <script src="app.js?v=21"></script>
+      <script>
+        if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+          window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(err => {
+              console.log('SW registration note:', err.message);
+            });
+          });
+        }
+      </script>
 </body>
 
 </html>

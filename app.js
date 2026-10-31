@@ -30,6 +30,7 @@ function initApp() {
   try { initPrintStudio(); } catch (e) { console.error("Print Studio init error:", e); }
   try { initFormKeyboardNavigation(); } catch (e) { console.error("Keyboard nav init error:", e); }
   try { initDailyArrivalsTracker(); } catch (e) { console.error("Arrivals Tracker init error:", e); }
+  try { initTrashView(); } catch (e) { console.error("Trash View init error:", e); }
 
   // 3. If a valid session exists, apply permissions and render
   try {
@@ -86,7 +87,7 @@ function debounce(fn, delay = 120) {
 // -------------------------------------------------------------
 // Global Toast System
 // -------------------------------------------------------------
-function showToast(message, type = "success") {
+function showToast(message, type = "success", action = null) {
   const container = document.getElementById("toast-container");
   if (!container) return;
 
@@ -97,14 +98,30 @@ function showToast(message, type = "success") {
   if (type === "error") icon = `✕`;
   if (type === "info") icon = `ℹ`;
 
-  toast.innerHTML = `<span>${icon}</span><span>${message}</span>`;
+  let actionHtml = '';
+  if (action && action.text) {
+    actionHtml = `<button type="button" class="toast-action-btn" style="margin-left: 0.75rem; background: rgba(255,255,255,0.22); border: 1px solid rgba(255,255,255,0.45); color: #fff; padding: 2px 8px; border-radius: 4px; font-weight: 700; cursor: pointer; font-size: 0.78rem;">${action.text}</button>`;
+  }
+
+  toast.innerHTML = `<span>${icon}</span><span style="flex: 1;">${message}</span>${actionHtml}`;
   container.appendChild(toast);
+
+  if (action && typeof action.onClick === "function") {
+    const btn = toast.querySelector(".toast-action-btn");
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        action.onClick();
+        toast.remove();
+      });
+    }
+  }
 
   setTimeout(() => {
     toast.style.opacity = "0";
     toast.style.transform = "translateX(50px)";
     setTimeout(() => toast.remove(), 250);
-  }, 3500);
+  }, action ? 6500 : 3500);
 }
 
 // -------------------------------------------------------------
@@ -427,14 +444,15 @@ const dirtyViews = new Set([
   "final-style",
   "contractors",
   "work-distribution",
-  "payment-sheet"
+  "payment-sheet",
+  "trash"
 ]);
 
 function markViewsDirty(tabId = null) {
   if (tabId) {
     dirtyViews.add(tabId);
   } else {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet"].forEach(t => dirtyViews.add(t));
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => dirtyViews.add(t));
   }
 }
 
@@ -461,6 +479,9 @@ function renderTargetView(tabId) {
     else if (tabId === "payment-sheet") {
       populateRateApprovalPeriods();
       renderPaymentSheet();
+    }
+    else if (tabId === "trash") {
+      renderTrashView();
     }
     dirtyViews.delete(tabId);
   } catch (err) {
@@ -496,7 +517,8 @@ function switchTab(tabId) {
     "work-distribution": "📑 Work Distribution",
     "payment-sheet": "💰 Payment Sheet",
     "contractors": "👥 Contractors Hub",
-    "neon-sync": "☁️ Neon Cloud"
+    "neon-sync": "☁️ Neon Cloud",
+    "trash": "🗑️ Trash Bin"
   };
   const activeTabNameEl = document.getElementById("mobile-active-tab-name");
   if (activeTabNameEl) {
@@ -553,7 +575,7 @@ function renderAll(forceAll = false) {
   const currentTab = getActiveTabId();
 
   if (forceAll) {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet"].forEach(t => {
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => {
       renderTargetView(t);
     });
   } else {
@@ -623,6 +645,16 @@ function renderKPIs() {
 
   setBadgeText("badge-payment-count", window.db.getPaymentSheets().length);
   setBadgeText("badge-payment-count-mobile", window.db.getPaymentSheets().length);
+
+  // Trash Badges Sync
+  const trashItems = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+  setBadgeText("nav-trash-count", trashItems.length);
+  setBadgeText("mobile-nav-trash-count", trashItems.length);
+  const navTrashBadge = document.getElementById("nav-trash-count");
+  if (navTrashBadge) navTrashBadge.style.display = trashItems.length > 0 ? "inline-flex" : "none";
+  const mobileTrashBadge = document.getElementById("mobile-nav-trash-count");
+  if (mobileTrashBadge) mobileTrashBadge.style.display = trashItems.length > 0 ? "inline-flex" : "none";
+  setBadgeText("trash-kpi-count-badge", `${trashItems.length} Items`);
 }
 
 // =============================================================
@@ -1735,11 +1767,22 @@ async function deleteReceivingLogEntry(id) {
     showToast("Permission Denied: You do not have permission to delete receiving challans.", "error");
     return;
   }
-  if (confirm("Delete this receiving challan entry? Master inventory balance will be automatically recalculated.")) {
+  const item = window.db.getReceivingLogs().find(r => Number(r.id) === Number(id));
+  const desc = item ? `Challan #${item.challan_rec || item.id} (Style ${item.style_code})` : "this receiving challan";
+  if (confirm(`Move ${desc} to Trash?\nMaster inventory balance will update automatically, and you can restore it anytime from the Trash tab.`)) {
     window.lastUserActionTime = Date.now();
-    await window.db.deleteReceivingLog(id);
+    const trashed = await window.db.deleteReceivingLog(id);
     renderAll();
-    showToast("Receiving challan deleted and balance recalculated.");
+    showToast("Receiving challan moved to Trash.", "info", {
+      text: "Undo",
+      onClick: async () => {
+        if (trashed && trashed.id) {
+          await window.db.restoreFromTrash(trashed.id);
+          renderAll();
+          showToast("Receiving challan restored!", "success");
+        }
+      }
+    });
   }
 }
 
@@ -1881,11 +1924,22 @@ async function deleteDispatchLogEntry(id) {
     showToast("Permission Denied: You do not have permission to delete dispatch challans.", "error");
     return;
   }
-  if (confirm("Delete this dispatch challan entry? Master inventory balance will be automatically recalculated.")) {
+  const item = window.db.getDispatchLogs().find(d => Number(d.id) === Number(id));
+  const desc = item ? `Challan #${item.challan_dis || item.id} (Style ${item.style_code})` : "this dispatch challan";
+  if (confirm(`Move ${desc} to Trash?\nMaster inventory balance will update automatically, and you can restore it anytime from the Trash tab.`)) {
     window.lastUserActionTime = Date.now();
-    await window.db.deleteDispatchLog(id);
+    const trashed = await window.db.deleteDispatchLog(id);
     renderAll();
-    showToast("Dispatch challan deleted and balance recalculated.");
+    showToast("Dispatch challan moved to Trash.", "info", {
+      text: "Undo",
+      onClick: async () => {
+        if (trashed && trashed.id) {
+          await window.db.restoreFromTrash(trashed.id);
+          renderAll();
+          showToast("Dispatch challan restored!", "success");
+        }
+      }
+    });
   }
 }
 
@@ -2012,7 +2066,7 @@ function renderFinalStyleSheet() {
   if (list.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+        <td colspan="11" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
           No styles added to this sheet yet. Select a Style Code & Category above or click <strong>"Auto-Add Active Styles"</strong>.
         </td>
       </tr>
@@ -2025,12 +2079,15 @@ function renderFinalStyleSheet() {
   let totalCut = 0;
   let totalRec = 0;
   let totalBalStock = 0;
+  let totalDisHemb = 0;
   let totalBalHemb = 0;
 
   tbody.innerHTML = list.map((item, index) => {
     totalCut += item.cut_qty;
     totalRec += item.received_qty;
     totalBalStock += item.balance_from_stock;
+    const disQty = Number(item.dispatch_from_hemb) || 0;
+    totalDisHemb += disQty;
     totalBalHemb += item.balance_from_hemb;
 
     const balStockClass = item.balance_from_stock > 0 ? "balance-highlight-pink" : "";
@@ -2066,6 +2123,7 @@ function renderFinalStyleSheet() {
         <td style="font-weight: 700; font-family: var(--font-mono); text-align: right;">${item.cut_qty.toLocaleString()}</td>
         <td style="font-weight: 600; font-family: var(--font-mono); text-align: right;">${item.received_qty.toLocaleString()}</td>
         <td class="${balStockClass}" style="text-align: right; font-family: var(--font-mono);">${item.balance_from_stock.toLocaleString()}</td>
+        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: #818cf8; background: rgba(99, 102, 241, 0.05);">${disQty.toLocaleString()}</td>
         <td class="${balHembClass}" style="text-align: right; font-family: var(--font-mono);">${item.balance_from_hemb.toLocaleString()}</td>
         <td>
           <div style="display: flex; align-items: center; gap: 0.35rem;">
@@ -2097,6 +2155,7 @@ function renderFinalStyleSheet() {
         <td style="text-align: right; font-family: var(--font-mono);">${totalCut.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono);">${totalRec.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono);">${totalBalStock.toLocaleString()}</td>
+        <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: #818cf8;">${totalDisHemb.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); color: var(--accent-rose);">${totalBalHemb.toLocaleString()}</td>
         <td colspan="2"></td>
       </tr>
@@ -2120,9 +2179,13 @@ function removeFinalStyleRow(sNo) {
     showToast("Permission Denied: You do not have permission to remove rows.", "error");
     return;
   }
-  window.db.removeFinalStyle(sNo);
-  renderFinalStyleSheet();
-  showToast("Style removed from daily sheet.", "info");
+  const item = window.db.getFinalStyles().find(f => f.s_no === sNo);
+  const desc = item ? `Style ${item.style_code} [${item.category}]` : `Row #${sNo}`;
+  if (confirm(`Move ${desc} from Daily Sheet to Trash?\nYou can restore it anytime from the Trash tab.`)) {
+    window.db.removeFinalStyle(sNo);
+    renderAll();
+    showToast("Style moved from Daily Sheet to Trash.", "info");
+  }
 }
 
 function renderContractorSummarySidebar() {
@@ -2783,7 +2846,7 @@ function renderContractorsView() {
       `;
     } else {
       html += `
-        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 1.25rem;">
+        <div class="contractor-workload-grid">
           ${activeWorkloadContractors.map(c => `
             <div class="contractor-summary-card" style="border-top: 3.5px solid var(--accent-rose); display: flex; flex-direction: column; justify-content: space-between;">
               <div>
@@ -2868,7 +2931,7 @@ function renderContractorsView() {
           </div>
         </div>
 
-        <div class="kpi-grid" style="grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.25rem;">
+        <div class="contractor-workload-grid">
           ${allContractors.map(c => {
       const workloadInfo = allWorkloads.find(w => w.name.toLowerCase() === c.name.toLowerCase()) || { total_balance: 0, style_count: 0 };
       return `
@@ -4508,11 +4571,20 @@ async function deleteMasterEntry(id) {
   const item = window.db.getMasterInventory().find(i => Number(i.id) === numId || String(i.id) === String(id));
   if (!item) return;
 
-  if (confirm(`Are you sure you want to delete Style ${item.style_code} [${item.category}]?`)) {
+  if (confirm(`Move Style "${item.style_code}" [${item.category}] to Trash?\nYou can restore it anytime from the Trash tab.`)) {
     window.lastUserActionTime = Date.now();
-    await window.db.deleteMasterInventory(id);
+    const trashed = await window.db.deleteMasterInventory(id);
     renderAll();
-    showToast(`Style ${item.style_code} [${item.category}] deleted.`);
+    showToast(`Style ${item.style_code} [${item.category}] moved to Trash.`, "info", {
+      text: "Undo",
+      onClick: async () => {
+        if (trashed && trashed.id) {
+          await window.db.restoreFromTrash(trashed.id);
+          renderAll();
+          showToast(`Style ${item.style_code} restored!`, "success");
+        }
+      }
+    });
   }
 }
 
@@ -5023,7 +5095,7 @@ function exportFinalStylesToCSV() {
 
   const headers = [
     "S NO", "STYLE CODE", "CATEGORY", "CONT NAME", "CUT QTY",
-    "RECEIVED QTY", "BALANCE FROM STOCK", "BALNCE FROM H-EMB", "TIME / REMARKS"
+    "RECEIVED QTY", "BALANCE FROM STOCK", "DISPATCH HAND EMB", "BALNCE FROM H-EMB", "TIME / REMARKS"
   ];
 
   const rows = list.map(item => [
@@ -5034,6 +5106,7 @@ function exportFinalStylesToCSV() {
     item.cut_qty,
     item.received_qty,
     item.balance_from_stock,
+    item.dispatch_from_hemb || 0,
     item.balance_from_hemb,
     `"${item.time_remarks || ''}"`
   ]);
@@ -6282,6 +6355,26 @@ function initPaymentSheetView() {
     openPaymentEntryModal(null);
   });
 
+  document.getElementById("btn-auto-import-dispatches")?.addEventListener("click", () => {
+    openAutoImportDispatchesModal();
+  });
+
+  document.getElementById("btn-refresh-import-preview")?.addEventListener("click", () => {
+    renderImportDispatchesPreview();
+  });
+
+  document.getElementById("import-target-date")?.addEventListener("change", () => {
+    renderImportDispatchesPreview();
+  });
+
+  document.getElementById("import-scope-select")?.addEventListener("change", () => {
+    renderImportDispatchesPreview();
+  });
+
+  document.getElementById("btn-confirm-import-dispatches")?.addEventListener("click", () => {
+    confirmAutoImportDispatches();
+  });
+
   document.getElementById("btn-print-payment-sheet")?.addEventListener("click", printPaymentSheet);
   document.getElementById("btn-export-payment-csv")?.addEventListener("click", exportPaymentSheetToCSV);
 
@@ -6299,6 +6392,573 @@ function initPaymentSheetView() {
 
   // Initial render
   renderPaymentSheet();
+}
+
+// ====================================================================
+// BI-MONTHLY DISPATCH AUTO-IMPORT CONTROLLER
+// 2 Time Periods:
+// 1. 26th of month to 10th of next month (e.g. 26-OCT-2026 TO 10-NOV-2026)
+// 2. 11th of month to 25th of month (e.g. 11-OCT-2026 TO 25-OCT-2026)
+// Aggregates multi-date dispatches per style and computes paid vs remaining
+// ====================================================================
+
+function getBiMonthlyPeriod(dateInput) {
+  let dt = dateInput ? new Date(dateInput) : new Date();
+  if (isNaN(dt.getTime())) dt = new Date();
+
+  const year = dt.getFullYear();
+  const month = dt.getMonth(); // 0 = Jan, 9 = Oct, 10 = Nov
+  const day = dt.getDate();
+
+  const MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+
+  let startYear = year;
+  let startMonth = month;
+  let startDay = 26;
+
+  let endYear = year;
+  let endMonth = month;
+  let endDay = 10;
+
+  let cycleType = "";
+
+  if (day >= 26) {
+    // Current date is 26 to end of month (e.g. 31 Oct)
+    // Cycle starts on 26th of current month (e.g. 26 Oct 2026)
+    // Cycle ends on 10th of next month (e.g. 10 Nov 2026)
+    cycleType = "cycle_26_10";
+    startDay = 26;
+    startMonth = month;
+    startYear = year;
+
+    endDay = 10;
+    if (month === 11) {
+      endMonth = 0;
+      endYear = year + 1;
+    } else {
+      endMonth = month + 1;
+      endYear = year;
+    }
+  } else if (day <= 10) {
+    // Current date is 1 to 10 of month (e.g. 5 Nov)
+    // Cycle started on 26th of previous month (e.g. 26 Oct 2026)
+    // Cycle ends on 10th of current month (e.g. 10 Nov 2026)
+    cycleType = "cycle_26_10";
+    startDay = 26;
+    if (month === 0) {
+      startMonth = 11;
+      startYear = year - 1;
+    } else {
+      startMonth = month - 1;
+      startYear = year;
+    }
+
+    endDay = 10;
+    endMonth = month;
+    endYear = year;
+  } else {
+    // Day is between 11 and 25 (e.g. 15 Oct)
+    // Cycle starts on 11th of current month (e.g. 11 Oct 2026)
+    // Cycle ends on 25th of current month (e.g. 25 Oct 2026)
+    cycleType = "cycle_11_25";
+    startDay = 11;
+    startMonth = month;
+    startYear = year;
+
+    endDay = 25;
+    endMonth = month;
+    endYear = year;
+  }
+
+  const startDateObj = new Date(startYear, startMonth, startDay, 0, 0, 0, 0);
+  const endDateObj = new Date(endYear, endMonth, endDay, 23, 59, 59, 999);
+
+  const startStrISO = `${startYear}-${String(startMonth + 1).padStart(2, "0")}-${String(startDay).padStart(2, "0")}`;
+  const endStrISO = `${endYear}-${String(endMonth + 1).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+
+  const periodName = `${startDay}-${MONTHS[startMonth]}-${startYear} TO ${endDay}-${MONTHS[endMonth]}-${endYear}`;
+
+  return {
+    cycleType,
+    periodName,
+    startDate: startStrISO,
+    endDate: endStrISO,
+    startDateObj,
+    endDateObj,
+    startLabel: `${startDay}-${MONTHS[startMonth]}-${startYear}`,
+    endLabel: `${endDay}-${MONTHS[endMonth]}-${endYear}`
+  };
+}
+
+function parseAnyDateToTimestamp(str) {
+  if (!str) return 0;
+  if (str instanceof Date) return str.getTime();
+  const s = String(str).trim();
+  if (!s) return 0;
+
+  // 1. ISO format: YYYY-MM-DD or YYYY/MM/DD
+  const ymd = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (ymd) {
+    const dt = new Date(parseInt(ymd[1], 10), parseInt(ymd[2], 10) - 1, parseInt(ymd[3], 10), 12, 0, 0);
+    if (!isNaN(dt.getTime())) return dt.getTime();
+  }
+
+  // 2. DD-MMM-YYYY or DD-MMM-YY (e.g. 31-Oct-2026, 26-OCT-26, 31-Oct)
+  const dMmm = s.match(/^(\d{1,2})[-/ ]([A-Za-z]{3})[-/ ]?(\d{2,4})?/i);
+  if (dMmm) {
+    const day = parseInt(dMmm[1], 10);
+    const mStr = dMmm[2].toUpperCase();
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const mIdx = months.indexOf(mStr);
+    if (mIdx !== -1) {
+      let yr = dMmm[3] ? parseInt(dMmm[3], 10) : new Date().getFullYear();
+      if (yr < 100) yr = (yr < 70) ? 2000 + yr : 1900 + yr;
+      const dt = new Date(yr, mIdx, day, 12, 0, 0);
+      if (!isNaN(dt.getTime())) return dt.getTime();
+    }
+  }
+
+  // 3. DD-MM-YYYY or DD-MM-YY or DD/MM/YYYY
+  const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})/);
+  if (dmy) {
+    const d = parseInt(dmy[1], 10);
+    const m = parseInt(dmy[2], 10) - 1;
+    let y = parseInt(dmy[3], 10);
+    if (y < 100) y = (y < 70) ? 2000 + y : 1900 + y;
+    const dt = new Date(y, m, d, 12, 0, 0);
+    if (!isNaN(dt.getTime())) return dt.getTime();
+  }
+
+  // 4. Delegate to db.parseDateToTimestamp if available
+  if (window.db && typeof window.db.parseDateToTimestamp === "function") {
+    const t = window.db.parseDateToTimestamp(s);
+    if (t > 0) return t;
+  }
+
+  const fb = Date.parse(s);
+  return isNaN(fb) ? 0 : fb;
+}
+
+// Temporary storage for previewed styles to be confirmed
+let _pendingImportDispatches = [];
+let _pendingImportPeriodInfo = null;
+
+function openAutoImportDispatchesModal() {
+  const targetDateInput = document.getElementById("import-target-date");
+  const today = new Date();
+  if (targetDateInput) {
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, "0");
+    const dd = String(today.getDate()).padStart(2, "0");
+    targetDateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
+  const scopeSelect = document.getElementById("import-scope-select");
+  if (scopeSelect) {
+    scopeSelect.value = "up_to_date";
+  }
+
+  renderImportDispatchesPreview();
+
+  // USER REQUIREMENT:
+  // "ager current time period may koi style dispatch na hua hw tw software button per click karny per error show karwai"
+  if (!_pendingImportDispatches || _pendingImportDispatches.length === 0) {
+    const periodInfo = _pendingImportPeriodInfo || getBiMonthlyPeriod(today);
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    const todayLabel = `${today.getDate()}-${months[today.getMonth()]}-${today.getFullYear()}`;
+    showToast(`⚠️ Error: Current time period (${periodInfo.startLabel} se ${todayLabel}) may koi style dispatch nahi hua!`, "error");
+    return;
+  }
+
+  openModal("modal-import-dispatches");
+}
+
+function renderImportDispatchesPreview() {
+  const targetDateInput = document.getElementById("import-target-date");
+  const scopeSelect = document.getElementById("import-scope-select");
+  const cycleBadge = document.getElementById("import-cycle-badge");
+  const sheetTargetLabel = document.getElementById("import-sheet-target-label");
+  const rangeBanner = document.getElementById("import-range-banner");
+  const tbody = document.getElementById("tbody-import-preview");
+  const confirmBtn = document.getElementById("btn-confirm-import-dispatches");
+  const confirmBtnLabel = document.getElementById("btn-confirm-import-label");
+
+  const kpiStyles = document.getElementById("import-kpi-styles");
+  const kpiPcs = document.getElementById("import-kpi-pcs");
+  const kpiCut = document.getElementById("import-kpi-cut");
+  const kpiPaid = document.getElementById("import-kpi-paid");
+
+  let chosenDate = new Date();
+  if (targetDateInput && targetDateInput.value) {
+    const parts = targetDateInput.value.split("-");
+    if (parts.length === 3) {
+      chosenDate = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 12, 0, 0);
+    }
+  }
+
+  const periodInfo = getBiMonthlyPeriod(chosenDate);
+  _pendingImportPeriodInfo = periodInfo;
+
+  const isUpToDate = !scopeSelect || scopeSelect.value === "up_to_date";
+
+  // Calculate range window
+  const rangeStartTs = periodInfo.startDateObj.getTime();
+  let rangeEndTs = periodInfo.endDateObj.getTime();
+  let rangeEndLabel = periodInfo.endLabel;
+
+  if (isUpToDate) {
+    const endOfChosenDay = new Date(chosenDate.getFullYear(), chosenDate.getMonth(), chosenDate.getDate(), 23, 59, 59, 999);
+    rangeEndTs = endOfChosenDay.getTime();
+    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+    rangeEndLabel = `${chosenDate.getDate()}-${months[chosenDate.getMonth()]}-${chosenDate.getFullYear()}`;
+  }
+
+  if (cycleBadge) {
+    cycleBadge.textContent = periodInfo.cycleType === "cycle_26_10" ? "Cycle: 26th To 10th" : "Cycle: 11th To 25th";
+  }
+
+  if (sheetTargetLabel) {
+    sheetTargetLabel.textContent = periodInfo.periodName;
+  }
+
+  if (rangeBanner) {
+    rangeBanner.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          📌 Filter Window: <strong>${periodInfo.startLabel}</strong> se <strong>${rangeEndLabel}</strong> tak.
+          <span style="color: var(--text-muted); font-size: 0.75rem; margin-left: 4px;">(${periodInfo.periodName} Sheet)</span>
+        </div>
+        <div style="font-size: 0.75rem; color: #38bdf8;">
+          ⚡ Ek style ki tamam dates ka maal jama ho kar 1 row banegi
+        </div>
+      </div>
+    `;
+  }
+
+  // 1. Fetch all dispatch logs
+  const allDispatches = window.db ? window.db.getDispatchLogs() : [];
+
+  // Filter logs within [rangeStartTs, rangeEndTs]
+  const periodDispatches = allDispatches.filter(d => {
+    const t = parseAnyDateToTimestamp(d.date_dispatch);
+    if (!t) return false;
+    return t >= rangeStartTs && t <= rangeEndTs;
+  });
+
+  // 2. Group by Style Code + Category
+  const groupedMap = new Map();
+
+  periodDispatches.forEach(d => {
+    const style = (d.style_code || "").trim();
+    if (!style) return;
+    const cat = (d.category || "SHIRT").trim().toUpperCase();
+    const key = `${style.toUpperCase()}__${cat}`;
+    const qty = parseInt(d.dispatch_qty, 10) || 0;
+
+    if (!groupedMap.has(key)) {
+      groupedMap.set(key, {
+        style_code: style,
+        category: cat,
+        contractor_name: (d.contractor_name || "").trim(),
+        total_dispatch_qty: 0,
+        entries: []
+      });
+    }
+
+    const grp = groupedMap.get(key);
+    grp.total_dispatch_qty += qty;
+    grp.entries.push({
+      date: d.date_dispatch || "-",
+      qty: qty,
+      challan: d.challan_dis || "-"
+    });
+    if (!grp.contractor_name && d.contractor_name) {
+      grp.contractor_name = d.contractor_name.trim();
+    }
+  });
+
+  // 3. Fallback check: if no individual logs, also check master records whose date_dispatch falls in range
+  if (groupedMap.size === 0 && window.db) {
+    const masterList = window.db.getMasterInventory();
+    masterList.forEach(m => {
+      const dates = (m.date_dispatch || "").split("/").map(s => s.trim()).filter(Boolean);
+      let matched = false;
+      dates.forEach(dStr => {
+        const t = parseAnyDateToTimestamp(dStr);
+        if (t >= rangeStartTs && t <= rangeEndTs) matched = true;
+      });
+      if (matched && (m.dispatch_from_hemb || 0) > 0) {
+        const style = (m.style_code || "").trim();
+        const cat = (m.category || "SHIRT").trim().toUpperCase();
+        const key = `${style.toUpperCase()}__${cat}`;
+        if (!groupedMap.has(key)) {
+          groupedMap.set(key, {
+            style_code: style,
+            category: cat,
+            contractor_name: m.contractor_name || "",
+            total_dispatch_qty: m.dispatch_from_hemb,
+            entries: [{ date: m.date_dispatch || "-", qty: m.dispatch_from_hemb, challan: m.challan_dis || "-" }]
+          });
+        }
+      }
+    });
+  }
+
+  // 4. Enrich each grouped style with Master cut_qty, previous sheet payments, and remarks
+  const masterList = window.db ? window.db.getMasterInventory() : [];
+  const masterMap = new Map();
+  masterList.forEach(m => {
+    const k = `${(m.style_code || '').trim().toUpperCase()}__${(m.category || '').trim().toUpperCase()}`;
+    masterMap.set(k, m);
+    const kCodeOnly = (m.style_code || '').trim().toUpperCase();
+    if (!masterMap.has(kCodeOnly)) masterMap.set(kCodeOnly, m);
+  });
+
+  const allPayments = window.db ? window.db.getPaymentSheets() : [];
+
+  const existingSheetItems = allPayments.filter(p =>
+    (p.period || "").trim().toLowerCase() === periodInfo.periodName.trim().toLowerCase()
+  );
+
+  const previewList = [];
+  let sumPeriodDispatched = 0;
+  let sumCutQty = 0;
+  let sumCumulativePaid = 0;
+
+  groupedMap.forEach((grp) => {
+    const styleCode = grp.style_code;
+    const cat = grp.category;
+    const cleanKey = `${styleCode.toUpperCase()}__${cat.toUpperCase()}`;
+    const master = masterMap.get(cleanKey) || masterMap.get(styleCode.toUpperCase());
+
+    const cutQty = master ? (master.cut_qty || 0) : grp.total_dispatch_qty;
+    const contractor = grp.contractor_name || (master ? master.contractor_name : "Unassigned");
+
+    // Previous sheets paid pieces (sheets other than current target period)
+    let prevPaidPcs = 0;
+    allPayments.forEach(p => {
+      const pPeriod = (p.period || "").trim().toLowerCase();
+      if (pPeriod === periodInfo.periodName.trim().toLowerCase()) return; // ignore current sheet
+      const matchStyle = (p.style_code || "").trim().toUpperCase() === styleCode.toUpperCase();
+      const matchCat = (p.category || p.working || "").trim().toUpperCase() === cat.toUpperCase();
+      if (matchStyle && matchCat) {
+        const prod = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
+        prevPaidPcs += prod;
+      }
+    });
+
+    const totalPaid = prevPaidPcs + grp.total_dispatch_qty;
+    const remainingBalance = Math.max(0, cutQty - totalPaid);
+
+    let remarks = "";
+    if (cutQty > 0 && remainingBalance === 0) {
+      remarks = `${totalPaid} PCS FULLY PAID / CLOSE`;
+    } else if (prevPaidPcs > 0) {
+      remarks = `${totalPaid} PCS PAID (${prevPaidPcs} PREV + ${grp.total_dispatch_qty} CURR) / ${remainingBalance} PCS REMAINING`;
+    } else {
+      remarks = `${totalPaid} PCS PAID / ${remainingBalance} PCS REMAINING`;
+    }
+
+    // Check if already in the current target sheet
+    const existingInSheet = existingSheetItems.find(p =>
+      (p.style_code || "").trim().toUpperCase() === styleCode.toUpperCase() &&
+      (p.category || p.working || "").trim().toUpperCase() === cat.toUpperCase()
+    );
+
+    sumPeriodDispatched += grp.total_dispatch_qty;
+    sumCutQty += cutQty;
+    sumCumulativePaid += totalPaid;
+
+    previewList.push({
+      style_code: styleCode,
+      category: cat,
+      contractor_name: contractor,
+      cut_qty: cutQty,
+      period_dispatch_qty: grp.total_dispatch_qty,
+      entries: grp.entries,
+      prev_paid_pcs: prevPaidPcs,
+      total_paid: totalPaid,
+      remaining_balance: remainingBalance,
+      remarks: remarks,
+      existing_id: existingInSheet ? existingInSheet.id : null,
+      existing_prod_qty: existingInSheet ? (existingInSheet.prod_pcs_qty || existingInSheet.paid_pcs || 0) : null
+    });
+  });
+
+  _pendingImportDispatches = previewList;
+
+  // Update KPIs
+  if (kpiStyles) kpiStyles.textContent = previewList.length.toLocaleString();
+  if (kpiPcs) kpiPcs.textContent = sumPeriodDispatched.toLocaleString();
+  if (kpiCut) kpiCut.textContent = sumCutQty.toLocaleString();
+  if (kpiPaid) kpiPaid.textContent = sumCumulativePaid.toLocaleString();
+
+  // Render Table Rows
+  if (tbody) {
+    if (previewList.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
+            <div style="font-size: 2rem; margin-bottom: 0.5rem;">📦</div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.25rem;">
+              Koi Dispatch Records Nahi Milay!
+            </div>
+            <p style="font-size: 0.8rem; max-width: 460px; margin: 0 auto; color: var(--text-muted);">
+              Is time window (<strong>${periodInfo.startLabel}</strong> se <strong>${rangeEndLabel}</strong>) ke doran Dispatch Log may koi entry darj nahi hay.
+              Aap ooper di gayi <strong>As-of Date</strong> change kar ke check kar saktay hain.
+            </p>
+          </td>
+        </tr>
+      `;
+      if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.style.opacity = "0.5";
+        confirmBtn.style.cursor = "not-allowed";
+      }
+      if (confirmBtnLabel) {
+        confirmBtnLabel.textContent = "Koi Style Dastyab Nahi";
+      }
+    } else {
+      tbody.innerHTML = previewList.map((item, idx) => {
+        // Build breakdown tag
+        const breakdownStr = item.entries.map(e => `${e.date}: ${e.qty} pcs${e.challan !== '-' ? ` (#${e.challan})` : ''}`).join(" | ");
+
+        const isUpdate = item.existing_id !== null;
+        const statusBadge = isUpdate
+          ? `<span class="badge-tag inline" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.35); font-size: 0.7rem;">🔄 Update (${item.existing_prod_qty} → ${item.period_dispatch_qty})</span>`
+          : `<span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-size: 0.7rem;">➕ New Row</span>`;
+
+        return `
+          <tr>
+            <td style="text-align: center; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);">${idx + 1}</td>
+            <td style="font-weight: 800; font-family: var(--font-mono); color: #38bdf8;">${escapeHtml(item.style_code)}</td>
+            <td style="text-align: center; font-weight: 600;">${escapeHtml(item.category)}</td>
+            <td style="font-weight: 600;">${escapeHtml(item.contractor_name)}</td>
+            <td style="text-align: right; font-family: var(--font-mono); font-weight: 700;">${item.cut_qty.toLocaleString()}</td>
+            <td style="text-align: right; font-family: var(--font-mono); font-weight: 800; color: #10b981; font-size: 0.9rem;">${item.period_dispatch_qty.toLocaleString()}</td>
+            <td style="font-size: 0.72rem; color: var(--text-muted); max-width: 220px;" title="${escapeHtml(breakdownStr)}">
+              <span class="badge-tag inline" style="font-size: 0.68rem; line-height: 1.2; word-break: break-word;">${escapeHtml(breakdownStr)}</span>
+            </td>
+            <td style="font-size: 0.74rem; font-weight: 700; color: ${item.remaining_balance === 0 ? '#10b981' : '#f59e0b'};">
+              ${escapeHtml(item.remarks)}
+            </td>
+            <td style="text-align: center;">${statusBadge}</td>
+          </tr>
+        `;
+      }).join("");
+
+      if (confirmBtn) {
+        confirmBtn.disabled = false;
+        confirmBtn.style.opacity = "1";
+        confirmBtn.style.cursor = "pointer";
+      }
+      if (confirmBtnLabel) {
+        confirmBtnLabel.textContent = `✓ Add/Update ${previewList.length} Styles (${sumPeriodDispatched.toLocaleString()} Pcs) in Payment Sheet`;
+      }
+    }
+  }
+}
+
+async function confirmAutoImportDispatches() {
+  if (!_pendingImportDispatches || _pendingImportDispatches.length === 0 || !_pendingImportPeriodInfo) {
+    showToast("Koi styles dastyab nahi hain add karnay ke liye.", "warning");
+    return;
+  }
+
+  const periodInfo = _pendingImportPeriodInfo;
+  const periodName = periodInfo.periodName;
+
+  // 1. Ensure Rate Approval Period exists
+  const existingPeriods = window.db.getRateApprovalPeriods();
+  const foundPeriod = existingPeriods.find(p => p.period_name.trim().toLowerCase() === periodName.trim().toLowerCase());
+
+  if (!foundPeriod) {
+    window.db.addRateApprovalPeriod({
+      period_name: periodName,
+      start_date: periodInfo.startDate,
+      end_date: periodInfo.endDate,
+      department: "Hand Embroidery Department",
+      status: "Active",
+      notes: "Auto-generated bi-monthly period"
+    });
+  }
+
+  let addedCount = 0;
+  let updatedCount = 0;
+  let totalPcs = 0;
+
+  for (const item of _pendingImportDispatches) {
+    totalPcs += item.period_dispatch_qty;
+
+    if (item.existing_id) {
+      // Update existing record in this sheet
+      await window.db.updatePaymentSheet(item.existing_id, {
+        prod_pcs_qty: item.period_dispatch_qty,
+        paid_pcs: item.total_paid,
+        previous_paid_pcs: item.prev_paid_pcs,
+        remarks: item.remarks,
+        remarks_1: item.remarks,
+        cut_qty: item.cut_qty,
+        contractor_name: item.contractor_name,
+        payment_history: item.entries
+      });
+      updatedCount++;
+    } else {
+      // Add new record to this sheet
+      await window.db.addPaymentSheet({
+        period: periodName,
+        style_code: item.style_code,
+        working: item.category,
+        category: item.category,
+        contractor_name: item.contractor_name,
+        cut_qty: item.cut_qty,
+        prod_pcs_qty: item.period_dispatch_qty,
+        paid_pcs: item.total_paid,
+        previous_paid_pcs: item.prev_paid_pcs,
+        remarks: item.remarks,
+        remarks_1: item.remarks,
+        payment_channel: "stock_direct",
+        submission_date: periodInfo.startDate,
+        cutoff_date: periodInfo.endDate,
+        payment_history: item.entries
+      });
+      addedCount++;
+    }
+  }
+
+  // Update Period Dropdown and select this active period
+  populateRateApprovalPeriods();
+
+  const periodSelect = document.getElementById("select-rate-approval-period");
+  const periodInput = document.getElementById("input-rate-approval-period");
+  if (periodSelect) periodSelect.value = periodName;
+  if (periodInput) periodInput.value = periodName;
+
+  // Re-render Views & KPIs
+  populatePaymentContractorFilter();
+  populateAuditStylesDatalist();
+  renderPaymentSheet();
+  if (typeof renderKPIs === "function") renderKPIs();
+
+  closeModal("modal-import-dispatches");
+
+  // Ensure body scroll is unlocked
+  document.body.classList.remove("modal-open");
+  document.body.style.overflow = "";
+
+  const summaryMsg = updatedCount > 0
+    ? `✓ ${addedCount} Naye Styles add huay aur ${updatedCount} Styles update huay (${totalPcs.toLocaleString()} total pcs) sheet "${periodName}" may!`
+    : `✓ ${addedCount} Styles (${totalPcs.toLocaleString()} total pcs) kamyabi say payment sheet "${periodName}" may add ho gaye!`;
+
+  showToast(summaryMsg, "success");
+
+  // Smoothly scroll down to the payment sheet table so user sees entries without refreshing
+  setTimeout(() => {
+    const tableTarget = document.getElementById("table-rate-approval") || document.getElementById("container-excel-table") || document.getElementById("payment-sheet-view");
+    if (tableTarget) {
+      tableTarget.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, 120);
 }
 
 // Populate Contractors in Payment filter
@@ -7451,14 +8111,23 @@ async function deletePaymentEntryAction(id) {
   const item = window.db.getPaymentSheetById(id);
   if (!item) return;
 
-  if (confirm(`Are you sure you want to delete Rate Approval entry for Style "${item.style_code}"?`)) {
+  if (confirm(`Move Rate Approval entry for Style "${item.style_code}" to Trash?\nYou can restore it anytime from the Trash tab.`)) {
     try {
       window.lastUserActionTime = Date.now();
-      await window.db.deletePaymentSheet(id);
+      const trashed = await window.db.deletePaymentSheet(id);
       renderPaymentSheet();
       renderKPIs();
       renderNavigation();
-      showToast(`✓ Entry for Style "${item.style_code}" deleted.`);
+      showToast(`✓ Entry for Style "${item.style_code}" moved to Trash.`, "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast(`Entry for Style "${item.style_code}" restored!`, "success");
+          }
+        }
+      });
     } catch (err) {
       showToast(err.message, "error");
     }
@@ -8418,11 +9087,20 @@ async function deleteDistributionEntryAction(id) {
   const item = all.find(e => Number(e.id) === numId || String(e.id) === String(id));
   const styleLabel = item ? `Style ${item.style_code} (${item.contractor_name})` : "this distribution entry";
 
-  if (confirm(`Are you sure you want to delete ${styleLabel}?`)) {
+  if (confirm(`Move ${styleLabel} to Trash?\nYou can restore it anytime from the Trash tab.`)) {
     try {
       window.lastUserActionTime = Date.now();
-      await window.db.deleteWorkDistributionEntry(id);
-      showToast(`✓ Deleted ${styleLabel} successfully!`, "info");
+      const trashed = await window.db.deleteWorkDistributionEntry(id);
+      showToast(`✓ Moved ${styleLabel} to Trash!`, "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast(`${styleLabel} restored!`, "success");
+          }
+        }
+      });
       renderAll();
     } catch (err) {
       showToast(`Error deleting entry: ${err.message}`, "error");
@@ -8640,8 +9318,9 @@ const PRINT_STUDIO_DEFAULTS = {
       { id: "contractor", label: "CONT NAME", defaultWidth: 16, currentWidth: 16, enabled: true, align: "left" },
       { id: "cut_qty", label: "CUT QTY", defaultWidth: 8, currentWidth: 8, enabled: true, align: "right" },
       { id: "received_qty", label: "REC QTY", defaultWidth: 8, currentWidth: 8, enabled: true, align: "right" },
-      { id: "balance_stock", label: "BAL STOCK", defaultWidth: 10, currentWidth: 10, enabled: true, align: "right" },
-      { id: "balance_hemb", label: "BAL H-EMB", defaultWidth: 10, currentWidth: 10, enabled: true, align: "right" },
+      { id: "balance_stock", label: "BAL STOCK", defaultWidth: 9, currentWidth: 9, enabled: true, align: "right" },
+      { id: "dispatch_hemb", label: "DISPATCH H-EMB", defaultWidth: 9, currentWidth: 9, enabled: true, align: "right" },
+      { id: "balance_hemb", label: "BAL H-EMB", defaultWidth: 9, currentWidth: 9, enabled: true, align: "right" },
       { id: "remarks", label: "REMARKS / STATUS", defaultWidth: 17, currentWidth: 17, enabled: true, align: "left" }
     ],
     presets: [
@@ -8658,8 +9337,9 @@ const PRINT_STUDIO_DEFAULTS = {
           { id: "contractor", enabled: true, width: 16 },
           { id: "cut_qty", enabled: true, width: 8 },
           { id: "received_qty", enabled: true, width: 8 },
-          { id: "balance_stock", enabled: true, width: 10 },
-          { id: "balance_hemb", enabled: true, width: 10 },
+          { id: "balance_stock", enabled: true, width: 9 },
+          { id: "dispatch_hemb", enabled: true, width: 9 },
+          { id: "balance_hemb", enabled: true, width: 9 },
           { id: "remarks", enabled: true, width: 17 }
         ]
       },
@@ -9497,6 +10177,7 @@ function renderLiveA4Preview() {
     let sumCut = 0;
     let sumRec = 0;
     let sumStock = 0;
+    let sumDisHemb = 0;
     let sumHemb = 0;
 
     rows = finalStyles.map((item, idx) => {
@@ -9507,11 +10188,13 @@ function renderLiveA4Preview() {
       const cut = sMatch ? (sMatch.cut_qty || 0) : 0;
       const rec = sMatch ? (sMatch.received_qty || 0) : 0;
       const stock = sMatch ? (sMatch.balance_from_stock || 0) : 0;
+      const disHemb = sMatch ? (sMatch.dispatch_from_hemb || 0) : (item.dispatch_from_hemb || 0);
       const hemb = sMatch ? (sMatch.balance_from_hemb || 0) : 0;
 
       sumCut += cut;
       sumRec += rec;
       sumStock += stock;
+      sumDisHemb += disHemb;
       sumHemb += hemb;
 
       return {
@@ -9522,6 +10205,7 @@ function renderLiveA4Preview() {
         cut_qty: cut,
         received_qty: rec,
         balance_stock: stock,
+        dispatch_hemb: disHemb,
         balance_hemb: hemb,
         remarks: item.remarks || (sMatch ? (sMatch.remarks || "") : "")
       };
@@ -9531,6 +10215,7 @@ function renderLiveA4Preview() {
       cut_qty: sumCut,
       received_qty: sumRec,
       balance_stock: sumStock,
+      dispatch_hemb: sumDisHemb,
       balance_hemb: sumHemb,
       count: rows.length
     };
@@ -9899,5 +10584,350 @@ function executeStudioPrint() {
     window.print();
     setTimeout(cleanUpAfterPrint, 3500);
   }, 100);
+}
+
+// =============================================================
+// TAB 9: TRASH & RECYCLE BIN CONTROLLER (Recovery & Purge)
+// =============================================================
+let currentTrashFilterType = "all";
+let currentTrashSearchTerm = "";
+
+function initTrashView() {
+  const searchInput = document.getElementById("trash-search-input");
+  const filterSelect = document.getElementById("filter-trash-type");
+  const btnRestoreAll = document.getElementById("btn-trash-restore-all");
+  const btnEmpty = document.getElementById("btn-trash-empty");
+
+  const debouncedRender = debounce(() => renderTrashView(), 120);
+
+  if (searchInput) {
+    searchInput.addEventListener("input", (e) => {
+      currentTrashSearchTerm = (e.target.value || "").trim().toLowerCase();
+      debouncedRender();
+    });
+  }
+
+  if (filterSelect) {
+    filterSelect.addEventListener("change", (e) => {
+      currentTrashFilterType = e.target.value;
+      renderTrashView();
+    });
+  }
+
+  if (btnRestoreAll) {
+    btnRestoreAll.addEventListener("click", () => restoreAllTrashAction());
+  }
+
+  if (btnEmpty) {
+    btnEmpty.addEventListener("click", () => emptyTrashAction());
+  }
+}
+
+function renderTrashView() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function")
+    ? window.db.getTrashItems()
+    : [];
+
+  // Update Mini KPI Banner
+  const countRec = allTrash.filter(t => t.entity_type === "receiving").length;
+  const countDis = allTrash.filter(t => t.entity_type === "dispatch").length;
+  const countMasterDaily = allTrash.filter(t => t.entity_type === "master" || t.entity_type === "final_style").length;
+  const countPayDist = allTrash.filter(t => t.entity_type === "payment" || t.entity_type === "distribution").length;
+
+  const setElText = (id, val) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = val;
+  };
+
+  setElText("trash-kpi-total", allTrash.length);
+  setElText("trash-kpi-receiving", countRec);
+  setElText("trash-kpi-dispatch", countDis);
+  setElText("trash-kpi-master-daily", countMasterDaily);
+  setElText("trash-kpi-payment-dist", countPayDist);
+  setElText("trash-kpi-count-badge", `${allTrash.length} Items`);
+
+  // Filtering
+  let filtered = allTrash;
+
+  if (currentTrashFilterType && currentTrashFilterType !== "all") {
+    filtered = filtered.filter(t => t.entity_type === currentTrashFilterType);
+  }
+
+  if (currentTrashSearchTerm) {
+    const s = currentTrashSearchTerm;
+    filtered = filtered.filter(t => {
+      const matchTitle = (t.title || "").toLowerCase().includes(s);
+      const matchSub = (t.subtitle || "").toLowerCase().includes(s);
+      const matchUser = (t.deleted_by || "").toLowerCase().includes(s);
+      const matchType = (t.entity_type || "").toLowerCase().includes(s);
+      const matchStyle = (t.data?.style_code || "").toLowerCase().includes(s);
+      const matchContractor = (t.data?.contractor_name || "").toLowerCase().includes(s);
+      const matchChallanRec = (t.data?.challan_rec || "").toLowerCase().includes(s);
+      const matchChallanDis = (t.data?.challan_dis || "").toLowerCase().includes(s);
+      return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis;
+    });
+  }
+
+  const tbody = document.getElementById("trash-table-body");
+  const emptyState = document.getElementById("trash-empty-state");
+  const tableEl = document.getElementById("table-trash-items");
+
+  if (!tbody) return;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyState) emptyState.style.display = "block";
+    if (tableEl) tableEl.style.display = (allTrash.length === 0) ? "none" : "";
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = "none";
+  if (tableEl) tableEl.style.display = "";
+
+  const canDestroy = window.db.canUserPerformAction("can_destroy_trash");
+
+  tbody.innerHTML = filtered.map(item => {
+    // Determine friendly badge
+    let badgeClass = "badge-trash-receiving";
+    let badgeLabel = "📥 Receiving";
+
+    if (item.entity_type === "dispatch") {
+      badgeClass = "badge-trash-dispatch";
+      badgeLabel = "📤 Dispatch";
+    } else if (item.entity_type === "master") {
+      badgeClass = "badge-trash-master";
+      badgeLabel = "📦 Master Style";
+    } else if (item.entity_type === "final_style") {
+      badgeClass = "badge-trash-final";
+      badgeLabel = "📋 Daily Sheet";
+    } else if (item.entity_type === "distribution") {
+      badgeClass = "badge-trash-distribution";
+      badgeLabel = "📑 Work Dist.";
+    } else if (item.entity_type === "payment") {
+      badgeClass = "badge-trash-payment";
+      badgeLabel = "💰 Payment";
+    } else if (item.entity_type === "period") {
+      badgeClass = "badge-trash-period";
+      badgeLabel = "🗓️ Sheet Period";
+    } else if (item.entity_type === "distribution_period") {
+      badgeClass = "badge-trash-period";
+      badgeLabel = "🗓️ Dist. Period";
+    } else if (item.entity_type === "user") {
+      badgeClass = "badge-trash-user";
+      badgeLabel = "👤 User";
+    }
+
+    // Format deletion date
+    let dateStr = "";
+    if (item.deleted_at) {
+      try {
+        const d = new Date(item.deleted_at);
+        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        dateStr = item.deleted_at;
+      }
+    }
+
+    const safeTitle = escapeHtml(item.title || "Deleted Record");
+    const safeSubtitle = escapeHtml(item.subtitle || "");
+    const safeUser = escapeHtml(item.deleted_by || "Admin");
+
+    return `
+      <tr class="trash-item-row" data-id="${item.id}">
+        <td>
+          <span class="badge-trash-type ${badgeClass}">${badgeLabel}</span>
+        </td>
+        <td>
+          <div style="font-weight: 700; color: var(--text-main); font-size: 0.86rem;">${safeTitle}</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-family: monospace;">ID: ${escapeHtml(String(item.original_id || item.id))}</div>
+        </td>
+        <td>
+          <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">${safeSubtitle}</div>
+        </td>
+        <td>
+          <div style="font-size: 0.78rem; font-weight: 600; color: var(--text-main);">${dateStr}</div>
+        </td>
+        <td>
+          <span style="display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.78rem; font-weight: 600; background: var(--bg-card); padding: 2px 7px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+            👤 ${safeUser}
+          </span>
+        </td>
+        <td style="text-align: center;">
+          <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn-trash-act btn-trash-restore" onclick="restoreTrashItem('${item.id}')" title="Restore this record back to active database">
+              ↩️ Restore
+            </button>
+            <button type="button" class="btn-trash-act btn-trash-view" onclick="openTrashItemDetails('${item.id}')" title="Inspect record details">
+              👁️ View
+            </button>
+            ${canDestroy ? `
+              <button type="button" class="btn-trash-act btn-trash-destroy" onclick="destroyTrashItem('${item.id}')" title="Permanently destroy this item forever">
+                🗑️ Destroy
+              </button>
+            ` : ''}
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function restoreTrashItem(trashId) {
+  try {
+    const res = await window.db.restoreFromTrash(trashId);
+    if (res && res.success) {
+      renderAll();
+      showToast(`✓ Restored "${res.item.title}" successfully!`, "success");
+    }
+  } catch (err) {
+    showToast(`Error restoring item: ${err.message}`, "error");
+  }
+}
+
+async function destroyTrashItem(trashId) {
+  if (!window.db.canUserPerformAction("can_destroy_trash")) {
+    showToast("Permission Denied: You do not have permission to permanently destroy records.", "error");
+    return;
+  }
+
+  const allTrash = window.db.getTrashItems();
+  const target = allTrash.find(t => t.id === trashId);
+  const label = target ? target.title : "this item";
+
+  if (confirm(`⚠️ PERMANENT DELETION WARNING:\n\nAre you sure you want to PERMANENTLY DESTROY:\n"${label}"?\n\nThis action CANNOT be undone!`)) {
+    try {
+      await window.db.destroyFromTrash(trashId);
+      renderAll();
+      showToast("Item permanently destroyed from Trash.", "info");
+      closeModal("modal-trash-details");
+    } catch (err) {
+      showToast(`Error destroying item: ${err.message}`, "error");
+    }
+  }
+}
+
+async function restoreAllTrashAction() {
+  const allTrash = window.db.getTrashItems();
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+
+  const count = (currentTrashFilterType && currentTrashFilterType !== "all")
+    ? allTrash.filter(t => t.entity_type === currentTrashFilterType).length
+    : allTrash.length;
+
+  const typeLabel = (currentTrashFilterType && currentTrashFilterType !== "all")
+    ? `all ${count} filtered ${currentTrashFilterType} items`
+    : `all ${count} items in Trash`;
+
+  if (confirm(`Are you sure you want to restore ${typeLabel} back to the software?`)) {
+    try {
+      const res = await window.db.restoreAllTrash(currentTrashFilterType);
+      renderAll();
+      showToast(`✓ Successfully restored ${res.restoredCount} items!`, "success");
+    } catch (err) {
+      showToast(`Error restoring items: ${err.message}`, "error");
+    }
+  }
+}
+
+async function emptyTrashAction() {
+  if (!window.db.canUserPerformAction("can_destroy_trash")) {
+    showToast("Permission Denied: You do not have permission to empty trash.", "error");
+    return;
+  }
+
+  const allTrash = window.db.getTrashItems();
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+
+  if (confirm(`⚠️ EMPTY TRASH WARNING:\n\nAre you sure you want to permanently erase ALL ${allTrash.length} items from Trash?\n\nAll selected records will be irreversibly destroyed and CANNOT be recovered!`)) {
+    try {
+      await window.db.emptyTrash();
+      renderAll();
+      showToast(`Trash emptied: All ${allTrash.length} items permanently deleted.`, "info");
+    } catch (err) {
+      showToast(`Error emptying trash: ${err.message}`, "error");
+    }
+  }
+}
+
+function openTrashItemDetails(trashId) {
+  const allTrash = window.db.getTrashItems();
+  const item = allTrash.find(t => t.id === trashId);
+  if (!item) {
+    showToast("Item not found.", "error");
+    return;
+  }
+
+  const metaBox = document.getElementById("trash-detail-meta-box");
+  const grid = document.getElementById("trash-detail-grid");
+  const btnRestore = document.getElementById("btn-trash-detail-restore");
+  const btnDestroy = document.getElementById("btn-trash-detail-destroy");
+
+  if (metaBox) {
+    let dateStr = "";
+    if (item.deleted_at) {
+      try {
+        const d = new Date(item.deleted_at);
+        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        dateStr = item.deleted_at;
+      }
+    }
+
+    metaBox.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+        <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">${escapeHtml(item.title)}</span>
+        <span class="badge-tag" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); font-weight: 700;">${item.entity_type.toUpperCase()}</span>
+      </div>
+      <div style="color: var(--text-muted); font-size: 0.78rem;">
+        📅 <strong>Deleted On:</strong> ${dateStr} &nbsp;|&nbsp; 👤 <strong>Deleted By:</strong> ${escapeHtml(item.deleted_by || "Admin")}
+      </div>
+    `;
+  }
+
+  if (grid) {
+    const data = item.data || {};
+    const entries = Object.entries(data);
+    if (entries.length === 0) {
+      grid.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No additional data fields recorded.</div>`;
+    } else {
+      grid.innerHTML = entries.map(([k, v]) => {
+        let valStr = "";
+        if (typeof v === "object" && v !== null) {
+          valStr = JSON.stringify(v);
+        } else {
+          valStr = String(v !== undefined && v !== null ? v : "—");
+        }
+        return `
+          <div class="trash-detail-card">
+            <span class="trash-detail-label">${escapeHtml(k.replace(/_/g, " "))}</span>
+            <span class="trash-detail-val">${escapeHtml(valStr)}</span>
+          </div>
+        `;
+      }).join("");
+    }
+  }
+
+  if (btnRestore) {
+    btnRestore.onclick = () => {
+      restoreTrashItem(item.id);
+      closeModal("modal-trash-details");
+    };
+  }
+
+  if (btnDestroy) {
+    btnDestroy.onclick = () => {
+      destroyTrashItem(item.id);
+    };
+  }
+
+  openModal("modal-trash-details");
 }
 

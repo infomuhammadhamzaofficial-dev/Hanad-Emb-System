@@ -16,7 +16,8 @@ const DB_KEYS = {
   PAYMENT_SHEET: "hand_emb_payment_sheet_v2",
   RATE_APPROVAL_PERIODS: "hand_emb_rate_approval_periods_v1",
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
-  DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1"
+  DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1",
+  TRASH: "hand_emb_trash_v1"
 };
 
 // ====================================================================
@@ -141,6 +142,14 @@ class DatabaseService {
         }
       }, 800);
     }
+
+    // Automatically guarantee Neon trash_items table is ready and synced
+    setTimeout(() => {
+      const cfg = this.getConfig();
+      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+        this.ensureNeonTrashTableReady().catch(e => console.warn("Neon trash auto-init notice:", e));
+      }
+    }, 1200);
 
     // Seed & upgrade Neon Contractors (Imtiaz, Asif, Shoaib, Touseef, Asim, Naveed)
     const isNeonContSeeded = localStorage.getItem("hand_emb_contractors_neon_v2") === "true";
@@ -469,11 +478,537 @@ class DatabaseService {
     });
   }
 
+  // -------------------------------------------------------------
+  // TRASH & RECYCLE BIN MANAGEMENT (Soft-Delete, Recovery & Permanent Purge)
+  // -------------------------------------------------------------
+  getTrashItems() {
+    return this._getCached(DB_KEYS.TRASH, () => {
+      try {
+        return JSON.parse(localStorage.getItem(DB_KEYS.TRASH) || "[]");
+      } catch (e) {
+        return [];
+      }
+    });
+  }
+
+  saveTrashItems(list) {
+    this._setCached(DB_KEYS.TRASH, list || []);
+    try {
+      localStorage.setItem("craftflow_last_mutation", Date.now().toString());
+      window.dispatchEvent(new CustomEvent("craftflow-local-change"));
+    } catch (e) {}
+  }
+
+  moveToTrash(entityType, item, meta = {}) {
+    if (!item) return null;
+    const list = this.getTrashItems();
+    const currentUser = (typeof this.getCurrentUser === "function") ? this.getCurrentUser() : null;
+    const userLabel = currentUser ? (currentUser.full_name || currentUser.username) : "Admin";
+
+    const trashId = "trash_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7);
+
+    // Generate clear, readable titles & subtitles
+    let title = "";
+    let subtitle = "";
+
+    if (entityType === "receiving") {
+      title = `Challan #${item.challan_rec || item.id || 'N/A'} — Style: ${item.style_code} [${item.category || 'N/A'}]`;
+      subtitle = `Contractor: ${item.contractor_name || 'N/A'} | Received: ${item.received_qty || 0} pcs | Cut: ${item.cut_qty || 0} pcs | Date: ${item.date_receive || 'N/A'}`;
+    } else if (entityType === "dispatch") {
+      title = `Challan #${item.challan_dis || item.id || 'N/A'} — Style: ${item.style_code} [${item.category || 'N/A'}]`;
+      subtitle = `Contractor: ${item.contractor_name || 'N/A'} | Dispatched: ${item.dispatch_qty || 0} pcs | Date: ${item.date_dispatch || 'N/A'}`;
+    } else if (entityType === "master") {
+      title = `Master Style: ${item.style_code} [${item.category || 'N/A'}]`;
+      subtitle = `Ship: ${item.ship || 'N/A'} | Cut: ${item.cut_qty || 0} | Rec: ${item.received_qty || 0} | Dis: ${item.dispatch_from_hemb || 0} | Bal: ${item.total_balance || 0}`;
+    } else if (entityType === "final_style") {
+      title = `Daily Sheet — Row #${item.s_no || 'N/A'}: ${item.style_code} [${item.category || 'N/A'}]`;
+      subtitle = `Contractor: ${item.contractor_name || 'N/A'} | Cut: ${item.cut_qty || 0} | Rec: ${item.received_qty || 0} | Floor Bal: ${item.balance_from_hemb || 0} | Remarks: ${item.remarks || 'None'}`;
+    } else if (entityType === "distribution") {
+      title = `Work Distribution — Style: ${item.style_code} [${item.item || item.category || 'SHIRT'}]`;
+      subtitle = `Contractor: ${item.contractor_name || 'N/A'} | Period: ${item.period || 'N/A'} | Allocated: ${item.pcs_qty || item.allocated_qty || 0} pcs | Rate: Rs. ${item.rate || 0}`;
+    } else if (entityType === "payment") {
+      title = `Rate Approval — Style: ${item.style_code} [${item.category || item.working || 'N/A'}]`;
+      subtitle = `Contractor: ${item.contractor_name || 'N/A'} | Period: ${item.period || 'N/A'} | Cut: ${item.cut_qty || 0} | Prod: ${item.prod_pcs_qty || 0} | Rate: Rs. ${item.rate_total || item.rate_per_pc || 0}`;
+    } else if (entityType === "period") {
+      title = `Rate Approval Period: ${item.period_name || item.name || 'Period'}`;
+      subtitle = `Dates: ${item.start_date || ''} to ${item.end_date || ''} | Dept: ${item.department || ''}`;
+    } else if (entityType === "distribution_period") {
+      title = `Distribution Period: ${item.period_name || item.name || 'Period'}`;
+      subtitle = `Dates: ${item.start_date || ''} to ${item.end_date || ''} | Dept: ${item.department || ''}`;
+    } else if (entityType === "user") {
+      title = `User Account: ${item.full_name || item.username} (@${item.username})`;
+      subtitle = `Role: ${item.role} | Status: ${item.status}`;
+    } else {
+      title = `${entityType} Item #${item.id || item.s_no || ''}`;
+      subtitle = JSON.stringify(item).substring(0, 80);
+    }
+
+    const trashRecord = {
+      id: trashId,
+      original_id: item.id || item.s_no,
+      entity_type: entityType,
+      title: title,
+      subtitle: subtitle,
+      data: JSON.parse(JSON.stringify(item)),
+      meta: meta,
+      deleted_at: new Date().toISOString(),
+      deleted_by: userLabel
+    };
+
+    list.unshift(trashRecord);
+    this.saveTrashItems(list);
+    // Asynchronously push to Neon cloud trash_items table so deleted data is safely stored in Neon
+    this.pushTrashItemToNeonAsync(trashRecord);
+    return trashRecord;
+  }
+
+  async restoreFromTrash(trashId) {
+    let list = this.getTrashItems();
+    const trashItem = list.find(t => t.id === trashId);
+    if (!trashItem) throw new Error("Trash item not found.");
+
+    const entityType = trashItem.entity_type;
+    const data = trashItem.data;
+    const meta = trashItem.meta || {};
+
+    if (entityType === "receiving") {
+      const recList = this.getReceivingLogs();
+      const existingId = recList.some(r => Number(r.id) === Number(data.id));
+      if (existingId) {
+        data.id = recList.length > 0 ? Math.max(...recList.map(r => Number(r.id) || 0)) + 1 : 1;
+      }
+      this.untrackDeletedRecord("receiving", data.id);
+      if (data.challan_rec) {
+        this.untrackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
+      }
+      this.untrackDeletedRecord("master", `${data.style_code}|${data.category}`);
+
+      recList.unshift(data);
+      this.saveReceivingLogs(recList);
+      if (data.contractor_name) {
+        this.ensureContractorExists(data.contractor_name);
+      }
+      const masterRecord = this.recalculateMasterForStyleAndCategory(data.style_code, data.category, {
+        cut_qty: data.cut_qty,
+        contractor_name: data.contractor_name,
+        date_receive: data.date_receive,
+        challan_rec: data.challan_rec,
+        remarks: data.remarks
+      });
+      this.pushReceivingLogToNeonAsync(data, masterRecord);
+
+    } else if (entityType === "dispatch") {
+      const disList = this.getDispatchLogs();
+      const existingId = disList.some(d => Number(d.id) === Number(data.id));
+      if (existingId) {
+        data.id = disList.length > 0 ? Math.max(...disList.map(d => Number(d.id) || 0)) + 1 : 1;
+      }
+      this.untrackDeletedRecord("dispatch", data.id);
+      if (data.challan_dis) {
+        this.untrackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
+      }
+      this.untrackDeletedRecord("master", `${data.style_code}|${data.category}`);
+
+      disList.unshift(data);
+      this.saveDispatchLogs(disList);
+      if (data.contractor_name) {
+        this.ensureContractorExists(data.contractor_name);
+      }
+      const masterRecord = this.recalculateMasterForStyleAndCategory(data.style_code, data.category, {
+        contractor_name: data.contractor_name,
+        date_dispatch: data.date_dispatch,
+        challan_dis: data.challan_dis,
+        remarks: data.remarks
+      });
+      this.pushDispatchLogToNeonAsync(data, masterRecord);
+
+    } else if (entityType === "master") {
+      const masterList = this.getMasterInventory();
+      this.untrackDeletedRecord("master", data.id);
+      this.untrackDeletedRecord("master", `${data.style_code}|${data.category}`);
+
+      const existingIndex = masterList.findIndex(m => 
+        (m.style_code || '').trim().toLowerCase() === (data.style_code || '').trim().toLowerCase() &&
+        (m.category || '').trim().toLowerCase() === (data.category || '').trim().toLowerCase()
+      );
+      if (existingIndex !== -1) {
+        masterList[existingIndex] = { ...masterList[existingIndex], ...data };
+      } else {
+        masterList.unshift(data);
+      }
+      this.saveMasterInventory(masterList);
+      this.pushMasterRecordToNeonAsync(data);
+
+      if (Array.isArray(meta.linkedReceiving) && meta.linkedReceiving.length > 0) {
+        const recList = this.getReceivingLogs();
+        meta.linkedReceiving.forEach(r => {
+          this.untrackDeletedRecord("receiving", r.id);
+          if (r.challan_rec) this.untrackDeletedRecord("receiving", `${r.style_code}|${r.category}|${r.challan_rec}`);
+          if (!recList.some(item => Number(item.id) === Number(r.id))) {
+            recList.push(r);
+          }
+          this.pushReceivingLogToNeonAsync(r, data);
+        });
+        this.saveReceivingLogs(recList);
+      }
+
+      if (Array.isArray(meta.linkedDispatch) && meta.linkedDispatch.length > 0) {
+        const disList = this.getDispatchLogs();
+        meta.linkedDispatch.forEach(d => {
+          this.untrackDeletedRecord("dispatch", d.id);
+          if (d.challan_dis) this.untrackDeletedRecord("dispatch", `${d.style_code}|${d.category}|${d.challan_dis}`);
+          if (!disList.some(item => Number(item.id) === Number(d.id))) {
+            disList.push(d);
+          }
+          this.pushDispatchLogToNeonAsync(d, data);
+        });
+        this.saveDispatchLogs(disList);
+      }
+
+      this.recalculateMasterForStyleAndCategory(data.style_code, data.category);
+
+    } else if (entityType === "final_style") {
+      const finalStyles = this.getFinalStyles();
+      const existing = finalStyles.findIndex(f => f.s_no === data.s_no);
+      if (existing !== -1) {
+        finalStyles[existing] = data;
+      } else {
+        finalStyles.push(data);
+        finalStyles.sort((a, b) => (Number(a.s_no) || 0) - (Number(b.s_no) || 0));
+      }
+      this.saveFinalStyles(finalStyles);
+
+    } else if (entityType === "distribution") {
+      const distList = this.getWorkDistribution();
+      this.untrackDeletedRecord("distribution", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.untrackDeletedRecord("distribution", `${data.period}|${data.contractor_name}|${data.style_code}`);
+      }
+      const existingId = distList.some(w => Number(w.id) === Number(data.id));
+      if (existingId) {
+        data.id = distList.length > 0 ? Math.max(...distList.map(w => Number(w.id) || 0)) + 1 : 1;
+      }
+      distList.push(data);
+      this.saveWorkDistribution(distList);
+      const cfg = this.getConfig();
+      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+        this.executeNeonQuery(
+          `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+           ON CONFLICT (id) DO UPDATE SET
+             sr_no = EXCLUDED.sr_no,
+             period = EXCLUDED.period,
+             style_code = EXCLUDED.style_code,
+             contractor_name = EXCLUDED.contractor_name,
+             pcs_qty = EXCLUDED.pcs_qty,
+             rate = EXCLUDED.rate,
+             item = EXCLUDED.item,
+             floor = EXCLUDED.floor,
+             total_amount = EXCLUDED.total_amount,
+             remarks = EXCLUDED.remarks;`,
+          [data.id, data.sr_no, data.period, data.style_code, data.contractor_name, data.pcs_qty, data.rate, data.item, data.floor, data.total_amount, data.remarks]
+        ).catch(() => null);
+      }
+
+    } else if (entityType === "payment") {
+      const payList = this.getPaymentSheets();
+      this.untrackDeletedRecord("payment", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.untrackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
+      }
+      const existingId = payList.some(p => Number(p.id) === Number(data.id));
+      if (existingId) {
+        data.id = payList.length > 0 ? Math.max(...payList.map(p => Number(p.id) || 0)) + 1 : 1;
+      }
+      payList.push(data);
+      this.savePaymentSheets(payList);
+
+    } else if (entityType === "period") {
+      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
+      const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
+      localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(filteredPeriods));
+
+      const periods = this.getRateApprovalPeriods();
+      if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
+        periods.unshift(data);
+        this.saveRateApprovalPeriods(periods);
+      }
+
+      if (Array.isArray(meta.linkedEntries) && meta.linkedEntries.length > 0) {
+        const payList = this.getPaymentSheets();
+        meta.linkedEntries.forEach(p => {
+          this.untrackDeletedRecord("payment", p.id);
+          if (p.period && p.contractor_name && p.style_code) {
+            this.untrackDeletedRecord("payment", `${p.period}|${p.contractor_name}|${p.style_code}`);
+          }
+          if (!payList.some(item => Number(item.id) === Number(p.id))) {
+            payList.push(p);
+          }
+        });
+        this.savePaymentSheets(payList);
+      }
+
+    } else if (entityType === "distribution_period") {
+      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+      const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
+      localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(filteredPeriods));
+
+      const periods = this.getDistributionPeriods();
+      if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
+        periods.unshift(data);
+        this.saveDistributionPeriods(periods);
+      }
+
+      if (Array.isArray(meta.linkedEntries) && meta.linkedEntries.length > 0) {
+        const distList = this.getWorkDistribution();
+        meta.linkedEntries.forEach(w => {
+          this.untrackDeletedRecord("distribution", w.id);
+          if (w.period && w.contractor_name && w.style_code) {
+            this.untrackDeletedRecord("distribution", `${w.period}|${w.contractor_name}|${w.style_code}`);
+          }
+          if (!distList.some(item => Number(item.id) === Number(w.id))) {
+            distList.push(w);
+          }
+        });
+        this.saveWorkDistribution(distList);
+      }
+
+    } else if (entityType === "user") {
+      const users = this.getUsers();
+      if (!users.some(u => u.id === data.id)) {
+        users.push(data);
+        this.saveUsers(users);
+      }
+    }
+
+    // Remove from Trash
+    list = list.filter(t => t.id !== trashId);
+    this.saveTrashItems(list);
+    this.clearCache();
+    // Remove from Neon cloud trash_items table asynchronously
+    this.deleteTrashItemFromNeonAsync(trashId);
+    return { success: true, item: trashItem };
+  }
+
+  async destroyFromTrash(trashId) {
+    let list = this.getTrashItems();
+    const trashItem = list.find(t => t.id === trashId);
+    if (!trashItem) return false;
+
+    const entityType = trashItem.entity_type;
+    const data = trashItem.data;
+
+    // Permanent tombstone confirmation
+    if (entityType === "receiving") {
+      this.trackDeletedRecord("receiving", data.id);
+      if (data.challan_rec) this.trackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
+    } else if (entityType === "dispatch") {
+      this.trackDeletedRecord("dispatch", data.id);
+      if (data.challan_dis) this.trackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
+    } else if (entityType === "master") {
+      this.trackDeletedRecord("master", data.id);
+      this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
+    } else if (entityType === "distribution") {
+      this.trackDeletedRecord("distribution", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.trackDeletedRecord("distribution", `${data.period}|${data.contractor_name}|${data.style_code}`);
+      }
+    } else if (entityType === "payment") {
+      this.trackDeletedRecord("payment", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.trackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
+      }
+    }
+
+    list = list.filter(t => t.id !== trashId);
+    this.saveTrashItems(list);
+    // Remove from Neon cloud trash_items table asynchronously
+    this.deleteTrashItemFromNeonAsync(trashId);
+    return true;
+  }
+
+  async emptyTrash() {
+    const list = this.getTrashItems();
+    list.forEach(trashItem => {
+      const entityType = trashItem.entity_type;
+      const data = trashItem.data;
+      if (entityType === "receiving") {
+        this.trackDeletedRecord("receiving", data.id);
+        if (data.challan_rec) this.trackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
+      } else if (entityType === "dispatch") {
+        this.trackDeletedRecord("dispatch", data.id);
+        if (data.challan_dis) this.trackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
+      } else if (entityType === "master") {
+        this.trackDeletedRecord("master", data.id);
+        this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
+      } else if (entityType === "distribution") {
+        this.trackDeletedRecord("distribution", data.id);
+      } else if (entityType === "payment") {
+        this.trackDeletedRecord("payment", data.id);
+      }
+    });
+
+    this.saveTrashItems([]);
+    // Truncate Neon trash_items table asynchronously
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery("TRUNCATE TABLE trash_items;").catch(e => console.warn("Neon truncate trash error:", e));
+    }
+    return true;
+  }
+
+  async restoreAllTrash(filterType = "all") {
+    const list = this.getTrashItems();
+    const targetItems = (filterType && filterType !== "all")
+      ? list.filter(t => t.entity_type === filterType)
+      : [...list];
+
+    let restoredCount = 0;
+    for (const item of targetItems) {
+      try {
+        await this.restoreFromTrash(item.id);
+        restoredCount++;
+      } catch (err) {
+        console.warn("Error restoring item:", item.id, err);
+      }
+    }
+    return { restoredCount };
+  }
+
+  // -------------------------------------------------------------
+  // NEON CLOUD TRASH INTEGRATION
+  // Guarantees all deleted records remain safely preserved in Neon
+  // -------------------------------------------------------------
+  async pushTrashItemToNeonAsync(trashRecord) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    try {
+      await this.executeNeonQuery(
+        `INSERT INTO trash_items (id, original_id, entity_type, title, subtitle, item_data, meta, deleted_by, deleted_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+         ON CONFLICT (id) DO UPDATE SET
+           original_id = EXCLUDED.original_id,
+           entity_type = EXCLUDED.entity_type,
+           title = EXCLUDED.title,
+           subtitle = EXCLUDED.subtitle,
+           item_data = EXCLUDED.item_data,
+           meta = EXCLUDED.meta,
+           deleted_by = EXCLUDED.deleted_by,
+           deleted_at = EXCLUDED.deleted_at;`,
+        [
+          trashRecord.id,
+          String(trashRecord.original_id || ''),
+          trashRecord.entity_type,
+          trashRecord.title,
+          trashRecord.subtitle || '',
+          JSON.stringify(trashRecord.data || {}),
+          JSON.stringify(trashRecord.meta || {}),
+          trashRecord.deleted_by || 'Admin',
+          trashRecord.deleted_at || new Date().toISOString()
+        ]
+      );
+    } catch (err) {
+      console.warn("pushTrashItemToNeonAsync error:", err);
+      if (err.message && err.message.toLowerCase().includes("trash_items")) {
+        try {
+          await this.ensureNeonTrashTableReady();
+          await this.executeNeonQuery(
+            `INSERT INTO trash_items (id, original_id, entity_type, title, subtitle, item_data, meta, deleted_by, deleted_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO UPDATE SET
+               original_id = EXCLUDED.original_id,
+               entity_type = EXCLUDED.entity_type,
+               title = EXCLUDED.title,
+               subtitle = EXCLUDED.subtitle,
+               item_data = EXCLUDED.item_data,
+               meta = EXCLUDED.meta,
+               deleted_by = EXCLUDED.deleted_by,
+               deleted_at = EXCLUDED.deleted_at;`,
+            [
+              trashRecord.id,
+              String(trashRecord.original_id || ''),
+              trashRecord.entity_type,
+              trashRecord.title,
+              trashRecord.subtitle || '',
+              JSON.stringify(trashRecord.data || {}),
+              JSON.stringify(trashRecord.meta || {}),
+              trashRecord.deleted_by || 'Admin',
+              trashRecord.deleted_at || new Date().toISOString()
+            ]
+          );
+        } catch (retryErr) {
+          console.error("Failed retry pushTrashItemToNeonAsync:", retryErr);
+        }
+      }
+    }
+  }
+
+  async deleteTrashItemFromNeonAsync(trashId) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    try {
+      await this.executeNeonQuery("DELETE FROM trash_items WHERE id = $1;", [trashId]);
+    } catch (err) {
+      console.warn("deleteTrashItemFromNeonAsync notice:", err.message);
+    }
+  }
+
+  async ensureNeonTrashTableReady() {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return false;
+    try {
+      await this.executeNeonQuery(`
+        CREATE TABLE IF NOT EXISTS trash_items (
+          id VARCHAR(100) PRIMARY KEY,
+          original_id VARCHAR(100),
+          entity_type VARCHAR(50) NOT NULL,
+          title VARCHAR(255) NOT NULL,
+          subtitle TEXT,
+          item_data JSONB NOT NULL,
+          meta JSONB,
+          deleted_by VARCHAR(100),
+          deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+      await this.executeNeonQuery(`
+        CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
+      `).catch(() => null);
+
+      // Auto-sync any existing local trash items to Neon
+      const localTrash = this.getTrashItems();
+      if (Array.isArray(localTrash) && localTrash.length > 0) {
+        for (const item of localTrash) {
+          await this.pushTrashItemToNeonAsync(item);
+        }
+      }
+      return true;
+    } catch (err) {
+      console.warn("ensureNeonTrashTableReady error:", err);
+      return false;
+    }
+  }
+
   async deleteMasterInventory(id) {
     let list = this.getMasterInventory();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId);
     if (!item) return false;
+
+    // Track linked receiving and dispatch logs for complete restoration capability
+    const recMatching = this.getReceivingLogs().filter(r => 
+      (r.style_code.toLowerCase() === item.style_code.toLowerCase() && r.category.toLowerCase() === item.category.toLowerCase())
+    );
+    const disMatching = this.getDispatchLogs().filter(d => 
+      (d.style_code.toLowerCase() === item.style_code.toLowerCase() && d.category.toLowerCase() === item.category.toLowerCase())
+    );
+
+    // Safely move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("master", item, {
+      linkedReceiving: recMatching,
+      linkedDispatch: disMatching
+    });
 
     this.trackDeletedRecord("master", item.id);
     this.trackDeletedRecord("master", `${item.style_code}|${item.category}`);
@@ -511,7 +1046,7 @@ class DatabaseService {
         console.warn("Neon delete error:", err);
       }
     }
-    return true;
+    return trashItem;
   }
 
   // STRICT LOOKUP: Both style code AND category MUST match!
@@ -690,7 +1225,10 @@ class DatabaseService {
     const item = list.find(i => Number(i.id) === numId || (i.challan_rec && String(i.challan_rec).trim() === String(id).trim()));
     if (!item) return false;
 
-    // Track deletion so cloud polling NEVER brings it back
+    // Safely move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("receiving", item);
+
+    // Track deletion so cloud polling NEVER brings it back while in trash
     this.trackDeletedRecord("receiving", item.id);
     if (item.challan_rec) this.trackDeletedRecord("receiving", `${item.style_code}|${item.category}|${item.challan_rec}`);
 
@@ -715,7 +1253,7 @@ class DatabaseService {
       ).catch(err => console.warn("Neon delete receiving_log error:", err));
     }
 
-    return true;
+    return trashItem;
   }
 
   async updateReceivingLog(id, updatedData) {
@@ -940,7 +1478,10 @@ class DatabaseService {
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
     if (!item) return false;
 
-    // Track tombstone so polling NEVER resurrects it
+    // Safely move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("dispatch", item);
+
+    // Track tombstone so polling NEVER resurrects it while in trash
     this.trackDeletedRecord("dispatch", item.id);
     if (item.challan_dis) this.trackDeletedRecord("dispatch", `${item.style_code}|${item.category}|${item.challan_dis}`);
 
@@ -965,7 +1506,7 @@ class DatabaseService {
       ).catch(err => console.warn("Neon delete dispatch_log error:", err));
     }
 
-    return true;
+    return trashItem;
   }
 
   async updateDispatchLog(id, updatedData) {
@@ -1460,6 +2001,7 @@ class DatabaseService {
             cut_qty: master.cut_qty || 0,
             received_qty: master.received_qty || 0,
             balance_from_stock: master.balance_from_stock || 0,
+            dispatch_from_hemb: master.dispatch_from_hemb || 0,
             balance_from_hemb: master.balance_from_hemb || 0,
             time_remarks: entry.time_remarks || "",
             master_found: true
@@ -1473,6 +2015,7 @@ class DatabaseService {
             cut_qty: entry.cut_qty || 0,
             received_qty: entry.received_qty || 0,
             balance_from_stock: entry.balance_from_stock || 0,
+            dispatch_from_hemb: entry.dispatch_from_hemb || 0,
             balance_from_hemb: entry.balance_from_hemb || 0,
             time_remarks: entry.time_remarks || "",
             master_found: false
@@ -1487,6 +2030,7 @@ class DatabaseService {
       s_no: idx + 1,
       style_code: item.style_code,
       category: item.category,
+      dispatch_from_hemb: item.dispatch_from_hemb || 0,
       time_remarks: item.time_remarks || ""
     }));
     this._setCached(DB_KEYS.FINAL_STYLES, list, minimal);
@@ -1496,10 +2040,12 @@ class DatabaseService {
   addFinalStyle(styleCode, category, timeRemarks = "") {
     const list = this.getFinalStyles();
     const nextSNo = list.length + 1;
+    const master = this.findMasterByStyleAndCategory(styleCode, category);
     list.push({
       s_no: nextSNo,
       style_code: styleCode.trim(),
       category: (category || "Shirt").trim(),
+      dispatch_from_hemb: master ? (master.dispatch_from_hemb || 0) : 0,
       time_remarks: timeRemarks.trim()
     });
     this.saveFinalStyles(list);
@@ -1518,6 +2064,10 @@ class DatabaseService {
 
   removeFinalStyle(sNo) {
     let list = this.getFinalStyles();
+    const item = list.find(i => i.s_no === sNo);
+    if (item) {
+      this.moveToTrash("final_style", item);
+    }
     list = list.filter(i => i.s_no !== sNo);
     this.saveFinalStyles(list);
     return this.getFinalStyles();
@@ -2235,9 +2785,13 @@ class DatabaseService {
       localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(deletedPeriods));
     }
 
-    // 2. Remove any entries belonging to this deleted sheet locally
+    // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
     const sheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
+    const linkedSheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
     localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify(sheets));
+
+    // Move to Trash (Soft Delete) with attached payment entries
+    const trashItem = this.moveToTrash("period", toDelete, { linkedEntries: linkedSheets });
 
     // 3. Filter rate approval periods locally
     list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
@@ -2254,7 +2808,7 @@ class DatabaseService {
       }
     }
 
-    return true;
+    return trashItem;
   }
 
   // -------------------------------------------------------------
@@ -2402,6 +2956,10 @@ class DatabaseService {
     let list = this.getWorkDistribution();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
+    if (!item) return false;
+
+    // Safely move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("distribution", item);
     
     this.trackDeletedRecord("distribution", id);
     if (item && item.period && item.contractor_name && item.style_code) {
@@ -2419,7 +2977,7 @@ class DatabaseService {
         console.warn("Neon distribution delete notice:", err);
       }
     }
-    return true;
+    return trashItem;
   }
 
   // -------------------------------------------------------------
@@ -2520,6 +3078,10 @@ class DatabaseService {
       localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedPeriods));
     }
 
+    // Move to Trash (Soft Delete) with attached work distribution entries
+    const linkedDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() === pNameLower);
+    const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
+
     list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
     localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(list));
 
@@ -2531,7 +3093,7 @@ class DatabaseService {
         console.warn("Neon dist period delete notice:", err);
       }
     }
-    return true;
+    return trashItem;
   }
 
   // -------------------------------------------------------------
@@ -2866,6 +3428,10 @@ class DatabaseService {
     let list = this.getPaymentSheets();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
+    if (!item) return false;
+
+    // Safely move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("payment", item);
 
     this.trackDeletedRecord("payment", id);
     if (item && item.period && item.contractor_name && item.style_code) {
@@ -2883,7 +3449,7 @@ class DatabaseService {
         console.warn("Neon delete payment_sheet error:", err);
       }
     }
-    return true;
+    return trashItem;
   }
 
   async recordPaymentReceipt(paymentId, receipt) {
@@ -3119,6 +3685,9 @@ class DatabaseService {
       }
     }
 
+    // Move to Trash (Soft Delete)
+    const trashItem = this.moveToTrash("user", user);
+
     list = list.filter(u => u.id !== id);
     this.saveUsers(list);
 
@@ -3130,7 +3699,7 @@ class DatabaseService {
       });
     }
 
-    return true;
+    return trashItem;
   }
 
   async authenticateUser(username, password) {
@@ -3273,6 +3842,13 @@ class DatabaseService {
     if (!cur) return false;
     if (cur.role === "admin") return true;
     if (tabKey === "dashboard") return true;
+    if (tabKey === "trash") {
+      if (cur.role === "admin" || cur.role === "manager") return true;
+      if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs.trash !== undefined) {
+        return !!cur.permissions.tabs.trash;
+      }
+      return true; // Default accessible so staff can see and undo accidental deletions
+    }
     if (!cur.permissions || !cur.permissions.tabs) return false;
     if (tabKey === "payment_sheet" && cur.permissions.tabs.payment_sheet === undefined) {
       return cur.role === "manager" || cur.role === "operator" || cur.role === "admin";
@@ -3284,6 +3860,9 @@ class DatabaseService {
     const cur = user || this.getCurrentUser();
     if (!cur) return false;
     if (cur.role === "admin") return true;
+    if (actionKey === "can_destroy_trash") {
+      return cur.role === "admin" || (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_delete);
+    }
     if (!cur.permissions || !cur.permissions.actions) return false;
     return !!cur.permissions.actions[actionKey];
   }
@@ -3379,13 +3958,8 @@ class DatabaseService {
     }
 
     const payload = {
-      queries: [
-        {
-          sql: sqlQuery,
-          params: params || [],
-          args: params || []
-        }
-      ]
+      query: sqlQuery,
+      params: params || []
     };
 
     const response = await fetch(targetUrl, {
@@ -3670,7 +4244,21 @@ class DatabaseService {
         status VARCHAR(50) DEFAULT 'Active',
         notes TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-      );`
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS trash_items (
+        id VARCHAR(100) PRIMARY KEY,
+        original_id VARCHAR(100),
+        entity_type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        subtitle TEXT,
+        item_data JSONB NOT NULL,
+        meta JSONB,
+        deleted_by VARCHAR(100),
+        deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`
     ];
 
     for (const q of tableQueries) {
@@ -3940,13 +4528,42 @@ class DatabaseService {
         ).catch(() => null);
       }
 
+      // 9. Sync Trash Items to Neon
+      const trashItems = this.getTrashItems();
+      for (const t of trashItems) {
+        await this.executeNeonQuery(
+          `INSERT INTO trash_items (id, original_id, entity_type, title, subtitle, item_data, meta, deleted_by, deleted_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (id) DO UPDATE SET
+             original_id = EXCLUDED.original_id,
+             entity_type = EXCLUDED.entity_type,
+             title = EXCLUDED.title,
+             subtitle = EXCLUDED.subtitle,
+             item_data = EXCLUDED.item_data,
+             meta = EXCLUDED.meta,
+             deleted_by = EXCLUDED.deleted_by,
+             deleted_at = EXCLUDED.deleted_at;`,
+          [
+            t.id,
+            String(t.original_id || ''),
+            t.entity_type,
+            t.title,
+            t.subtitle || '',
+            JSON.stringify(t.data || {}),
+            JSON.stringify(t.meta || {}),
+            t.deleted_by || 'Admin',
+            t.deleted_at || new Date().toISOString()
+          ]
+        ).catch(() => null);
+      }
+
       const cfg = this.getConfig();
       cfg.lastSyncTime = new Date().toISOString();
       this.saveConfig(cfg);
 
       return {
         success: true,
-        message: `Successfully synchronized ${master.length} styles, ${receivingLogs.length} receiving challans, ${dispatchLogs.length} dispatch challans, ${paymentSheets.length} payment records, and ${users.length} users to Neon PostgreSQL!`
+        message: `Successfully synchronized ${master.length} styles, ${receivingLogs.length} receiving challans, ${dispatchLogs.length} dispatch challans, ${trashItems.length} trash records, and users to Neon PostgreSQL!`
       };
     } catch (err) {
       return { success: false, error: err.message };
@@ -3965,7 +4582,8 @@ class DatabaseService {
         payRes,
         periodRes,
         distRes,
-        distPeriodRes
+        distPeriodRes,
+        trashRes
       ] = await Promise.all([
         this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
         this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
@@ -3975,7 +4593,8 @@ class DatabaseService {
         this.executeNeonQuery("SELECT * FROM payment_sheet ORDER BY id DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM rate_approval_periods ORDER BY created_at DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null)
+        this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
+        this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null)
       ]);
 
       const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
@@ -3987,6 +4606,7 @@ class DatabaseService {
       const rawPeriodRows = periodRes?.rows || (Array.isArray(periodRes) ? periodRes : []);
       const rawDistRows = distRes?.rows || (Array.isArray(distRes) ? distRes : []);
       const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
+      const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
 
       const deletedPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
       const deletedDistPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
@@ -4110,6 +4730,30 @@ class DatabaseService {
           permissions: typeof u.permissions === "string" ? JSON.parse(u.permissions) : u.permissions
         }));
         localStorage.setItem(DB_KEYS.USERS, JSON.stringify(parsedUsers));
+      }
+
+      // Merge Cloud Trash Items with local Trash
+      if (Array.isArray(rawTrashRows) && rawTrashRows.length > 0) {
+        const parsedTrash = rawTrashRows.map(t => ({
+          id: t.id,
+          original_id: t.original_id,
+          entity_type: t.entity_type,
+          title: t.title,
+          subtitle: t.subtitle || '',
+          data: typeof t.item_data === "string" ? JSON.parse(t.item_data) : (t.item_data || {}),
+          meta: typeof t.meta === "string" ? JSON.parse(t.meta) : (t.meta || {}),
+          deleted_by: t.deleted_by || 'Admin',
+          deleted_at: t.deleted_at
+        }));
+        const localTrash = this.getTrashItems() || [];
+        const mergedTrash = [...parsedTrash];
+        for (const localItem of localTrash) {
+          if (!mergedTrash.some(mt => mt.id === localItem.id)) {
+            mergedTrash.push(localItem);
+            this.pushTrashItemToNeonAsync(localItem).catch(() => null);
+          }
+        }
+        localStorage.setItem(DB_KEYS.TRASH, JSON.stringify(mergedTrash));
       }
 
       // Rebuild master aggregations and clean any orphan styles that have 0 receiving and 0 dispatch logs

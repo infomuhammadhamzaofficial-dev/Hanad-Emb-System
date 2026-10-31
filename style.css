@@ -899,17 +899,30 @@
   box-sizing: border-box;
 }
 
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
+  position: relative;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-x: none;
+}
+
 body {
   font-family: var(--font-main);
   background-color: var(--bg-app);
   color: var(--text-main);
   line-height: 1.5;
+  width: 100%;
+  max-width: 100%;
   min-height: 100vh;
   min-height: 100dvh;
   /* Mobile browser address-bar-aware viewport height */
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
+  position: relative;
+  overscroll-behavior-x: none;
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
@@ -2347,6 +2360,13 @@ input[type="date"].app-input {
   display: flex;
   flex-direction: column;
   gap: 1rem;
+}
+
+.contractor-workload-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.25rem;
+  width: 100%;
 }
 
 .contractor-summary-card {
@@ -4137,22 +4157,133 @@ body.auth-locked .mobile-bottom-nav {
     justify-content: center !important;
   }
 
+  /* Complete Mobile Screen & Horizontal Overflow Isolation */
+  html, body {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    position: relative !important;
+    overscroll-behavior-x: none !important;
+  }
+
+  .app-container,
+  .app-main,
+  .tab-view,
+  .final-style-grid,
+  .final-style-grid > *,
+  .summary-sidebar,
+  .table-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Daily Sheet View on Mobile - Exact Responsiveness & No Table/Card Overflow */
+  #daily-sheet-view,
+  #final-style-view {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow-x: hidden !important;
+    box-sizing: border-box !important;
+  }
+
+  .final-style-grid {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: 1fr !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .final-style-grid > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .table-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .table-responsive,
+  .table-container {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    display: block !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior-x: contain !important;
+    touch-action: pan-x pan-y !important;
+  }
+
   .quick-add-bar {
     flex-direction: column !important;
     align-items: stretch !important;
     padding: 0.85rem !important;
     gap: 0.55rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .quick-add-remarks-wrapper {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.4rem !important;
   }
 
   .quick-add-bar select,
   .quick-add-bar input,
-  .quick-add-bar button {
+  .quick-add-bar button,
+  .quick-add-remarks-wrapper input,
+  .quick-add-remarks-wrapper button {
     width: 100% !important;
     min-width: 0 !important;
   }
 
-  .final-style-grid {
+  /* Contractor Workload Grid & Cards on Mobile */
+  .contractor-workload-grid {
+    display: grid !important;
     grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .contractor-summary-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding: 0.85rem 1rem !important;
+  }
+
+  .contractor-summary-card h3 {
+    font-size: 1rem !important;
+  }
+
+  #daily-sheet-arrivals-banner {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 0.5rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #daily-sheet-arrivals-banner button {
+    width: 100% !important;
   }
 
   /* Work Distribution & Payment Sheet Period Inputs */
@@ -4180,8 +4311,14 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   /* Contractors Cards Grid */
-  .contractors-card-grid {
+  #contractors-card-grid,
+  .contractors-card-grid,
+  .contractor-workload-grid {
+    display: grid !important;
     grid-template-columns: 1fr !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 
   /* Images Tabs: Thumbnails, Upload Dropzones, Lightbox */
@@ -6721,11 +6858,14 @@ body.auth-locked .mobile-bottom-nav {
    ====================================================================== */
 @media (max-width: 767px) {
 
-  /* --- 1. Natural Touch & Momentum Scrolling --- */
+  /* --- 1. Natural Touch & Momentum Scrolling (No Horizontal Page Leak) --- */
   html,
   body {
-    touch-action: manipulation;
-    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y !important;
+    -webkit-overflow-scrolling: touch !important;
+    overflow-x: hidden !important;
+    max-width: 100% !important;
+    overscroll-behavior-x: none !important;
   }
 
   .app-main {
@@ -6769,12 +6909,12 @@ body.auth-locked .mobile-bottom-nav {
     gap: 0.45rem !important;
   }
 
-  /* --- 6. Table: Natural rendering without paint containment traps --- */
+  /* --- 6. Table: Clean responsive containment without page overflow leak --- */
   .table-card {
-    overflow: visible !important;
-    contain: none !important;
+    overflow: hidden !important;
     width: 100% !important;
     max-width: 100% !important;
+    min-width: 0 !important;
     box-sizing: border-box !important;
   }
 
@@ -7711,4 +7851,199 @@ td .badge-tag {
 [data-theme="light"] .contractor-chip.active .chip-val {
   background: rgba(37, 99, 235, 0.15) !important;
   color: #1d4ed8 !important;
+}
+
+/* ============================================================== */
+/* AUTO IMPORT DISPATCHES BUTTON & MODAL STYLING                  */
+/* ============================================================== */
+#btn-auto-import-dispatches {
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+#btn-auto-import-dispatches:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+  filter: brightness(1.08);
+}
+
+#btn-auto-import-dispatches:active {
+  transform: translateY(1px);
+}
+
+#modal-import-dispatches .master-table th {
+  background: #1e293b;
+  color: #f1f5f9;
+  font-size: 0.75rem;
+  letter-spacing: 0.03em;
+  border-bottom: 2px solid var(--border-color);
+}
+
+#modal-import-dispatches .master-table td {
+  padding: 6px 10px;
+  vertical-align: middle;
+}
+
+[data-theme="light"] #modal-import-dispatches .master-table th {
+  background: #e2e8f0;
+  color: #0f172a;
+}
+
+/* ============================================================== */
+/* TRASH & RECYCLE BIN MANAGEMENT STYLING                         */
+/* ============================================================== */
+.trash-nav-badge {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-rose, #f43f5e) !important;
+  color: #ffffff !important;
+  font-size: 0.68rem !important;
+  font-weight: 800 !important;
+  padding: 1px 6px !important;
+  border-radius: 9999px !important;
+  margin-left: 6px !important;
+  line-height: 1.2 !important;
+  box-shadow: 0 1px 4px rgba(244, 63, 94, 0.4);
+}
+
+.badge-trash-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  white-space: nowrap;
+}
+
+.badge-trash-receiving {
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+}
+
+.badge-trash-dispatch {
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.badge-trash-master {
+  background: rgba(16, 185, 129, 0.15);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.badge-trash-final {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+.badge-trash-distribution {
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+}
+
+.badge-trash-payment {
+  background: rgba(20, 184, 166, 0.15);
+  color: #2dd4bf;
+  border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
+.badge-trash-period {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.3);
+}
+
+.badge-trash-user {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+  border: 1px solid rgba(244, 63, 94, 0.3);
+}
+
+.btn-trash-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-trash-restore {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary, #10b981);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.btn-trash-restore:hover {
+  background: var(--primary, #10b981);
+  color: #ffffff;
+  box-shadow: 0 2px 8px var(--primary-glow, rgba(16, 185, 129, 0.4));
+  transform: translateY(-1px);
+}
+
+.btn-trash-destroy {
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--accent-rose, #f43f5e);
+  border: 1px solid rgba(244, 63, 94, 0.35);
+}
+
+.btn-trash-destroy:hover {
+  background: var(--accent-rose, #f43f5e);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(244, 63, 94, 0.4);
+  transform: translateY(-1px);
+}
+
+.btn-trash-view {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.btn-trash-view:hover {
+  background: var(--bg-card-hover);
+  color: var(--text-main);
+}
+
+.trash-item-row {
+  transition: background 0.15s ease;
+}
+
+.trash-item-row:hover {
+  background: var(--bg-card-hover) !important;
+}
+
+.trash-detail-card {
+  padding: 0.5rem 0.65rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm, 6px);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.trash-detail-label {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.trash-detail-val {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-main);
+  word-break: break-word;
 }
