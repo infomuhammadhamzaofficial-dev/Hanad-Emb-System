@@ -31,21 +31,13 @@ const DEFAULT_NEON_CONFIG = {
   autoSync: true
 };
 
-// Official assigned serial numbers matching Neon master_inventory table
-const NEON_ASSIGNED_SR = {
-  "jst-27-2003": 1,
-  "jst-27-2001": 2,
-  "jss-27-302": 3,
-  "jss-27-301": 4,
-  "jls-27-001": 5
-};
-
 class DatabaseService {
   constructor() {
     this._memCache = {};
     this.cleanLegacyDummyData();
     this.cleanCorruptedNumericTombstones();
     this.initLocalStorage();
+    this.deduplicateMasterInventorySerialNumbers();
     this._neonTablesReady = false;
   }
 
@@ -185,13 +177,10 @@ class DatabaseService {
             if (m.challan_dis && String(m.challan_dis).startsWith("DIS-20")) return false;
             return true;
           });
-          cleaned.forEach(m => {
-            const code = (m.style_code || '').trim().toLowerCase();
-            if (NEON_ASSIGNED_SR[code] !== undefined) {
-              m.sr_no = NEON_ASSIGNED_SR[code];
-            }
+          cleaned.forEach((m, idx) => {
+            m.sr_no = parseInt(m.sr_no, 10) || (idx + 1);
           });
-          // Strict ordering: sr_no DESC (5 at top, 1 at bottom)
+          // Strict ordering: sr_no DESC (highest at top, 1 at bottom)
           cleaned.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
           localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(cleaned));
           this.clearCache();
@@ -261,6 +250,53 @@ class DatabaseService {
       this.rebuildAllMastersFromLogs();
     } catch (e) {
       console.warn("rebuildAllMastersFromLogs notice:", e);
+    }
+  }
+
+  // Self-healing: Deduplicate and ensure sequential unique sr_no for all Master Inventory styles
+  deduplicateMasterInventorySerialNumbers() {
+    try {
+      const raw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY);
+      if (!raw) return;
+      let list = JSON.parse(raw);
+      if (!Array.isArray(list) || list.length <= 1) return;
+
+      const seenSrs = new Set();
+      let hasIssue = false;
+      for (const item of list) {
+        const sr = parseInt(item.sr_no, 10);
+        if (!sr || sr <= 0 || seenSrs.has(sr)) {
+          hasIssue = true;
+          break;
+        }
+        seenSrs.add(sr);
+      }
+
+      if (hasIssue) {
+        console.log("⚡ Auto-repairing duplicate/conflicting serial numbers in Master Inventory...");
+        // Sort chronologically by original ID ASC so older styles retain 1, 2, 3... and new styles get 6, 7, 8...
+        list.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        list.forEach((item, index) => {
+          item.sr_no = index + 1;
+        });
+        // Sort DESC (highest serial number at top, 1 at bottom)
+        list.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
+        localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(list));
+        this.clearCache();
+
+        // Push clean sr_no to Neon in background
+        const cfg = this.getConfig();
+        if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+          list.forEach(item => {
+            this.executeNeonQuery(
+              "UPDATE master_inventory SET sr_no = $1 WHERE id = $2;",
+              [item.sr_no, item.id]
+            ).catch(() => null);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("Deduplicate master inventory notice:", e);
     }
   }
 
@@ -350,16 +386,12 @@ class DatabaseService {
   getMasterInventory() {
     return this._getCached(DB_KEYS.MASTER_INVENTORY, () => {
       const data = JSON.parse(localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "[]");
-      const mapped = data.map(item => {
-        const code = (item.style_code || '').trim().toLowerCase();
-        const assignedSr = NEON_ASSIGNED_SR[code];
-        return {
-          ...item,
-          sr_no: (assignedSr !== undefined) ? assignedSr : (parseInt(item.sr_no, 10) || 1),
-          ...this.computeRecordBalances(item)
-        };
-      });
-      // Sort strictly by sr_no DESC so 5 is at top, 1 is at bottom
+      const mapped = data.map(item => ({
+        ...item,
+        sr_no: parseInt(item.sr_no, 10) || Number(item.id) || 1,
+        ...this.computeRecordBalances(item)
+      }));
+      // Sort strictly by sr_no DESC so highest SR is at top, 1 is at bottom
       return mapped.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
     });
   }
@@ -1745,12 +1777,8 @@ class DatabaseService {
     this.untrackDeletedRecord("master", item ? item.id : "");
     this.untrackDeletedRecord("master", `${cleanCode}|${cleanCat}`);
 
-    const assignedSr = NEON_ASSIGNED_SR[cleanCode.toLowerCase()];
-
     if (item) {
-      if (assignedSr !== undefined) {
-        item.sr_no = assignedSr;
-      }
+      item.sr_no = parseInt(item.sr_no, 10) || 1;
       item.cut_qty = cutQty;
       item.received_qty = totalReceived;
       item.dispatch_from_hemb = totalDispatched;
@@ -1763,12 +1791,11 @@ class DatabaseService {
       if (remarks) item.remarks = remarks;
       item.status = (cutQty > 0 && item.dispatch_from_hemb >= cutQty) ? "Completed" : "In Progress";
     } else {
-      const newId = masterList.length > 0 ? Math.max(...masterList.map(i => i.id || 0)) + 1 : 1;
-      const validSrs = masterList.map(i => parseInt(i.sr_no, 10) || 0).filter(n => n < 50);
-      const maxSr = validSrs.length > 0 ? Math.max(...validSrs) : 0;
+      const newId = masterList.length > 0 ? Math.max(...masterList.map(i => Number(i.id) || 0)) + 1 : 1;
+      const maxSr = masterList.length > 0 ? Math.max(...masterList.map(i => parseInt(i.sr_no, 10) || 0), 0) : 0;
       item = {
         id: newId,
-        sr_no: (assignedSr !== undefined) ? assignedSr : (maxSr + 1),
+        sr_no: maxSr + 1,
         style_code: cleanCode,
         ship: ship,
         category: cleanCat,
@@ -4667,21 +4694,18 @@ class DatabaseService {
 
       // 3. Master Inventory: Cloud (Neon) is the single source of truth
       const offlineMasterDrafts = (this.getMasterInventory() || []).filter(m => m._is_offline_draft === true);
-      const cleanMasterRows = masterRows.map(m => {
-        const code = (m.style_code || '').trim().toLowerCase();
-        const assignedSr = NEON_ASSIGNED_SR[code];
-        return {
-          ...m,
-          id: Number(m.id),
-          sr_no: (assignedSr !== undefined) ? assignedSr : (parseInt(m.sr_no, 10) || 1),
-          cut_qty: parseInt(m.cut_qty, 10) || 0,
-          received_qty: parseInt(m.received_qty, 10) || 0,
-          dispatch_from_hemb: parseInt(m.dispatch_from_hemb, 10) || 0
-        };
-      });
+      const cleanMasterRows = masterRows.map(m => ({
+        ...m,
+        id: Number(m.id),
+        sr_no: parseInt(m.sr_no, 10) || Number(m.id) || 1,
+        cut_qty: parseInt(m.cut_qty, 10) || 0,
+        received_qty: parseInt(m.received_qty, 10) || 0,
+        dispatch_from_hemb: parseInt(m.dispatch_from_hemb, 10) || 0
+      }));
       const finalMasterList = [...offlineMasterDrafts, ...cleanMasterRows];
       finalMasterList.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
       localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(finalMasterList));
+      this.deduplicateMasterInventorySerialNumbers();
 
       if (Array.isArray(rawPayRows)) {
         const parsedPay = rawPayRows

@@ -4126,6 +4126,10 @@ function handleLiveStyleFetch() {
     }
     // New category - clear ID so it doesn't overwrite another category
     document.getElementById("entry-id").value = "";
+    const list = window.db.getMasterInventory();
+    const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0), 0) : 0;
+    const srEl = document.getElementById("entry-sr");
+    if (srEl) srEl.value = maxSr + 1;
 
     // Auto-fill contractor from Distribution Sheet for new style!
     const distInfo = window.db.getContractorForStyle(code, cat);
@@ -4603,16 +4607,9 @@ async function saveMasterEntryFromForm() {
   if (document.getElementById("entry-date-dispatch")) document.getElementById("entry-date-dispatch").value = todayIso;
   if (document.getElementById("entry-contractor") && preserveContractor) document.getElementById("entry-contractor").value = preserveContractor;
 
-  // Next SR Number
+  // Next Style SR Number
   const list = window.db.getMasterInventory();
-  const recList = window.db.getReceivingLogs();
-  const disList = window.db.getDispatchLogs();
-  const maxSr = Math.max(
-    ...list.map(i => parseInt(i.sr_no, 10) || 0),
-    ...recList.map(i => parseInt(i.sr_no, 10) || 0),
-    ...disList.map(i => parseInt(i.sr_no, 10) || 0),
-    0
-  );
+  const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0), 0) : 0;
   if (document.getElementById("entry-sr")) document.getElementById("entry-sr").value = maxSr + 1;
 
   // Reset live badge & KPIs
