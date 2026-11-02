@@ -33,7 +33,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg?v=20">
-  <link rel="stylesheet" href="style.css?v=21">
+  <link rel="stylesheet" href="style.css?v=26">
   <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=21">
   <link rel="shortcut icon" href="icon-192.svg?v=21">
 </head>
@@ -938,8 +938,30 @@
       </div>
 
       <!-- Master Inventory Table (Excel Image 1 Structure) -->
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
+          </span>
+          <span id="master-records-badge" class="table-records-badge">Updated 50 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="master" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-master-table" data-dir="-1" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-master-table" data-dir="1" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
       <div class="table-card">
-        <div class="table-responsive">
+        <div class="table-responsive" id="container-master-table">
           <table class="master-table" id="table-master-inventory">
             <thead>
               <!-- Group Header Row matching Excel Layout -->
@@ -1062,8 +1084,30 @@
       </div>
 
       <!-- Receiving Log Table -->
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
+          </span>
+          <span id="rec-records-badge" class="table-records-badge">Updated 50 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="receiving" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-receiving-table" data-dir="-1" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-receiving-table" data-dir="1" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
       <div class="table-card">
-        <div class="table-responsive">
+        <div class="table-responsive" id="container-receiving-table">
           <table class="master-table" id="table-receiving-log">
             <thead>
               <tr class="column-header">
@@ -1165,8 +1209,30 @@
       </div>
 
       <!-- Dispatch Log Table -->
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
+          </span>
+          <span id="dis-records-badge" class="table-records-badge">Updated 50 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="dispatch" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-dispatch-table" data-dir="-1" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-dispatch-table" data-dir="1" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
       <div class="table-card">
-        <div class="table-responsive">
+        <div class="table-responsive" id="container-dispatch-table">
           <table class="master-table" id="table-dispatch-log">
             <thead>
               <tr class="column-header">
@@ -1229,7 +1295,7 @@
               <line x1="8" y1="2" x2="8" y2="6"></line>
               <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
-            <span>📅 Incoming Arrivals Tracker (آمد چیکر)</span>
+            <span>📅 Incoming Arrivals Tracker</span>
             <span class="badge-pill" id="badge-incoming-arrivals-count"
               style="background: rgba(0,0,0,0.3); color: #fff; font-weight: 800; font-size: 0.7rem; padding: 1px 7px; border-radius: 999px;">0</span>
           </button>
@@ -1249,6 +1315,12 @@
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
             </svg>
             Export Sheet
+          </button>
+
+          <button class="btn btn-success btn-sm btn-open-table-whatsapp-img" data-sheet="daily"
+            title="Export table as high-resolution image for WhatsApp"
+            style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff;">
+            <span>📸</span> WhatsApp Image
           </button>
 
           <button class="btn btn-primary btn-sm" id="btn-print-report"
@@ -1333,32 +1405,57 @@
 
       <!-- Final Style Main Grid Layout -->
       <div class="final-style-grid">
-        <!-- Table matching Image 2 -->
-        <div class="table-card">
-          <div class="table-responsive">
-            <table class="master-table" id="table-final-styles">
-              <thead>
-                <tr class="column-header">
-                  <th style="width: 45px; text-align: center;">S NO</th>
-                  <th>STYLE CODE</th>
-                  <th>CATEGORY</th>
-                  <th>CONT NAME</th>
-                  <th>CUT QTY</th>
-                  <th>RECEIVED QTY</th>
-                  <th style="background: rgba(244, 63, 94, 0.1);">BALANCE FROM STOCK</th>
-                  <th style="background: rgba(99, 102, 241, 0.12); color: #818cf8;">DISPATCH HAND EMB</th>
-                  <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
-                  <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
-                  <th style="width: 60px; text-align: center;">ACTION</th>
-                </tr>
-              </thead>
-              <tbody id="tbody-final-styles">
-                <!-- Dynamically populated from JS -->
-              </tbody>
-              <tfoot id="tfoot-final-styles" style="font-weight: 800; background: var(--bg-card-hover);">
-                <!-- Totals row calculated automatically -->
-              </tfoot>
-            </table>
+        <!-- Main Column: Scroll Controls + Full Width Table -->
+        <div class="final-style-table-col" style="min-width: 0; width: 100%; display: flex; flex-direction: column; gap: 0.5rem;">
+          <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+          <div class="table-scroll-toolbar" style="margin-bottom: 0;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+                <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+                <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
+              </span>
+              <span id="final-records-badge" class="table-records-badge">Active Styles</span>
+            </div>
+            <div style="display: flex; gap: 0.4rem; align-items: center;">
+              <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="daily" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span>📸</span> <span>WhatsApp Image</span>
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-final-table" data-dir="-1" title="Scroll Left">
+                ◀ Scroll Left
+              </button>
+              <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-final-table" data-dir="1" title="Scroll Right">
+                Scroll Right ▶
+              </button>
+            </div>
+          </div>
+
+          <!-- Table matching Image 2 -->
+          <div class="table-card">
+            <div class="table-responsive" id="container-final-table">
+              <table class="master-table" id="table-final-styles">
+                <thead>
+                  <tr class="column-header">
+                    <th style="width: 45px; text-align: center;">S NO</th>
+                    <th>STYLE CODE</th>
+                    <th>CATEGORY</th>
+                    <th>CONT NAME</th>
+                    <th>CUT QTY</th>
+                    <th>RECEIVED QTY</th>
+                    <th style="background: rgba(244, 63, 94, 0.1);">BALANCE FROM STOCK</th>
+                    <th style="background: rgba(99, 102, 241, 0.12); color: #818cf8;">DISPATCH HAND EMB</th>
+                    <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
+                    <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
+                    <th style="width: 60px; text-align: center;">ACTION</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-final-styles">
+                  <!-- Dynamically populated from JS -->
+                </tbody>
+                <tfoot id="tfoot-final-styles" style="font-weight: 800; background: var(--bg-card-hover);">
+                  <!-- Totals row calculated automatically -->
+                </tfoot>
+              </table>
+            </div>
           </div>
         </div>
 
@@ -1440,7 +1537,7 @@
       <div class="view-toolbar" style="margin-bottom: 1.25rem;">
         <div>
           <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
-            <span>Contractor Work Distribution (تقسیم کار)</span>
+            <span>Contractor Work Distribution</span>
             <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Bi-Monthly Cycles</span>
           </h2>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
@@ -1583,7 +1680,29 @@
       </div>
 
       <!-- Work Distribution Table (Exact to User's Uploaded Image) -->
-      <div class="table-container" style="max-height: 700px; overflow-y: auto;">
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view columns</span>
+          </span>
+          <span id="work-dist-records-badge" class="table-records-badge">Updated 50 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="distribution" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-work-dist-table" data-dir="-1" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" data-target="#container-work-dist-table" data-dir="1" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
+      <div class="table-container" id="container-work-dist-table">
         <table class="table-rate-approval table-dist-sheet" id="table-work-distribution">
           <thead>
             <tr>
@@ -1851,18 +1970,23 @@
       </div>
 
       <!-- Table Quick Navigation & Horizontal Scroll Controls -->
-      <div class="table-scroll-toolbar"
-        style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem; padding: 0.4rem 0.75rem; background: rgba(17, 24, 39, 0.7); border: 1px solid var(--border-color); border-radius: var(--radius-md);">
-        <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
-          <span style="color: var(--primary); font-size: 1rem;">↔️</span>
-          <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view
-            columns</span>
-        </span>
-        <div style="display: flex; gap: 0.4rem;">
-          <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-left" title="Scroll Left">
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view
+              columns</span>
+          </span>
+          <span id="payment-records-badge" class="table-records-badge">Updated 50 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="payment" title="Export as WhatsApp Image" style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" id="btn-scroll-table-left" data-target="#container-excel-table" data-dir="-1" title="Scroll Left">
             ◀ Scroll Left
           </button>
-          <button type="button" class="btn btn-secondary btn-xs" id="btn-scroll-table-right" title="Scroll Right">
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll" id="btn-scroll-table-right" data-target="#container-excel-table" data-dir="1" title="Scroll Right">
             Scroll Right ▶
           </button>
         </div>
@@ -2117,7 +2241,7 @@
               <!-- Table Breakdown Mini Badges -->
               <div class="neon-table-breakdown-wrapper">
                 <div class="breakdown-title">
-                  <span>📊 Tables Storage Footprint (کون سی ٹیبل کتنی جگہ لے رہی ہے):</span>
+                  <span>📊 Tables Storage Footprint (Data Usage Breakdown):</span>
                 </div>
                 <div class="breakdown-tags" id="neon-table-breakdown-tags">
                   <span class="table-size-tag"><strong>master_inventory:</strong> Calculating...</span>
@@ -2709,8 +2833,7 @@
 
         <div
           style="background: rgba(245, 158, 11, 0.12); border-left: 3px solid #f59e0b; padding: 0.65rem 0.85rem; border-radius: var(--radius-sm); font-size: 0.8rem; color: #fde68a; line-height: 1.4;">
-          <strong>⚠️ Warning:</strong> Stock say jitna maal aya hay, dispatch ussay zyada ho raha hay. Kya aap waqai is
-          entry ko confirm kar ke save karna chahtay hain?
+          <strong>⚠️ Warning:</strong> <span id="confirm-dialog-urdu-note">The entered quantity exceeds the recorded balance. Are you sure you want to proceed and save?</span>
         </div>
       </div>
 
@@ -3916,7 +4039,7 @@
 
               <!-- 1. Target Sheet Selector -->
               <div class="print-control-box">
-                <label class="print-control-label">1. Sheet to Print (شیٹ منتخب کریں):</label>
+                <label class="print-control-label">1. Sheet to Print:</label>
                 <select id="print-sheet-selector" class="app-select" style="width: 100%; font-weight: 700;">
                   <option value="daily">📋 Daily Running Style Status Sheet</option>
                   <option value="distribution">📦 Work Distribution & Allocation Sheet</option>
@@ -3929,7 +4052,7 @@
                 style="background: rgba(56, 189, 248, 0.05); border: 1px solid rgba(56, 189, 248, 0.25);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                   <label class="print-control-label" style="color: #38bdf8; margin-bottom: 0;">2. Saved Layout Alignment
-                    (محفوظ الائنمنٹس):</label>
+                    (Presets):</label>
                   <span id="print-preset-badge" class="badge-tag inline" style="font-size: 0.68rem;">Saved
                     Presets</span>
                 </div>
@@ -3968,16 +4091,16 @@
 
               <!-- 3. Page Orientation & Layout Sizing Controls -->
               <div class="print-control-box">
-                <label class="print-control-label">3. Page Format & Orientation (پیج فارمیٹ):</label>
+                <label class="print-control-label">3. Page Format & Orientation:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-bottom: 0.65rem;">
                   <button type="button" class="btn-orientation-toggle active" id="btn-orient-landscape">
                     <span style="font-size: 1.1rem;">📑</span>
-                    <span style="font-weight: 800; font-size: 0.8rem;">Landscape (افقی)</span>
+                    <span style="font-weight: 800; font-size: 0.8rem;">Landscape</span>
                     <span style="font-size: 0.68rem; color: var(--text-muted);">(Wide Tables)</span>
                   </button>
                   <button type="button" class="btn-orientation-toggle" id="btn-orient-portrait">
                     <span style="font-size: 1.1rem;">📄</span>
-                    <span style="font-weight: 800; font-size: 0.8rem;">Portrait (عمودی)</span>
+                    <span style="font-weight: 800; font-size: 0.8rem;">Portrait</span>
                     <span style="font-size: 0.68rem; color: var(--text-muted);">(Standard A4)</span>
                   </button>
                 </div>
@@ -3987,7 +4110,7 @@
                   style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem; margin-bottom: 0.55rem;">
                   <label
                     style="font-size: 0.725rem; font-weight: 700; color: #a78bfa; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">
-                    Table Text Align (ٹیکسٹ الائنمنٹ):
+                    Table Text Align:
                   </label>
                   <div style="display: flex; gap: 0.3rem;">
                     <button type="button" class="btn-align-toggle active" id="btn-align-auto"
@@ -4014,7 +4137,7 @@
                     style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
                     <label
                       style="font-size: 0.725rem; font-weight: 700; color: #38bdf8; text-transform: uppercase; margin-bottom: 0;">Heading
-                      Row (ہیڈنگ فارمیٹ و اونچائی):</label>
+                      Row Format & Height:</label>
                     <button type="button" class="btn btn-secondary btn-xs active" id="btn-toggle-header-bold"
                       style="padding: 2px 8px; font-weight: 800; font-size: 0.75rem; border-color: #38bdf8; color: #38bdf8;">
                       𝐁 Bold
@@ -4045,7 +4168,7 @@
                   style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.55rem; margin-bottom: 0.55rem;">
                   <label
                     style="font-size: 0.725rem; font-weight: 700; color: #10b981; text-transform: uppercase; margin-bottom: 0.4rem; display: block;">Row
-                    Heights & Data Font (رو کی اونچائی و سائز):</label>
+                    Heights & Data Font Size:</label>
 
                   <!-- Data Row Height -->
                   <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
@@ -4089,8 +4212,7 @@
               <!-- 4. Column Visibility & Excel-Like Width Sizing -->
               <div class="print-control-box" style="flex: 1; display: flex; flex-direction: column;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                  <label class="print-control-label" style="margin-bottom: 0;">4. Columns, Widths & Bold (کالم، چوڑائی و
-                    بولڈ):</label>
+                  <label class="print-control-label" style="margin-bottom: 0;">4. Columns, Widths & Bold:</label>
                   <div style="display: flex; gap: 0.35rem;">
                     <button type="button" class="btn btn-secondary btn-xs" id="btn-print-select-all"
                       style="padding: 2px 6px; font-size: 0.7rem;">Select All</button>
@@ -4114,7 +4236,7 @@
               <div class="preview-toolbar-header">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                   <span class="pulse-indicator"></span>
-                  <strong style="font-size: 0.85rem;">👁️ Live Print Preview (براہ راست پرنٹ پریویو)</strong>
+                  <strong style="font-size: 0.85rem;">👁️ Live Print Preview</strong>
                   <span id="preview-col-count-badge" class="badge-tag inline" style="font-size: 0.7rem;">9 Columns
                     Selected</span>
                 </div>
@@ -4151,11 +4273,14 @@
               </div>
             </div>
 
-            <div style="display: flex; gap: 0.5rem;">
+            <div style="display: flex; gap: 0.5rem; align-items: center;">
               <button type="button" class="btn btn-secondary" onclick="closeModal('modal-print-studio')">Cancel</button>
+              <button type="button" class="btn btn-success" id="btn-studio-whatsapp-image" style="font-weight: 800; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;" title="Export table as high-resolution image for WhatsApp">
+                <span>📸</span> <span>WhatsApp Image</span>
+              </button>
               <button type="button" class="btn btn-primary" id="btn-execute-studio-print"
                 style="font-weight: 800; padding: 0.65rem 1.4rem;">
-                🖨️ Print Document / Save PDF (پرنٹ کریں)
+                🖨️ Print Document / Save PDF
               </button>
             </div>
           </div>
@@ -4282,7 +4407,7 @@
       </div>
 
       <!-- ============================================================== -->
-      <!-- MODAL: DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر)      -->
+      <!-- MODAL: DAILY INWARD ARRIVALS & BALANCE TRACKER                 -->
       <!-- ============================================================== -->
       <div class="modal-backdrop" id="modal-daily-arrivals">
         <div class="modal-card" style="max-width: 1100px; width: 96vw;">
@@ -4298,13 +4423,10 @@
                   style="font-size: 1.25rem; font-weight: 800; color: var(--text-main); margin: 0; display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                   <span>Daily Inward Arrivals & Balance Tracker</span>
                   <span class="badge-tag"
-                    style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">آمد
-                    اسمارٹ ٹریکر</span>
+                    style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">Smart Inward Tracker</span>
                 </h2>
                 <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
-                  Aane wale styles, aaj ke pieces, total wasooli, kitne dy chuky hain aur hamare pass kitna stock
-                  balance
-                  hai live check karein.
+                  Live tracking for incoming styles, daily received quantities, dispatches, and warehouse stock balances.
                 </p>
               </div>
             </div>
@@ -4318,17 +4440,15 @@
               style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; background: var(--bg-card); padding: 0.85rem 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1rem;">
               <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
                 <label for="arrivals-modal-date"
-                  style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Tarikh (Date):</label>
+                  style="font-weight: 700; font-size: 0.85rem; color: var(--text-main);">Date:</label>
                 <input type="date" id="arrivals-modal-date" class="app-input"
                   style="font-weight: 700; font-family: var(--font-mono); width: auto; min-width: 165px; padding: 4px 10px;">
 
                 <div style="display: inline-flex; gap: 0.35rem; flex-wrap: wrap;">
-                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Aaj
-                    (Today)</button>
-                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Kal
-                    (Yesterday)</button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-today">Today</button>
+                  <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-yesterday">Yesterday</button>
                   <button type="button" class="btn btn-secondary btn-xs" id="btn-arrivals-quick-latest"
-                    title="View most recent date that has receipts">Aakhri Aamad (Latest)</button>
+                    title="View most recent date that has receipts">Latest Arrival</button>
                 </div>
               </div>
 
@@ -4360,20 +4480,12 @@
                       <th>STYLE CODE</th>
                       <th>CATEGORY</th>
                       <th>CONTRACTOR & CHALLAN</th>
-                      <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">IS DATE PAR
-                        AAYE
-                      </th>
+                      <th style="background: rgba(245, 158, 11, 0.12); color: #f59e0b; text-align: right;">DATE RECEIVED</th>
                       <th style="text-align: right;">TOTAL CUT</th>
-                      <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED
-                      </th>
-                      <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DY CHUKY
-                        (DISPATCH)
-                      </th>
-                      <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">HAMARY PASS
-                        (STOCK)</th>
-                      <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">AANA BAQI
-                        (PENDING)
-                      </th>
+                      <th style="text-align: right; background: rgba(16, 185, 129, 0.1); color: #10b981;">TOTAL RECEIVED</th>
+                      <th style="text-align: right; background: rgba(6, 182, 212, 0.1); color: #06b6d4;">DISPATCHED</th>
+                      <th style="text-align: right; background: rgba(245, 158, 11, 0.15); color: #f59e0b;">STOCK IN-HOUSE</th>
+                      <th style="text-align: right; background: rgba(239, 68, 68, 0.1); color: #ef4444;">PENDING FROM STOCK</th>
                       <th style="text-align: center; min-width: 150px;">DAILY SHEET STATUS</th>
                     </tr>
                   </thead>
@@ -4391,14 +4503,11 @@
           <div class="modal-footer"
             style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem; background: var(--bg-card-hover);">
             <div style="font-size: 0.78rem; color: var(--text-muted);" id="arrivals-footer-note">
-              💡 <strong>Tip:</strong> Daily Sheet mein style add hone se wo wahan Master balances ke sath link ho jata
-              hai.
+              💡 <strong>Tip:</strong> Adding styles to the Daily Sheet automatically links live Master Inventory balances.
             </div>
             <div style="display: flex; gap: 0.5rem;">
-              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Band Karein
-                (Close)</button>
-              <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Daily Sheet Par Jayein
-                📋</button>
+              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-daily-arrivals')">Close</button>
+              <button type="button" class="btn btn-primary" id="btn-arrivals-go-to-sheet">Go to Daily Sheet 📋</button>
             </div>
           </div>
         </div>
@@ -4432,6 +4541,178 @@
             <div style="display: flex; gap: 0.5rem;">
               <button type="button" class="btn btn-secondary" id="btn-trash-detail-destroy" style="color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4); font-weight: 700;">🗑️ Destroy</button>
               <button type="button" class="btn btn-primary" id="btn-trash-detail-restore" style="font-weight: 700;">↩️ Restore Record</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================================== -->
+      <!-- MODAL: WHATSAPP TABLE IMAGE EXPORTER & COLUMN CUSTOMIZER      -->
+      <!-- ============================================================== -->
+      <div class="modal-backdrop" id="modal-whatsapp-table-image" style="z-index: 380;">
+        <div class="modal-card" style="max-width: 1120px; width: 96%; max-height: 94vh;">
+          <div class="modal-header" style="background: var(--bg-card-hover); border-bottom: 1.5px solid var(--border-color); padding: 0.85rem 1.25rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div style="width: 40px; height: 40px; border-radius: 10px; background: rgba(37, 211, 102, 0.15); border: 1.5px solid #25d366; display: flex; align-items: center; justify-content: center; font-size: 1.4rem;">
+                📸
+              </div>
+              <div>
+                <h2 style="font-size: 1.15rem; font-weight: 800; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                  <span>Export Table Image for WhatsApp</span>
+                  <span class="badge-pill" style="background: #25d366; color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px;">WhatsApp Ready</span>
+                </h2>
+                <div style="font-size: 0.775rem; color: var(--text-muted); margin-top: 2px;">
+                  Select custom columns, filter by contractor, and copy crisp 2x table image directly to WhatsApp.
+                </div>
+              </div>
+            </div>
+            <button type="button" class="btn-modal-close" onclick="closeModal('modal-whatsapp-table-image')">✕</button>
+          </div>
+
+          <div class="modal-body" style="padding: 1rem 1.25rem; overflow-y: auto;">
+            <div class="whatsapp-modal-grid">
+              <!-- Left Sidebar: Controls & Column Selection -->
+              <div class="whatsapp-sidebar-panel">
+                <!-- Sheet Selector -->
+                <div>
+                  <label class="app-label" style="font-weight: 700; font-size: 0.8rem; margin-bottom: 0.35rem; display: block;">
+                    📊 Select Table / Sheet:
+                  </label>
+                  <select class="app-select" id="whatsapp-sheet-select" style="width: 100%;">
+                    <option value="daily">Daily Running Style Sheet</option>
+                    <option value="distribution">Work Distribution Sheet</option>
+                    <option value="payment">Rate Approval / Payment Sheet</option>
+                    <option value="receiving">Inward Receiving Log</option>
+                    <option value="dispatch">Outward Dispatch Log</option>
+                    <option value="master">Master Inventory & Styles</option>
+                  </select>
+                </div>
+
+                <!-- Contractor Filter -->
+                <div>
+                  <label class="app-label" style="font-weight: 700; font-size: 0.8rem; margin-bottom: 0.35rem; display: flex; justify-content: space-between;">
+                    <span>👤 Contractor Filter:</span>
+                    <span id="whatsapp-contractor-count" style="font-size: 0.72rem; color: var(--text-muted);"></span>
+                  </label>
+                  <select class="app-select" id="whatsapp-contractor-select" style="width: 100%;">
+                    <option value="all">👥 All Contractors (Whole Sheet)</option>
+                  </select>
+                  <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 3px;">
+                    Tip: Select a contractor to generate an image tailored exclusively for them.
+                  </span>
+                </div>
+
+                <!-- Column Chooser Section -->
+                <div style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem;">
+                    <label class="app-label" style="font-weight: 700; font-size: 0.8rem; margin: 0;">
+                      📋 Visible Columns:
+                    </label>
+                    <span id="whatsapp-saved-settings-badge" style="font-size: 0.7rem; color: #10b981; font-weight: 700; display: none;">
+                      ✓ Saved Settings
+                    </span>
+                  </div>
+
+                  <!-- Quick Select Buttons -->
+                  <div style="display: flex; gap: 0.35rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-whatsapp-cols-all" style="flex: 1; font-size: 0.7rem;">
+                      Select All
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-whatsapp-cols-none" style="flex: 1; font-size: 0.7rem;">
+                      Clear
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-whatsapp-cols-reset" style="flex: 1; font-size: 0.7rem;">
+                      Default
+                    </button>
+                  </div>
+
+                  <!-- Column Checkboxes Container -->
+                  <div class="whatsapp-columns-list" id="whatsapp-columns-container">
+                    <!-- Populated dynamically -->
+                  </div>
+
+                  <!-- Save Column Settings Button -->
+                  <div style="margin-top: 0.6rem; display: flex; gap: 0.4rem;">
+                    <button type="button" class="btn btn-primary btn-xs" id="btn-whatsapp-save-cols" style="flex: 1; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+                      <span>💾</span> <span>Save Column Settings</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-whatsapp-reset-saved-cols" title="Reset saved preferences" style="font-size: 0.72rem;">
+                      Reset
+                    </button>
+                  </div>
+                  <div id="whatsapp-save-feedback" style="display: none; font-size: 0.72rem; color: #10b981; font-weight: 700; margin-top: 4px; text-align: center;">
+                    ✓ Preferences saved for this table!
+                  </div>
+                </div>
+
+                <!-- Table Search & Filter Sync Toggle -->
+                <div style="border-top: 1px dashed var(--border-color); padding-top: 0.65rem;">
+                  <label class="whatsapp-col-checkbox-label" style="padding: 0; margin: 0;" title="Sync with active search & filters on the table">
+                    <input type="checkbox" id="whatsapp-sync-filters-toggle" checked style="accent-color: #38bdf8; width: 16px; height: 16px;">
+                    <span>Sync with Active Table Filters</span>
+                  </label>
+                  <div id="whatsapp-active-filter-hint" style="font-size: 0.72rem; color: #38bdf8; margin-top: 4px; display: none; font-weight: 700;">
+                    🔍 Active filter applied
+                  </div>
+                </div>
+
+                <!-- Summary Row Toggle -->
+                <div style="border-top: 1px dashed var(--border-color); padding-top: 0.65rem;">
+                  <label class="whatsapp-col-checkbox-label" style="padding: 0; margin: 0;">
+                    <input type="checkbox" id="whatsapp-include-totals-toggle" checked style="accent-color: #25d366; width: 16px; height: 16px;">
+                    <span>Include Totals / Summary Row</span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Right Area: Live High-Resolution Preview -->
+              <div style="display: flex; flex-direction: column; gap: 0.65rem; min-width: 0;">
+                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+                  <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                    <span style="font-weight: 800; font-size: 0.85rem; color: var(--primary);">Live Table Preview:</span>
+                    <span id="whatsapp-preview-badge" class="badge-pill" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; font-size: 0.72rem; font-weight: 700; border: 1px solid rgba(56, 189, 248, 0.3);">
+                      Loading preview...
+                    </span>
+                  </div>
+                  <div style="display: flex; align-items: center; gap: 0.5rem;">
+                    <button type="button" class="btn btn-secondary btn-xs" id="btn-whatsapp-toggle-zoom" style="font-size: 0.72rem; font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;" title="Toggle between Fit to Screen and 100% Zoom">
+                      <span id="whatsapp-zoom-icon">🔍</span> <span id="whatsapp-zoom-text">100% Full View</span>
+                    </button>
+                    <span style="font-size: 0.75rem; color: var(--text-muted);">
+                      ✨ Ultra HD 2x
+                    </span>
+                  </div>
+                </div>
+
+                <div class="whatsapp-preview-viewport fit-to-screen" id="whatsapp-preview-viewport">
+                  <div class="whatsapp-canvas-wrapper" id="whatsapp-canvas-wrapper">
+                    <canvas id="whatsapp-table-canvas"></canvas>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="modal-footer" style="background: var(--bg-card-hover); justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+            <div style="display: flex; align-items: center; gap: 0.6rem;">
+              <div id="whatsapp-action-status" style="display: none; align-items: center; gap: 0.45rem; font-size: 0.825rem; font-weight: 800; color: #10b981; background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; padding: 5px 14px; border-radius: 6px;">
+                <span>✅</span> <span id="whatsapp-action-status-text">Copied to clipboard!</span>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary" onclick="closeModal('modal-whatsapp-table-image')">
+                Close
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-whatsapp-open-web" title="Open WhatsApp Web in new tab" style="display: inline-flex; align-items: center; gap: 0.35rem;">
+                <span>💬</span> <span>Open WhatsApp Web</span>
+              </button>
+              <button type="button" class="btn btn-secondary" id="btn-whatsapp-download-image" title="Download PNG file directly" style="display: inline-flex; align-items: center; gap: 0.35rem; font-weight: 700;">
+                <span>⬇️</span> <span>Download PNG</span>
+              </button>
+              <button type="button" class="btn btn-success" id="btn-whatsapp-copy-clipboard" style="font-weight: 800; padding: 0.65rem 1.35rem; background: #25d366; border-color: #128c7e; color: #fff; display: inline-flex; align-items: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);">
+                <span style="font-size: 1.1rem;">📋</span> <span>Copy Image for WhatsApp</span>
+              </button>
             </div>
           </div>
         </div>
@@ -4480,9 +4761,9 @@
       <div class="toast-container" id="toast-container"></div>
 
       <!-- Scripts -->
-      <script src="data.js?v=21"></script>
-      <script src="db.js?v=21"></script>
-      <script src="app.js?v=21"></script>
+      <script src="data.js?v=26"></script>
+      <script src="db.js?v=26"></script>
+      <script src="app.js?v=26"></script>
       <script>
         if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
           window.addEventListener('load', () => {

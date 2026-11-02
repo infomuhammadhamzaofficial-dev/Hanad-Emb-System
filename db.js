@@ -2028,48 +2028,68 @@ class DatabaseService {
   saveFinalStyles(list) {
     const minimal = list.map((item, idx) => ({
       s_no: idx + 1,
-      style_code: item.style_code,
-      category: item.category,
+      style_code: (item.style_code || "").trim(),
+      category: (item.category || "Shirt").trim(),
       dispatch_from_hemb: item.dispatch_from_hemb || 0,
-      time_remarks: item.time_remarks || ""
+      time_remarks: (item.time_remarks || "").trim()
     }));
-    this._setCached(DB_KEYS.FINAL_STYLES, list, minimal);
+    this.clearCache(DB_KEYS.FINAL_STYLES);
+    try {
+      localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(minimal));
+    } catch (e) {
+      console.warn("Storage write error:", e);
+    }
     this.triggerAutoSyncIfEnabled();
   }
 
   addFinalStyle(styleCode, category, timeRemarks = "") {
-    const list = this.getFinalStyles();
-    const nextSNo = list.length + 1;
-    const master = this.findMasterByStyleAndCategory(styleCode, category);
-    list.push({
-      s_no: nextSNo,
-      style_code: styleCode.trim(),
-      category: (category || "Shirt").trim(),
-      dispatch_from_hemb: master ? (master.dispatch_from_hemb || 0) : 0,
-      time_remarks: timeRemarks.trim()
-    });
-    this.saveFinalStyles(list);
+    const cleanCode = (styleCode || "").trim();
+    const cleanCat = (category || "Shirt").trim();
+    if (!cleanCode) return this.getFinalStyles();
+
+    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const existingIndex = raw.findIndex(i =>
+      (i.style_code || "").trim().toLowerCase() === cleanCode.toLowerCase() &&
+      (i.category || "").trim().toLowerCase() === cleanCat.toLowerCase()
+    );
+
+    const entryToSave = {
+      s_no: existingIndex >= 0 ? raw[existingIndex].s_no : raw.length + 1,
+      style_code: cleanCode,
+      category: cleanCat,
+      dispatch_from_hemb: 0,
+      time_remarks: (timeRemarks || "").trim()
+    };
+
+    if (existingIndex >= 0) {
+      raw[existingIndex] = entryToSave;
+    } else {
+      raw.push(entryToSave);
+    }
+
+    this.saveFinalStyles(raw);
     return this.getFinalStyles();
   }
 
   updateFinalStyleRemarks(sNo, newRemarks) {
-    const list = this.getFinalStyles();
-    const item = list.find(i => i.s_no === sNo);
+    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const item = raw.find(i => i.s_no === sNo);
     if (item) {
-      item.time_remarks = newRemarks;
-      this.saveFinalStyles(list);
+      item.time_remarks = (newRemarks || "").trim();
+      this.saveFinalStyles(raw);
     }
     return this.getFinalStyles();
   }
 
   removeFinalStyle(sNo) {
-    let list = this.getFinalStyles();
-    const item = list.find(i => i.s_no === sNo);
+    const currentList = this.getFinalStyles();
+    const item = currentList.find(i => i.s_no === sNo);
     if (item) {
       this.moveToTrash("final_style", item);
     }
-    list = list.filter(i => i.s_no !== sNo);
-    this.saveFinalStyles(list);
+    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const updated = raw.filter(i => i.s_no !== sNo).map((i, idx) => ({ ...i, s_no: idx + 1 }));
+    this.saveFinalStyles(updated);
     return this.getFinalStyles();
   }
 

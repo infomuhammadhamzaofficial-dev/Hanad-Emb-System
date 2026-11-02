@@ -1,8 +1,8 @@
 // ====================================================================
-// CraftFlow - Service Worker for PWA (Zero Lag & Mobile Cache)
+// CraftFlow - Service Worker for PWA (Lightweight & Deduplicated Cache)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v21';
+const CACHE_NAME = 'craftflow-cache-v26';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -24,7 +24,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// Activate Event: Clear outdated caches
+// Activate Event: Clear all outdated caches to free up storage immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -39,33 +39,52 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Fetch Event: Network-First with Cache Fallback for dynamic fresh data
+// Fetch Event: Cache-First with ignoreSearch for static assets, no duplicate query entries
 self.addEventListener('fetch', (event) => {
   // Let cross-origin Neon Cloud API and CDN requests pass straight to network
   if (!event.request.url.startsWith(self.location.origin)) {
     return;
   }
 
-  // Avoid caching POST/PUT requests
+  // Avoid non-GET requests
   if (event.request.method !== 'GET') {
     return;
   }
 
+  const url = new URL(event.request.url);
+
   event.respondWith(
-    fetch(event.request)
-      .then((networkResponse) => {
-        // Clone and update cache with fresh response
+    caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
+      if (cachedResponse) {
+        // Fetch fresh copy in background without duplicating cache entries (Stale-While-Revalidate)
+        fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => {
+              // Store under clean pathname to prevent duplicate entries for ?v=21, ?v=22
+              const cleanRequest = new Request(url.origin + url.pathname, { method: 'GET' });
+              cache.put(cleanRequest, networkResponse);
+            });
+          }
+        }).catch(() => null);
+        return cachedResponse;
+      }
+
+      // If not in cache, fetch from network
+      return fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
-          const resClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, resClone);
-          });
+          // Only cache core local static files (html, css, js, json, svg)
+          const path = url.pathname.toLowerCase();
+          if (path.endsWith('.html') || path.endsWith('.css') || path.endsWith('.js') || path.endsWith('.json') || path.endsWith('.svg') || path === '/' || path.endsWith('/')) {
+            const resClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              const cleanRequest = new Request(url.origin + url.pathname, { method: 'GET' });
+              cache.put(cleanRequest, resClone);
+            });
+          }
         }
         return networkResponse;
-      })
-      .catch(() => {
-        // Fallback to cache if network fails (offline / spotty connection)
-        return caches.match(event.request);
-      })
+      });
+    })
   );
 });
+

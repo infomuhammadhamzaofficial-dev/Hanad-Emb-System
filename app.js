@@ -1394,6 +1394,23 @@ function renderMasterInventory() {
     return queryPassed && contractorPassed && categoryPassed && balancePassed;
   });
 
+  const totalFilteredCount = list.length;
+  const isSearchActive = Boolean(searchQuery);
+  const displayLimit = 50;
+  const displayList = list.slice(0, displayLimit);
+
+  // Update records count badge in toolbar
+  const masterBadge = document.getElementById("master-records-badge");
+  if (masterBadge) {
+    if (isSearchActive) {
+      masterBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    } else if (totalFilteredCount > displayLimit) {
+      masterBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+    } else {
+      masterBadge.textContent = `Showing all ${totalFilteredCount} records`;
+    }
+  }
+
   if (list.length === 0) {
     const isFiltered = !!(searchQuery || selectedContractor || selectedCategory || selectedBalance);
     tbody.innerHTML = `
@@ -1412,7 +1429,7 @@ function renderMasterInventory() {
     return;
   }
 
-  tbody.innerHTML = list.map(item => {
+  tbody.innerHTML = displayList.map(item => {
     const balStockClass = item.balance_from_stock > 0 ? "balance-highlight-pink" : "balance-zero-green";
     const balHembClass = item.balance_from_hemb > 0 ? "balance-highlight-pink" : "balance-zero-green";
     const totalBalClass = item.total_balance > 0 ? "balance-highlight-pink" : "balance-zero-green";
@@ -1688,6 +1705,26 @@ function renderReceivingLog() {
     return queryPassed && catPassed && contPassed;
   });
 
+  // Ensure latest / updated entries are first (descending by SR or ID)
+  list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+  const totalFilteredCount = list.length;
+  const isSearchActive = Boolean(searchQuery);
+  const displayLimit = 50;
+  const displayList = list.slice(0, displayLimit);
+
+  // Update records count badge in toolbar
+  const recBadge = document.getElementById("rec-records-badge");
+  if (recBadge) {
+    if (isSearchActive) {
+      recBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    } else if (totalFilteredCount > displayLimit) {
+      recBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+    } else {
+      recBadge.textContent = `Showing all ${totalFilteredCount} records`;
+    }
+  }
+
   // KPIs
   const allLogs = window.db.getReceivingLogs();
   const totalPieces = allLogs.reduce((acc, r) => acc + (parseInt(r.received_qty, 10) || 0), 0);
@@ -1717,7 +1754,7 @@ function renderReceivingLog() {
   let sumCut = 0;
   let sumRec = 0;
 
-  tbody.innerHTML = list.map((item) => {
+  tbody.innerHTML = displayList.map((item) => {
     sumCut += (item.cut_qty || 0);
     sumRec += (item.received_qty || 0);
 
@@ -1753,7 +1790,7 @@ function renderReceivingLog() {
   if (tfoot) {
     tfoot.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">Filtered Totals (${list.length} Challans):</td>
+        <td colspan="6" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">Filtered Totals (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Challans):</td>
         <td style="text-align: right; font-family: var(--font-mono);">${sumCut.toLocaleString()}</td>
         <td class="cell-rec-qty">${sumRec.toLocaleString()}</td>
         <td colspan="2"></td>
@@ -1843,6 +1880,26 @@ function renderDispatchLog() {
     return queryPassed && catPassed && contPassed;
   });
 
+  // Ensure latest / updated entries are first (descending by SR or ID)
+  list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+  const totalFilteredCount = list.length;
+  const isSearchActive = Boolean(searchQuery);
+  const displayLimit = 50;
+  const displayList = list.slice(0, displayLimit);
+
+  // Update records count badge in toolbar
+  const disBadge = document.getElementById("dis-records-badge");
+  if (disBadge) {
+    if (isSearchActive) {
+      disBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    } else if (totalFilteredCount > displayLimit) {
+      disBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+    } else {
+      disBadge.textContent = `Showing all ${totalFilteredCount} records`;
+    }
+  }
+
   // KPIs
   const allLogs = window.db.getDispatchLogs();
   const totalPieces = allLogs.reduce((acc, d) => acc + (parseInt(d.dispatch_qty, 10) || 0), 0);
@@ -1871,7 +1928,7 @@ function renderDispatchLog() {
 
   let sumDis = 0;
 
-  tbody.innerHTML = list.map((item) => {
+  tbody.innerHTML = displayList.map((item) => {
     sumDis += (item.dispatch_qty || 0);
 
     let remarkBadge = "";
@@ -1911,7 +1968,7 @@ function renderDispatchLog() {
   if (tfoot) {
     tfoot.innerHTML = `
       <tr>
-        <td colspan="6" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">Filtered Totals (${list.length} Challans):</td>
+        <td colspan="6" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">Filtered Totals (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Challans):</td>
         <td class="cell-dis-qty">${sumDis.toLocaleString()}</td>
         <td colspan="2"></td>
       </tr>
@@ -2063,6 +2120,19 @@ function renderFinalStyleSheet() {
 
   const list = window.db.getFinalStyles();
 
+  const totalFilteredCount = list.length;
+  const displayLimit = 50;
+  const displayList = list.slice(0, displayLimit);
+
+  const finalBadge = document.getElementById("final-records-badge");
+  if (finalBadge) {
+    if (totalFilteredCount > displayLimit) {
+      finalBadge.textContent = `Showing 50 of ${totalFilteredCount} styles`;
+    } else {
+      finalBadge.textContent = `${totalFilteredCount} Active Styles`;
+    }
+  }
+
   if (list.length === 0) {
     tbody.innerHTML = `
       <tr>
@@ -2082,16 +2152,21 @@ function renderFinalStyleSheet() {
   let totalDisHemb = 0;
   let totalBalHemb = 0;
 
-  tbody.innerHTML = list.map((item, index) => {
-    totalCut += item.cut_qty;
-    totalRec += item.received_qty;
-    totalBalStock += item.balance_from_stock;
+  tbody.innerHTML = displayList.map((item, index) => {
+    const cut = Number(item.cut_qty) || 0;
+    const rec = Number(item.received_qty) || 0;
+    const balStock = Number(item.balance_from_stock) || 0;
     const disQty = Number(item.dispatch_from_hemb) || 0;
-    totalDisHemb += disQty;
-    totalBalHemb += item.balance_from_hemb;
+    const balHemb = Number(item.balance_from_hemb) || 0;
 
-    const balStockClass = item.balance_from_stock > 0 ? "balance-highlight-pink" : "";
-    const balHembClass = item.balance_from_hemb > 0 ? "balance-highlight-pink" : "";
+    totalCut += cut;
+    totalRec += rec;
+    totalBalStock += balStock;
+    totalDisHemb += disQty;
+    totalBalHemb += balHemb;
+
+    const balStockClass = balStock > 0 ? "balance-highlight-pink" : "";
+    const balHembClass = balHemb > 0 ? "balance-highlight-pink" : "";
 
     let remarkBadge = "";
     const rLower = (item.time_remarks || "").toLowerCase();
@@ -2120,11 +2195,11 @@ function renderFinalStyleSheet() {
             ${escapeHtml(displayCont)}
           </span>
         </td>
-        <td style="font-weight: 700; font-family: var(--font-mono); text-align: right;">${item.cut_qty.toLocaleString()}</td>
-        <td style="font-weight: 600; font-family: var(--font-mono); text-align: right;">${item.received_qty.toLocaleString()}</td>
-        <td class="${balStockClass}" style="text-align: right; font-family: var(--font-mono);">${item.balance_from_stock.toLocaleString()}</td>
+        <td style="font-weight: 700; font-family: var(--font-mono); text-align: right;">${cut.toLocaleString()}</td>
+        <td style="font-weight: 600; font-family: var(--font-mono); text-align: right;">${rec.toLocaleString()}</td>
+        <td class="${balStockClass}" style="text-align: right; font-family: var(--font-mono);">${balStock.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: #818cf8; background: rgba(99, 102, 241, 0.05);">${disQty.toLocaleString()}</td>
-        <td class="${balHembClass}" style="text-align: right; font-family: var(--font-mono);">${item.balance_from_hemb.toLocaleString()}</td>
+        <td class="${balHembClass}" style="text-align: right; font-family: var(--font-mono);">${balHemb.toLocaleString()}</td>
         <td>
           <div style="display: flex; align-items: center; gap: 0.35rem;">
             ${remarkBadge}
@@ -2222,7 +2297,7 @@ function renderContractorSummarySidebar() {
 }
 
 // ==============================================================
-// DAILY INWARD ARRIVALS & BALANCE TRACKER (آمد چیکر کنٹرولر)
+// DAILY INWARD ARRIVALS & BALANCE TRACKER CONTROLLER
 // ==============================================================
 let _currentArrivalsDate = "";
 let _arrivalsFilterQuery = "";
@@ -2288,7 +2363,7 @@ function initDailyArrivalsTracker() {
       if (modalDateInput) modalDateInput.value = _currentArrivalsDate;
       renderDailyArrivalsModal();
       updateDailySheetArrivalsBanner();
-      showToast(`Aakhri aamad ki tarikh: ${_currentArrivalsDate}`);
+      showToast(`Latest receiving date: ${_currentArrivalsDate}`);
     } else {
       showToast("No receiving dates recorded yet.", "info");
     }
@@ -2386,7 +2461,7 @@ function renderDailyArrivalsModal() {
 
       <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
         <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Dy Chuky (Dispatched)</span>
+          <span class="dash-kpi-label">Dispatched Units</span>
           <div class="dash-kpi-icon cyan" style="width: 28px; height: 28px; font-size: 0.9rem;">📤</div>
         </div>
         <div class="dash-kpi-num" style="font-size: 1.45rem; color: #06b6d4;">${(rep.totalDispatchedPcs || 0).toLocaleString()}</div>
@@ -2397,7 +2472,7 @@ function renderDailyArrivalsModal() {
 
       <div class="dash-kpi-card" style="padding: 0.85rem; border: 1px solid var(--border-color); background: var(--bg-card);">
         <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Hamary Pass (Stock)</span>
+          <span class="dash-kpi-label">Stock In-House</span>
           <div class="dash-kpi-icon amber" style="width: 28px; height: 28px; font-size: 0.9rem;">📦</div>
         </div>
         <div class="dash-kpi-num text-amber" style="font-size: 1.45rem;">${(rep.totalStockBalancePcs || 0).toLocaleString()}</div>
@@ -2408,7 +2483,7 @@ function renderDailyArrivalsModal() {
 
       <div class="dash-kpi-card highlight-rose" style="padding: 0.85rem; border: 1px solid rgba(244, 63, 94, 0.3); background: var(--bg-card);">
         <div class="dash-kpi-top">
-          <span class="dash-kpi-label">Aana Baqi (Pending)</span>
+          <span class="dash-kpi-label">Pending from Stock</span>
           <div class="dash-kpi-icon rose" style="width: 28px; height: 28px; font-size: 0.9rem;">⏳</div>
         </div>
         <div class="dash-kpi-num text-rose" style="font-size: 1.45rem;">${rep.totalPendingPieces.toLocaleString()}</div>
@@ -2438,9 +2513,9 @@ function renderDailyArrivalsModal() {
       <tr>
         <td colspan="11" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
           <div style="font-size: 2rem; margin-bottom: 0.5rem;">📭</div>
-          <strong style="font-size: 0.95rem; color: var(--text-main);">Is Tarikh (${rep.targetDate}) par koi Receiving Entry nahi mili.</strong>
+          <strong style="font-size: 0.95rem; color: var(--text-main);">No receiving entries found for date (${rep.targetDate}).</strong>
           <p style="margin: 0.5rem 0 1rem 0; font-size: 0.8rem;">
-            Aap upar se date change kar saktay hain ya 'Aakhri Aamad (Latest)' dabayein.
+            Select another date from above or click 'Latest Arrival'.
           </p>
           ${rep.availableDates.length > 0 ? `
             <div style="display: flex; gap: 0.4rem; justify-content: center; flex-wrap: wrap;">
@@ -2474,7 +2549,7 @@ function renderDailyArrivalsModal() {
 
     let pendingBadge = "";
     if (item.balance_pending > 0) {
-      pendingBadge = `<span class="badge-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 800; font-family: var(--font-mono); font-size: 0.82rem;">${item.balance_pending.toLocaleString()} Baqi</span>`;
+      pendingBadge = `<span class="badge-tag" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 800; font-family: var(--font-mono); font-size: 0.82rem;">${item.balance_pending.toLocaleString()} Pending</span>`;
     } else if (item.balance_pending === 0) {
       pendingBadge = `<span class="badge-tag" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 700; font-size: 0.78rem;">✓ Complete (0)</span>`;
     } else {
@@ -2571,7 +2646,7 @@ function renderDailyArrivalsModal() {
           ${sumStockBal.toLocaleString()}
         </td>
         <td style="text-align: right; font-family: var(--font-mono); color: #ef4444;">
-          ${sumPending.toLocaleString()} Baqi
+          ${sumPending.toLocaleString()} Pending
         </td>
         <td style="text-align: center;">
           <button type="button" class="btn btn-secondary btn-xs" onclick="addIncomingArrivalsToDailySheet(true)" style="font-weight: 700;">
@@ -2613,7 +2688,7 @@ function addIncomingArrivalsToDailySheet(showFeedback = true) {
   const missing = rep.styles.filter(s => !s.in_daily_sheet);
 
   if (missing.length === 0) {
-    if (showFeedback) showToast("Tamam aane wale styles pehle se Daily Sheet mein mojood hain!", "info");
+    if (showFeedback) showToast("All incoming styles are already added to Daily Sheet!", "info");
     return;
   }
 
@@ -2629,7 +2704,7 @@ function addIncomingArrivalsToDailySheet(showFeedback = true) {
   updateDailySheetArrivalsBanner();
 
   if (showFeedback) {
-    showToast(`✓ ${count} naye styles Daily Sheet mein shaamil kar diye gaye!`);
+    showToast(`✓ ${count} style(s) successfully added to Daily Sheet!`);
   }
 }
 
@@ -2648,13 +2723,13 @@ function updateDailySheetArrivalsBanner() {
 
   if (summaryText) {
     if (rep.totalStylesCount === 0) {
-      summaryText.innerHTML = `Is date (${targetDate}) par koi inward receiving entry nahi hai.`;
+      summaryText.innerHTML = `No inward receiving entries found for date (${targetDate}).`;
     } else {
       summaryText.innerHTML = `
-        <strong>${rep.totalStylesCount} styles aaye hain</strong> (Total <strong>${rep.totalDatePcs.toLocaleString()} pcs</strong>). 
+        <strong>${rep.totalStylesCount} incoming styles</strong> (Total <strong>${rep.totalDatePcs.toLocaleString()} pcs</strong>). 
         ${rep.missingFromDailySheetCount > 0
-          ? `<span style="color: #fbbf24; font-weight: 700;">${rep.missingFromDailySheetCount} styles Daily Sheet mein missing hain.</span>`
-          : `<span style="color: #34d399; font-weight: 700;">✓ Tamam styles Daily Sheet mein mojood hain.</span>`}
+          ? `<span style="color: #fbbf24; font-weight: 700;">${rep.missingFromDailySheetCount} styles not yet in Daily Sheet.</span>`
+          : `<span style="color: #34d399; font-weight: 700;">✓ All incoming styles are in Daily Sheet.</span>`}
       `;
     }
   }
@@ -4141,7 +4216,7 @@ function showWarningConfirmModal({
   subtitle = "Quantity exceeds available stock",
   message = "The entered quantity exceeds available balance.",
   details = [],
-  urduNote = "Stock say jitna maal aya hay, dispatch ussay zyada ho raha hay. Kya aap waqai is entry ko save karna chahtay hain?",
+  urduNote = "The entered quantity exceeds available stock. Are you sure you want to proceed and save this entry?",
   confirmText = "✓ Yes, Allow Excess Entry",
   cancelText = "✕ Cancel & Adjust Qty"
 }) {
@@ -4353,7 +4428,7 @@ async function saveMasterEntryFromForm() {
         const confirmed = await showWarningConfirmModal({
           title: "⚠️ Excess Receiving Warning",
           subtitle: `Style: ${styleCode} [${category}]`,
-          message: `Stock say aany wala maal Cut Order say zyada hay!<br>You are receiving <strong>${recQty.toLocaleString()} pcs</strong>, which exceeds the remaining Cut Order balance (<strong>${remainingCut.toLocaleString()} pcs</strong>) by <strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs</strong>!`,
+          message: `Entered receiving quantity (<strong>${recQty.toLocaleString()} pcs</strong>) exceeds remaining Cut Order (<strong>${remainingCut.toLocaleString()} pcs</strong>) by <strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs</strong>!`,
           details: [
             { label: "Style & Category", value: `${styleCode} [${category}]` },
             { label: "Total Cut Order", value: `${effectiveCut.toLocaleString()} pcs` },
@@ -4362,7 +4437,7 @@ async function saveMasterEntryFromForm() {
             { label: "Entered Receiving", value: `${recQty.toLocaleString()} pcs`, color: "#f59e0b" },
             { label: "Excess over Cut", value: `+${excess.toLocaleString()} pcs`, color: "#f43f5e" }
           ],
-          urduNote: `Cutting/Stock say total cut order ${effectiveCut.toLocaleString()} pcs tha aur ${alreadyRec.toLocaleString()} pcs pehle aa chukay hain. Aap ${recQty.toLocaleString()} pcs enter kar rahay hain jo cut order say zyada hay. Kya aap waqai save karna chahtay hain?`,
+          urduNote: `The total cut order was ${effectiveCut.toLocaleString()} pcs and ${alreadyRec.toLocaleString()} pcs were already received. You are entering ${recQty.toLocaleString()} pcs which exceeds the cut order. Do you want to proceed and save?`,
           confirmText: "✓ Yes, Allow Excess Receiving",
           cancelText: "✕ Cancel & Adjust Qty"
         });
@@ -4411,7 +4486,7 @@ async function saveMasterEntryFromForm() {
         const confirmed = await showWarningConfirmModal({
           title: "⚠️ Over-Dispatch Warning",
           subtitle: `Style: ${styleCode} [${category}]`,
-          message: `Stock say Hand-Embroidery may total <strong>${totalRec.toLocaleString()} pcs</strong> ai thay aur pehle say <strong>${alreadyDis.toLocaleString()} pcs</strong> dispatch ho chukay hain.<br><br>Available Balance sirf <strong style="color: #38bdf8;">${Math.max(0, availableHemb).toLocaleString()} pcs</strong> hay, lekin aap <strong>${disQty.toLocaleString()} pcs</strong> dispatch kar rahay hain (<strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs zyada</strong>)!`,
+          message: `Total received in Hand Embroidery is <strong>${totalRec.toLocaleString()} pcs</strong>, and <strong>${alreadyDis.toLocaleString()} pcs</strong> have already been dispatched.<br><br>Available Balance is <strong style="color: #38bdf8;">${Math.max(0, availableHemb).toLocaleString()} pcs</strong>, but you are attempting to dispatch <strong>${disQty.toLocaleString()} pcs</strong> (<strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs excess</strong>)!`,
           details: [
             { label: "Style & Category", value: `${styleCode} [${category}]` },
             { label: "Total Received (Stock)", value: `${totalRec.toLocaleString()} pcs` },
@@ -4420,7 +4495,7 @@ async function saveMasterEntryFromForm() {
             { label: "Attempted Dispatch", value: `${disQty.toLocaleString()} pcs`, color: "#f59e0b" },
             { label: "Excess / Deficit", value: `+${excess.toLocaleString()} pcs`, color: "#f43f5e" }
           ],
-          urduNote: `Stock say jitna maal aya hay (${totalRec.toLocaleString()} pcs), dispatch ussay zyada ho raha hay (${(alreadyDis + disQty).toLocaleString()} pcs). Kya aap waqai is over-dispatch entry ko confirm kar ke save karna chahtay hain?`,
+          urduNote: `Dispatches are exceeding total received stock (${totalRec.toLocaleString()} pcs). Are you sure you want to confirm and proceed with this over-dispatch entry?`,
           confirmText: "✓ Yes, Allow Excess Dispatch",
           cancelText: "✕ Cancel & Adjust Qty"
         });
@@ -4467,7 +4542,7 @@ async function saveMasterEntryFromForm() {
             { label: "Dispatch from H-Emb", value: `${disQty.toLocaleString()} pcs`, color: "#f59e0b" },
             { label: "Excess / Deficit", value: `+${excess.toLocaleString()} pcs`, color: "#f43f5e" }
           ],
-          urduNote: `Received maal say zyada dispatch enter ho raha hay. Kya aap waqai save karna chahtay hain?`,
+          urduNote: `Dispatch quantity exceeds received stock. Are you sure you want to confirm and save this entry?`,
           confirmText: "✓ Yes, Allow Excess Dispatch",
           cancelText: "✕ Cancel & Adjust Qty"
         });
@@ -4768,7 +4843,7 @@ async function saveEditLogFromForm() {
             { label: "New Receiving", value: `${qty.toLocaleString()} pcs`, color: "#f59e0b" },
             { label: "Excess over Cut", value: `+${excess.toLocaleString()} pcs`, color: "#f43f5e" }
           ],
-          urduNote: `Cutting say aya hua maal cut order say zyada ho raha hay. Kya aap waqai is change ko save karna chahtay hain?`,
+          urduNote: `Received quantity exceeds the recorded cut order. Are you sure you want to save this update?`,
           confirmText: "✓ Yes, Update Excess Receiving",
           cancelText: "✕ Cancel & Adjust Qty"
         });
@@ -4808,7 +4883,7 @@ async function saveEditLogFromForm() {
         const confirmed = await showWarningConfirmModal({
           title: "⚠️ Over-Dispatch Warning",
           subtitle: `Style: ${styleCode} [${category}]`,
-          message: `Stock say Hand-Embroidery may total <strong>${totalRec.toLocaleString()} pcs</strong> ai thay aur baaqi dispatches <strong>${otherDis.toLocaleString()} pcs</strong> hain.<br><br>Available Balance sirf <strong style="color: #38bdf8;">${Math.max(0, availableHemb).toLocaleString()} pcs</strong> hay, lekin aap <strong>${qty.toLocaleString()} pcs</strong> update kar rahay hain (<strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs zyada</strong>)!`,
+          message: `Total received in Hand Embroidery is <strong>${totalRec.toLocaleString()} pcs</strong> and other dispatches equal <strong>${otherDis.toLocaleString()} pcs</strong>.<br><br>Available balance is <strong style="color: #38bdf8;">${Math.max(0, availableHemb).toLocaleString()} pcs</strong>, but you are updating to <strong>${qty.toLocaleString()} pcs</strong> (<strong style="color: #f43f5e;">+${excess.toLocaleString()} pcs excess</strong>)!`,
           details: [
             { label: "Style & Category", value: `${styleCode} [${category}]` },
             { label: "Total Received (Stock)", value: `${totalRec.toLocaleString()} pcs` },
@@ -4817,7 +4892,7 @@ async function saveEditLogFromForm() {
             { label: "Updated Dispatch", value: `${qty.toLocaleString()} pcs`, color: "#f59e0b" },
             { label: "Excess / Deficit", value: `+${excess.toLocaleString()} pcs`, color: "#f43f5e" }
           ],
-          urduNote: `Stock say jitna maal aya hay, dispatch ussay zyada ho raha hay. Kya aap waqai is over-dispatch ko update karna chahtay hain?`,
+          urduNote: `Dispatches exceed total received from stock. Are you sure you want to update this over-dispatch entry?`,
           confirmText: "✓ Yes, Allow Excess Dispatch",
           cancelText: "✕ Cancel & Adjust Qty"
         });
@@ -6378,6 +6453,18 @@ function initPaymentSheetView() {
   document.getElementById("btn-print-payment-sheet")?.addEventListener("click", printPaymentSheet);
   document.getElementById("btn-export-payment-csv")?.addEventListener("click", exportPaymentSheetToCSV);
 
+  // Universal Table Horizontal Scroll Navigation Buttons
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-table-scroll");
+    if (!btn) return;
+    const targetSelector = btn.getAttribute("data-target");
+    if (!targetSelector) return;
+    const container = document.querySelector(targetSelector);
+    if (!container) return;
+    const dir = parseInt(btn.getAttribute("data-dir"), 10) || 1;
+    container.scrollBy({ left: dir * 350, behavior: "smooth" });
+  });
+
   // Table Horizontal Scroll Navigation Buttons
   const btnScrollLeft = document.getElementById("btn-scroll-table-left");
   const btnScrollRight = document.getElementById("btn-scroll-table-right");
@@ -6566,7 +6653,7 @@ function openAutoImportDispatchesModal() {
     const periodInfo = _pendingImportPeriodInfo || getBiMonthlyPeriod(today);
     const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
     const todayLabel = `${today.getDate()}-${months[today.getMonth()]}-${today.getFullYear()}`;
-    showToast(`⚠️ Error: Current time period (${periodInfo.startLabel} se ${todayLabel}) may koi style dispatch nahi hua!`, "error");
+    showToast(`⚠️ Notice: No styles were dispatched in this period (${periodInfo.startLabel} to ${todayLabel}).`, "warning");
     return;
   }
 
@@ -6801,11 +6888,11 @@ function renderImportDispatchesPreview() {
           <td colspan="9" style="text-align: center; padding: 2.5rem 1rem; color: var(--text-muted);">
             <div style="font-size: 2rem; margin-bottom: 0.5rem;">📦</div>
             <div style="font-weight: 700; font-size: 0.95rem; color: var(--text-main); margin-bottom: 0.25rem;">
-              Koi Dispatch Records Nahi Milay!
+              No Dispatch Records Found!
             </div>
             <p style="font-size: 0.8rem; max-width: 460px; margin: 0 auto; color: var(--text-muted);">
-              Is time window (<strong>${periodInfo.startLabel}</strong> se <strong>${rangeEndLabel}</strong>) ke doran Dispatch Log may koi entry darj nahi hay.
-              Aap ooper di gayi <strong>As-of Date</strong> change kar ke check kar saktay hain.
+              No entries were found in the Dispatch Log for this time window (<strong>${periodInfo.startLabel}</strong> to <strong>${rangeEndLabel}</strong>).
+              You can adjust the <strong>As-of Date</strong> above to check another date.
             </p>
           </td>
         </tr>
@@ -6816,7 +6903,7 @@ function renderImportDispatchesPreview() {
         confirmBtn.style.cursor = "not-allowed";
       }
       if (confirmBtnLabel) {
-        confirmBtnLabel.textContent = "Koi Style Dastyab Nahi";
+        confirmBtnLabel.textContent = "No Styles Available";
       }
     } else {
       tbody.innerHTML = previewList.map((item, idx) => {
@@ -6861,7 +6948,7 @@ function renderImportDispatchesPreview() {
 
 async function confirmAutoImportDispatches() {
   if (!_pendingImportDispatches || _pendingImportDispatches.length === 0 || !_pendingImportPeriodInfo) {
-    showToast("Koi styles dastyab nahi hain add karnay ke liye.", "warning");
+    showToast("No styles available to import.", "warning");
     return;
   }
 
@@ -7385,6 +7472,22 @@ function renderPaymentSheet() {
       `;
       if (tfootExcel) tfootExcel.innerHTML = "";
     } else {
+      const totalFilteredCount = filtered.length;
+      const isSearchActive = Boolean(query);
+      const displayLimit = 50;
+      const displayList = filtered.slice(0, displayLimit);
+
+      const payBadge = document.getElementById("payment-records-badge");
+      if (payBadge) {
+        if (isSearchActive) {
+          payBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+        } else if (totalFilteredCount > displayLimit) {
+          payBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+        } else {
+          payBadge.textContent = `Showing all ${totalFilteredCount} records`;
+        }
+      }
+
       let fCut = 0, fProd = 0, fStockBal = 0, fHembBal = 0, fTotBal = 0, fCumulative = 0;
 
       // Master Inventory lookup map for live auto-sync balances
@@ -7399,7 +7502,7 @@ function renderPaymentSheet() {
         }
       });
 
-      tbodyExcel.innerHTML = filtered.map((item, idx) => {
+      tbodyExcel.innerHTML = displayList.map((item, idx) => {
         const srNo = item.sr_no || (idx + 1);
         const styleCode = item.style_code || "";
         const working = item.working || item.category || "SHIRT";
@@ -7526,7 +7629,8 @@ function renderPaymentSheet() {
       tbodyDetailed.innerHTML = `<tr><td colspan="15" style="text-align: center; vertical-align: middle; padding: 2rem;">No entries found</td></tr>`;
       if (tfootDetailed) tfootDetailed.innerHTML = "";
     } else {
-      tbodyDetailed.innerHTML = filtered.map((item, idx) => {
+      const detailedDisplay = filtered.slice(0, 50);
+      tbodyDetailed.innerHTML = detailedDisplay.map((item, idx) => {
         let thumbHtml = item.image_data
           ? `<div class="payment-thumb-wrapper" onclick="openImageLightbox('${item.id}')"><img src="${item.image_data}" class="payment-thumb-img"/></div>`
           : `<div class="payment-thumb-placeholder">📷</div>`;
@@ -7710,16 +7814,57 @@ function initPaymentModalHandlers() {
     removeImageBtn.addEventListener("click", () => clearUploadedPaymentImage());
   }
 
+  const compressImageFile = (file, callback) => {
+    // If image is already lightweight (< 120KB), keep as-is
+    if (file.size < 120 * 1024) {
+      const reader = new FileReader();
+      reader.onload = (evt) => callback(evt.target.result);
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 900; // Optimal sharp preview on mobile without storage bloat
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Compress to JPEG 0.75 (reduces 10MB mobile photo to ~80KB)
+        const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.75);
+        callback(compressedDataUrl);
+      };
+      img.onerror = () => callback(evt.target.result);
+      img.src = evt.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSelectedFile = (file) => {
     if (!file || !file.type.startsWith("image/")) {
       showToast("Please select a valid image file.", "error");
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      setPaymentImagePreview(evt.target.result, file.name);
-    };
-    reader.readAsDataURL(file);
+    compressImageFile(file, (compressedBase64) => {
+      setPaymentImagePreview(compressedBase64, file.name);
+    });
   };
 
   if (fileInput) {
@@ -8704,6 +8849,22 @@ function renderWorkDistribution() {
   });
 
   // 4. Render Table Rows
+  const totalFilteredCount = filtered.length;
+  const isSearchActive = Boolean(query);
+  const displayLimit = 50;
+  const displayList = filtered.slice(0, displayLimit);
+
+  const workDistBadge = document.getElementById("work-dist-records-badge");
+  if (workDistBadge) {
+    if (isSearchActive) {
+      workDistBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    } else if (totalFilteredCount > displayLimit) {
+      workDistBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+    } else {
+      workDistBadge.textContent = `Showing all ${totalFilteredCount} records`;
+    }
+  }
+
   if (filtered.length === 0) {
     const isSearchActive = !!query;
     const isFiltered = !!(query || contFilterVal || floorFilterVal || itemFilterVal);
@@ -8738,7 +8899,7 @@ function renderWorkDistribution() {
   let tablePcs = 0;
   let tableAmount = 0;
 
-  tbody.innerHTML = filtered.map((item, idx) => {
+  tbody.innerHTML = displayList.map((item, idx) => {
     const srNo = item.sr_no || (idx + 1);
     const styleCode = item.style_code || "";
     const contName = item.contractor_name || "";
@@ -8790,7 +8951,7 @@ function renderWorkDistribution() {
     tfoot.innerHTML = `
       <tr style="background: rgba(16, 185, 129, 0.08); font-weight: 800; border-top: 2px solid rgba(16, 185, 129, 0.4);">
         <td colspan="3" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; padding: 0.85rem 1rem;">
-          Total Distributed (${filtered.length} Styles):
+          Total Distributed (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Styles):
         </td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.95rem; font-weight: 900; color: #10b981;">${tablePcs.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">Avg ${tableAvgRate > 0 ? tableAvgRate.toLocaleString() : '-'}</td>
@@ -9326,7 +9487,7 @@ const PRINT_STUDIO_DEFAULTS = {
     presets: [
       {
         id: "default",
-        name: "Standard Full Sheet (تمام کالم)",
+        name: "Standard Full Sheet",
         orientation: "landscape",
         fontSize: "normal",
         autoFit: true,
@@ -9345,7 +9506,7 @@ const PRINT_STUDIO_DEFAULTS = {
       },
       {
         id: "floor_balance",
-        name: "Floor & Cutting Balances (فلور بیلنس)",
+        name: "Floor & Cutting Balances",
         orientation: "portrait",
         fontSize: "normal",
         autoFit: true,
@@ -9363,7 +9524,7 @@ const PRINT_STUDIO_DEFAULTS = {
       },
       {
         id: "contractor_work",
-        name: "Contractor Pending Work (ٹھیکیدار ورک لسٹ)",
+        name: "Contractor Pending Work",
         orientation: "landscape",
         fontSize: "normal",
         autoFit: true,
@@ -9381,7 +9542,7 @@ const PRINT_STUDIO_DEFAULTS = {
       },
       {
         id: "executive_summary",
-        name: "Executive Summary (مختصر رپورٹ)",
+        name: "Executive Summary",
         orientation: "portrait",
         fontSize: "large",
         autoFit: true,
@@ -9419,7 +9580,7 @@ const PRINT_STUDIO_DEFAULTS = {
     presets: [
       {
         id: "default",
-        name: "Standard Distribution (مکمل لسٹ)",
+        name: "Standard Distribution",
         orientation: "landscape",
         fontSize: "normal",
         autoFit: true,
@@ -9438,7 +9599,7 @@ const PRINT_STUDIO_DEFAULTS = {
       },
       {
         id: "gate_pass",
-        name: "Contractor Gate Pass / Handover (گیٹ پاس)",
+        name: "Contractor Gate Pass / Handover",
         orientation: "portrait",
         fontSize: "normal",
         autoFit: true,
@@ -9482,7 +9643,7 @@ const PRINT_STUDIO_DEFAULTS = {
     presets: [
       {
         id: "default",
-        name: "Standard Full Approval (مکمل ریٹ شیٹ)",
+        name: "Standard Full Approval",
         orientation: "landscape",
         fontSize: "compact",
         autoFit: true,
@@ -9506,7 +9667,7 @@ const PRINT_STUDIO_DEFAULTS = {
       },
       {
         id: "payment_summary",
-        name: "Payment Audit & Rates (اکاؤنٹس پےمنٹ سمری)",
+        name: "Payment Audit & Rates",
         orientation: "landscape",
         fontSize: "normal",
         autoFit: true,
@@ -10041,11 +10202,11 @@ function saveActivePrintPreset() {
   }));
 
   savePrintPresetsForSheet(printStudioActiveSheet, presets);
-  showPrintStudioStatus(`✓ Layout "${preset.name}" کامیابی سے محفوظ ہوگیا!`, true);
+  showPrintStudioStatus(`✓ Layout "${preset.name}" saved successfully!`, true);
 }
 
 function saveNewPrintPreset() {
-  const name = prompt("Enter a name for your custom layout alignment (e.g. Daily Balance Print / کاریگر لسٹ):");
+  const name = prompt("Enter a name for your custom layout alignment (e.g. Daily Balance Print / Floor Summary):");
   if (!name || !name.trim()) return;
 
   const presets = getPrintPresetsForSheet(printStudioActiveSheet);
@@ -10074,12 +10235,12 @@ function saveNewPrintPreset() {
   savePrintPresetsForSheet(printStudioActiveSheet, presets);
   populatePrintPresetsDropdown(printStudioActiveSheet);
   applyPrintPreset(newId);
-  showPrintStudioStatus(`✓ نیا Layout "${newPreset.name}" محفوظ ہوگیا!`, true);
+  showPrintStudioStatus(`✓ New layout "${newPreset.name}" saved successfully!`, true);
 }
 
 function deleteActivePrintPreset() {
   if (printStudioCurrentPresetId === "default") {
-    showPrintStudioStatus("ڈیفالٹ لے آؤٹ کو ڈیلیٹ نہیں کیا جاسکتا۔", false);
+    showPrintStudioStatus("Default layout cannot be deleted.", false);
     return;
   }
 
@@ -10092,7 +10253,7 @@ function deleteActivePrintPreset() {
     savePrintPresetsForSheet(printStudioActiveSheet, updated);
     populatePrintPresetsDropdown(printStudioActiveSheet);
     applyPrintPreset(updated[0]?.id || "default");
-    showPrintStudioStatus(`لے آؤٹ "${target.name}" ڈیلیٹ ہوگیا۔`, false);
+    showPrintStudioStatus(`Layout "${target.name}" has been deleted.`, false);
   }
 }
 
@@ -10102,7 +10263,7 @@ function resetPrintPresetsToDefault() {
     savePrintPresetsForSheet(printStudioActiveSheet, defaults);
     populatePrintPresetsDropdown(printStudioActiveSheet);
     applyPrintPreset("default");
-    showPrintStudioStatus("Layouts ڈیفالٹ سیٹنگز پر بحال ہوگئے۔", true);
+    showPrintStudioStatus("Layouts restored to factory defaults.", true);
   }
 }
 
@@ -10930,4 +11091,1348 @@ function openTrashItemDetails(trashId) {
 
   openModal("modal-trash-details");
 }
+
+// ====================================================================
+// WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
+// 2x Retina Canvas Engine • Custom Column Picker • LocalStorage Persistence
+// Direct Clipboard Copy (Ctrl+V into WhatsApp) • Contractor Tailored Sharing
+// ====================================================================
+
+let currentWhatsAppSheet = "daily";
+let currentWhatsAppContractor = "all";
+let whatsappControllerInitialized = false;
+
+const WHATSAPP_SHEET_DEFS = {
+  daily: {
+    id: "daily",
+    title: "DAILY RUNNING STYLE STATUS SHEET",
+    subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
+    getDatePeriod() {
+      const el = document.getElementById("daily-sheet-date");
+      if (el && el.value) {
+        const parts = el.value.split("-");
+        if (parts.length === 3) {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const m = months[parseInt(parts[1], 10) - 1] || parts[1];
+          return `${parts[2]}-${m}-${parts[0]}`;
+        }
+        return el.value;
+      }
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const set = new Set();
+      finalStyles.forEach(item => {
+        const match = master.find(m =>
+          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+        );
+        const name = (match ? match.contractor_name : item.contractor_name) || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+
+      let rows = finalStyles.map((item, idx) => {
+        const match = master.find(m =>
+          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+        );
+        const cont = (match ? match.contractor_name : item.contractor_name) || "-";
+        const cut = match ? (Number(match.cut_qty) || 0) : 0;
+        const rec = match ? (Number(match.received_qty) || 0) : 0;
+        const stock = match ? (Number(match.balance_from_stock) || 0) : 0;
+        const dis = match ? (Number(match.dispatch_from_hemb) || 0) : (Number(item.dispatch_from_hemb) || 0);
+        const hemb = match ? (Number(match.balance_from_hemb) || 0) : 0;
+
+        return {
+          sr_no: idx + 1,
+          style_code: item.style_code || "",
+          category: item.category || "SHIRT",
+          contractor: cont,
+          cut_qty: cut,
+          received_qty: rec,
+          balance_stock: stock,
+          dispatch_hemb: dis,
+          balance_hemb: hemb,
+          remarks: item.remarks || (match ? match.remarks || "" : "")
+        };
+      });
+
+      const filterParts = [];
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        rows = rows.filter(r => (r.contractor || "").toLowerCase() === contractorFilter.toLowerCase());
+        rows.forEach((r, i) => { r.sr_no = i + 1; });
+      }
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "S NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+      { id: "dispatch_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_hemb },
+      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+      { id: "remarks", label: "REMARKS / STATUS", default: true, align: "left", width: 180, get: (r) => r.remarks || "-" }
+    ]
+  },
+
+  distribution: {
+    id: "distribution",
+    title: "WORK DISTRIBUTION SHEET",
+    subtitle: "Bi-Monthly Contractor Garment Allocation",
+    getDatePeriod() {
+      if (typeof getActiveDistributionPeriod === "function") {
+        const p = getActiveDistributionPeriod();
+        if (p && p !== "all") return p;
+      }
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const query = syncWithPage ? (document.getElementById("search-dist-input")?.value || "").toLowerCase().trim() : "";
+      const contFilterVal = syncWithPage ? (document.getElementById("filter-dist-contractor")?.value || "").toLowerCase().trim() : "";
+      const floorFilterVal = syncWithPage ? (document.getElementById("filter-dist-floor")?.value || "").toLowerCase().trim() : "";
+      const itemFilterVal = syncWithPage ? (document.getElementById("filter-dist-item")?.value || "").toLowerCase().trim() : "";
+
+      const filterParts = [];
+      if (query) filterParts.push(`Search: "${query}"`);
+      if (contFilterVal) filterParts.push(`Cont: ${contFilterVal}`);
+      if (floorFilterVal) filterParts.push(`Floor: ${floorFilterVal}`);
+      if (itemFilterVal) filterParts.push(`Item: ${itemFilterVal}`);
+
+      if (!query && typeof getActiveDistributionPeriod === "function") {
+        const activePeriod = getActiveDistributionPeriod();
+        if (activePeriod && activePeriod !== "all") {
+          list = list.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+        }
+      }
+
+      if (syncWithPage && (query || contFilterVal || floorFilterVal || itemFilterVal)) {
+        list = list.filter(item => {
+          const qMatch = !query ||
+            (item.style_code || "").toLowerCase().includes(query) ||
+            (item.contractor_name || "").toLowerCase().includes(query) ||
+            (item.item || "").toLowerCase().includes(query) ||
+            (item.floor || "").toLowerCase().includes(query) ||
+            (item.period || "").toLowerCase().includes(query) ||
+            (item.remarks || "").toLowerCase().includes(query);
+
+          let cMatch = true;
+          if (contFilterVal) {
+            if (contFilterVal === "joint") cMatch = (item.contractor_name || "").includes("/");
+            else cMatch = (item.contractor_name || "").toLowerCase().includes(contFilterVal);
+          }
+          const fMatch = !floorFilterVal || (item.floor || "").toLowerCase() === floorFilterVal;
+          const iMatch = !itemFilterVal || (item.item || "").toLowerCase() === itemFilterVal;
+          return qMatch && cMatch && fMatch && iMatch;
+        });
+      }
+
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const rows = list.map((item, idx) => {
+        const qty = parseInt(item.pcs_qty, 10) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
+          ? Number(item.total_amount)
+          : (qty * rate);
+
+        return {
+          sr_no: item.sr_no || (idx + 1),
+          style_code: item.style_code || "",
+          contractor_name: item.contractor_name || "-",
+          pcs_qty: qty,
+          rate: rate > 0 ? rate : "-",
+          item: item.item || "SHIRT",
+          floor: item.floor || "-",
+          total: total > 0 ? Math.round(total) : 0,
+          period: item.period || "-",
+          remarks: item.remarks || "-"
+        };
+      });
+
+      const totals = {
+        pcs_qty: rows.reduce((s, r) => s + (Number(r.pcs_qty) || 0), 0),
+        total: rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "pcs_qty", label: "PCS QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.pcs_qty },
+      { id: "rate", label: "RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+      { id: "item", label: "ITEM / CAT", default: true, align: "center", width: 95, get: (r) => r.item },
+      { id: "floor", label: "FLOOR", default: true, align: "center", width: 85, get: (r) => r.floor },
+      { id: "total", label: "TOTAL (PKR)", default: true, align: "right", width: 110, isNumeric: true, get: (r) => r.total },
+      { id: "period", label: "TIME PERIOD", default: true, align: "center", width: 125, get: (r) => r.period },
+      { id: "remarks", label: "REMARKS", default: false, align: "left", width: 140, get: (r) => r.remarks }
+    ]
+  },
+
+  payment: {
+    id: "payment",
+    title: "RATE APPROVAL & PAYMENT RECONCILIATION SHEET",
+    subtitle: "Bi-Monthly Contractor Production & Payment Audit",
+    getDatePeriod() {
+      const p = (document.getElementById("filter-payment-period")?.value || "").trim();
+      if (p && p !== "all") return p;
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const query = syncWithPage ? (document.getElementById("payment-search-input")?.value || "").toLowerCase().trim() : "";
+      const channelFilter = syncWithPage ? (document.getElementById("filter-payment-channel")?.value || "") : "";
+      const statusFilter = syncWithPage ? (document.getElementById("filter-payment-status")?.value || "") : "";
+      const contractorPageFilter = syncWithPage ? (document.getElementById("filter-payment-contractor")?.value || "").toLowerCase().trim() : "";
+      const periodFilter = (typeof getActiveRateApprovalPeriod === "function" ? getActiveRateApprovalPeriod() : (document.getElementById("filter-payment-period")?.value || "")).trim();
+
+      const filterParts = [];
+      if (query) filterParts.push(`Search: "${query}"`);
+      if (channelFilter) filterParts.push(`Channel: ${channelFilter}`);
+      if (statusFilter) filterParts.push(`Status: ${statusFilter}`);
+      if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
+
+      if (!query && periodFilter && periodFilter !== "all") {
+        list = list.filter(item => (item.period || "").trim().toLowerCase() === periodFilter.toLowerCase());
+      }
+
+      if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
+        list = list.filter(item => {
+          const qMatch = !query ||
+            (item.style_code || "").toLowerCase().includes(query) ||
+            (item.contractor_name || "").toLowerCase().includes(query) ||
+            (item.working || item.category || "").toLowerCase().includes(query) ||
+            (item.remarks_1 || item.remarks || "").toLowerCase().includes(query) ||
+            (item.remarks_2 || item.status_remarks || "").toLowerCase().includes(query) ||
+            (item.target_floor || "").toLowerCase().includes(query) ||
+            (item.period || "").toLowerCase().includes(query);
+
+          const cMatch = !channelFilter || item.payment_channel === channelFilter;
+
+          let sMatch = true;
+          const rem2 = (item.remarks_2 || item.status_remarks || item.status || "").toLowerCase();
+          const totBal = item.total_balance != null ? item.total_balance : 0;
+          if (statusFilter === "close") sMatch = rem2.includes("close") || totBal === 0;
+          else if (statusFilter === "deduction") sMatch = rem2.includes("deduction");
+          else if (statusFilter === "balance") sMatch = totBal > 0;
+
+          const contMatch = !contractorPageFilter || (item.contractor_name || "").toLowerCase() === contractorPageFilter;
+
+          return qMatch && cMatch && sMatch && contMatch;
+        });
+      }
+
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const rows = list.map((item, idx) => ({
+        sr_no: item.sr_no || (idx + 1),
+        style_code: item.style_code || "",
+        working: item.working || item.category || "SHIRT",
+        contractor_name: item.contractor_name || "-",
+        rate: Number(item.rate) || 0,
+        cut_qty: Number(item.cut_qty) || 0,
+        prod_pcs_qty: Number(item.prod_pcs_qty) || 0,
+        carigar_rate: Number(item.carigar_rate) || 0,
+        commission: Number(item.commission) || 0,
+        rate_total: Number(item.rate_total) || 0,
+        remarks: item.remarks || "-",
+        balance_stock: Number(item.balance_stock) || 0,
+        balance_hemb: Number(item.balance_hemb) || 0,
+        total_balance: Number(item.total_balance) || 0,
+        period: item.period || "-"
+      }));
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
+        rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0),
+        total_balance: rows.reduce((s, r) => s + (Number(r.total_balance) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "S.NO", default: true, align: "center", width: 50, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE NAME", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "working", label: "WORKING", default: true, align: "center", width: 85, get: (r) => r.working },
+      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
+      { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
+      { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
+      { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },
+      { id: "rate_total", label: "TOTAL (PKR)", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.rate_total },
+      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+      { id: "total_balance", label: "TOTAL BAL", default: true, align: "right", width: 90, isNumeric: true, isBalance: true, get: (r) => r.total_balance },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 120, get: (r) => r.remarks },
+      { id: "period", label: "TIME PERIOD", default: false, align: "center", width: 115, get: (r) => r.period }
+    ]
+  },
+
+  receiving: {
+    id: "receiving",
+    title: "INWARD RECEIVING CHALLAN LOG",
+    subtitle: "Incoming Fabric & Garment Challans from Cutting / Stock",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+          ? i.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+
+      // Sort latest first (descending by SR or ID, matching the UI table)
+      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
+      const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+
+          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+
+          return queryPassed && catPassed && contPassed;
+        });
+      }
+
+      const rows = list.map((item, idx) => {
+        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+          ? item.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+        return {
+          sr_no: item.sr_no || item.id || (idx + 1),
+          date_receive: item.date_receive || item.date_received || "-",
+          challan_rec: item.challan_rec || item.challan_no || "-",
+          style_code: item.style_code || "",
+          category: item.category || "SHIRT",
+          contractor_name: cont,
+          cut_qty: Number(item.cut_qty != null ? item.cut_qty : item.cut_order_qty) || 0,
+          received_qty: Number(item.received_qty) || 0,
+          remarks: item.remarks || "-"
+        };
+      });
+
+      let filteredRows = rows;
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const totals = {
+        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: filteredRows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0)
+      };
+
+      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "date_receive", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_receive },
+      { id: "challan_rec", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_rec },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT ORDER", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.received_qty },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 140, get: (r) => r.remarks }
+    ]
+  },
+
+  dispatch: {
+    id: "dispatch",
+    title: "OUTWARD DISPATCH CHALLAN LOG",
+    subtitle: "Finished Hand Embroidery Dispatched to Unit / Finishing",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+          ? i.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+
+      // Sort latest first (descending by SR or ID, matching the UI table)
+      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
+      const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+
+          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+
+          return queryPassed && catPassed && contPassed;
+        });
+      }
+
+      const rows = list.map((item, idx) => {
+        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+          ? item.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+        return {
+          sr_no: item.sr_no || item.id || (idx + 1),
+          date_dispatch: item.date_dispatch || item.date_dispatched || "-",
+          challan_dis: item.challan_dis || item.challan_no || "-",
+          style_code: item.style_code || "",
+          category: item.category || "SHIRT",
+          contractor_name: cont,
+          dispatch_qty: Number(item.dispatch_qty) || 0,
+          remarks: item.remarks || "-"
+        };
+      });
+
+      let filteredRows = rows;
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const totals = {
+        dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
+      };
+
+      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "date_dispatch", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_dispatch },
+      { id: "challan_dis", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_dis },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
+      { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+    ]
+  },
+
+  master: {
+    id: "master",
+    title: "MASTER INVENTORY & ACTIVE STYLES",
+    subtitle: "Complete Hand Embroidery Style Production Balances",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const searchQuery = syncWithPage ? (document.getElementById("master-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedContractor = syncWithPage ? (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim() : "";
+      const selectedCategory = syncWithPage ? (document.getElementById("filter-category")?.value || "").toLowerCase().trim() : "";
+      const selectedBalance = syncWithPage ? (document.getElementById("filter-balance-status")?.value || "").trim() : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedContractor) filterParts.push(`Cont: ${selectedContractor}`);
+      if (selectedCategory) filterParts.push(`Cat: ${selectedCategory.toUpperCase()}`);
+      if (selectedBalance) filterParts.push(`Bal: ${selectedBalance}`);
+
+      if (syncWithPage && (searchQuery || selectedContractor || selectedCategory || selectedBalance)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const challanRecMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+          const challanDisMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+          const dateRecMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+          const dateDisMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || contMatch || challanRecMatch || challanDisMatch || dateRecMatch || dateDisMatch;
+
+          const contractorPassed = !selectedContractor || (item.contractor_name || "").toLowerCase() === selectedContractor;
+          const categoryPassed = !selectedCategory || (item.category || "").toLowerCase() === selectedCategory;
+
+          let balancePassed = true;
+          if (selectedBalance === "pending_hemb") balancePassed = item.balance_from_hemb > 0;
+          if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
+          if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
+
+          return queryPassed && contractorPassed && categoryPassed && balancePassed;
+        });
+      }
+
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const rows = list.map((item, idx) => ({
+        sr_no: item.sr_no || (idx + 1),
+        style_code: item.style_code || "",
+        category: item.category || "SHIRT",
+        contractor_name: item.contractor_name || "-",
+        cut_qty: Number(item.cut_qty) || 0,
+        received_qty: Number(item.received_qty) || 0,
+        balance_from_stock: Number(item.balance_from_stock) || 0,
+        dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+        balance_from_hemb: Number(item.balance_from_hemb) || 0,
+        status: item.status || "ACTIVE",
+        remarks: item.remarks || "-"
+      }));
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+      { id: "balance_from_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_stock },
+      { id: "dispatch_from_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_from_hemb },
+      { id: "balance_from_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_hemb },
+      { id: "status", label: "STATUS", default: false, align: "center", width: 85, get: (r) => r.status },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+    ]
+  }
+};
+
+function getSavedWhatsAppColumns(sheetKey) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  const stored = localStorage.getItem(key);
+  if (stored) {
+    try {
+      let parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Map legacy column IDs to current column IDs
+        parsed = parsed.map(id => {
+          if (id === "date_received") return "date_receive";
+          if (id === "date_dispatched") return "date_dispatch";
+          if (id === "challan_no") return sheetKey === "dispatch" ? "challan_dis" : "challan_rec";
+          if (id === "cut_order_qty") return "cut_qty";
+          return id;
+        });
+        return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed reading saved whatsapp cols:", e);
+    }
+  }
+  return null;
+}
+
+function saveWhatsAppColumns(sheetKey, colIds) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(colIds));
+    return true;
+  } catch (e) {
+    console.error("Failed saving whatsapp cols:", e);
+    return false;
+  }
+}
+
+function resetSavedWhatsAppColumns(sheetKey) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error("Failed clearing saved cols:", e);
+  }
+}
+
+function initWhatsAppTableController() {
+  if (whatsappControllerInitialized) return;
+  whatsappControllerInitialized = true;
+
+  // Global click delegate for any button opening WhatsApp Image modal
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-open-table-whatsapp-img");
+    if (btn) {
+      const sheet = btn.getAttribute("data-sheet") || "daily";
+      openWhatsAppTableImageModal(sheet);
+    }
+  });
+
+  // Sheet change listener
+  document.getElementById("whatsapp-sheet-select")?.addEventListener("change", (e) => {
+    switchWhatsAppSheet(e.target.value);
+  });
+
+  // Contractor change listener
+  document.getElementById("whatsapp-contractor-select")?.addEventListener("change", (e) => {
+    currentWhatsAppContractor = e.target.value;
+    renderWhatsAppTableImage();
+  });
+
+  // Summary toggle
+  document.getElementById("whatsapp-include-totals-toggle")?.addEventListener("change", () => {
+    renderWhatsAppTableImage();
+  });
+
+  // Bulk column buttons
+  document.getElementById("btn-whatsapp-cols-all")?.addEventListener("click", () => {
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach(cb => { cb.checked = true; });
+    renderWhatsAppTableImage();
+  });
+
+  document.getElementById("btn-whatsapp-cols-none")?.addEventListener("click", () => {
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach((cb, idx) => { cb.checked = (idx === 0 || idx === 1); });
+    renderWhatsAppTableImage();
+  });
+
+  document.getElementById("btn-whatsapp-cols-reset")?.addEventListener("click", () => {
+    const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+    if (!def) return;
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach(cb => {
+      const colId = cb.getAttribute("data-col-id");
+      const cDef = def.columns.find(c => c.id === colId);
+      cb.checked = cDef ? Boolean(cDef.default) : true;
+    });
+    renderWhatsAppTableImage();
+  });
+
+  // Save Column Preferences Button
+  document.getElementById("btn-whatsapp-save-cols")?.addEventListener("click", () => {
+    const selected = getActiveWhatsAppSelectedColIds();
+    if (selected.length === 0) {
+      showToast("Please select at least 1 column before saving.", "error");
+      return;
+    }
+    const ok = saveWhatsAppColumns(currentWhatsAppSheet, selected);
+    if (ok) {
+      const badge = document.getElementById("whatsapp-saved-settings-badge");
+      if (badge) badge.style.display = "inline";
+      const fb = document.getElementById("whatsapp-save-feedback");
+      if (fb) {
+        fb.style.display = "block";
+        setTimeout(() => { fb.style.display = "none"; }, 3500);
+      }
+      showToast("Column preferences saved! CraftFlow will remember your columns.", "success");
+    }
+  });
+
+  // Reset Saved Preferences Button
+  document.getElementById("btn-whatsapp-reset-saved-cols")?.addEventListener("click", () => {
+    resetSavedWhatsAppColumns(currentWhatsAppSheet);
+    const badge = document.getElementById("whatsapp-saved-settings-badge");
+    if (badge) badge.style.display = "none";
+    document.getElementById("btn-whatsapp-cols-reset")?.click();
+    showToast("Preferences reset to default.", "info");
+  });
+
+  // Active table filter sync toggle
+  document.getElementById("whatsapp-sync-filters-toggle")?.addEventListener("change", () => {
+    renderWhatsAppTableImage();
+  });
+
+  // Fit to screen / 100% Zoom toggle
+  document.getElementById("btn-whatsapp-toggle-zoom")?.addEventListener("click", () => {
+    const viewport = document.getElementById("whatsapp-preview-viewport");
+    const zoomText = document.getElementById("whatsapp-zoom-text");
+    const zoomIcon = document.getElementById("whatsapp-zoom-icon");
+    if (!viewport) return;
+    const isFit = viewport.classList.toggle("fit-to-screen");
+    if (zoomText) zoomText.textContent = isFit ? "100% Full View" : "Fit to Screen";
+    if (zoomIcon) zoomIcon.textContent = isFit ? "🔍" : "↔️";
+  });
+
+  // Action Buttons: Copy, Download, WhatsApp Web
+  document.getElementById("btn-whatsapp-copy-clipboard")?.addEventListener("click", copyWhatsAppTableImageToClipboard);
+  document.getElementById("btn-whatsapp-download-image")?.addEventListener("click", downloadWhatsAppTableImage);
+  document.getElementById("btn-whatsapp-open-web")?.addEventListener("click", () => {
+    window.open("https://web.whatsapp.com", "_blank");
+  });
+
+  // Print Studio connector
+  document.getElementById("btn-studio-whatsapp-image")?.addEventListener("click", () => {
+    if (typeof closeModal === "function") closeModal("modal-print-studio");
+    const active = (typeof printStudioActiveSheet !== "undefined" && printStudioActiveSheet) ? printStudioActiveSheet : "daily";
+    openWhatsAppTableImageModal(active);
+  });
+}
+
+function openWhatsAppTableImageModal(sheetKey = "daily") {
+  initWhatsAppTableController();
+
+  // Reset zoom toggle UI state to match default fit-to-screen
+  const viewport = document.getElementById("whatsapp-preview-viewport");
+  const zoomText = document.getElementById("whatsapp-zoom-text");
+  const zoomIcon = document.getElementById("whatsapp-zoom-icon");
+  if (viewport) {
+    viewport.classList.add("fit-to-screen");
+    if (zoomText) zoomText.textContent = "100% Full View";
+    if (zoomIcon) zoomIcon.textContent = "🔍";
+  }
+
+  // Ensure sync filters toggle is checked by default
+  const syncToggle = document.getElementById("whatsapp-sync-filters-toggle");
+  if (syncToggle) syncToggle.checked = true;
+
+  switchWhatsAppSheet(sheetKey);
+  if (typeof openModal === "function") {
+    openModal("modal-whatsapp-table-image");
+  }
+}
+
+function switchWhatsAppSheet(sheetKey) {
+  if (!WHATSAPP_SHEET_DEFS[sheetKey]) sheetKey = "daily";
+  currentWhatsAppSheet = sheetKey;
+  currentWhatsAppContractor = "all";
+
+  const sheetSelect = document.getElementById("whatsapp-sheet-select");
+  if (sheetSelect) sheetSelect.value = sheetKey;
+
+  populateWhatsAppContractorDropdown(sheetKey);
+  renderWhatsAppColumnCheckboxes(sheetKey);
+  renderWhatsAppTableImage();
+}
+
+function populateWhatsAppContractorDropdown(sheetKey) {
+  const select = document.getElementById("whatsapp-contractor-select");
+  const countEl = document.getElementById("whatsapp-contractor-count");
+  if (!select) return;
+
+  const def = WHATSAPP_SHEET_DEFS[sheetKey];
+  const contractors = def ? def.getContractors() : [];
+
+  select.innerHTML = `<option value="all">👥 All Contractors (Whole Sheet)</option>` +
+    contractors.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+
+  select.value = "all";
+  if (countEl) {
+    countEl.textContent = `${contractors.length} active contractors`;
+  }
+}
+
+function renderWhatsAppColumnCheckboxes(sheetKey) {
+  const container = document.getElementById("whatsapp-columns-container");
+  const badge = document.getElementById("whatsapp-saved-settings-badge");
+  if (!container) return;
+
+  const def = WHATSAPP_SHEET_DEFS[sheetKey];
+  if (!def) return;
+
+  const savedCols = getSavedWhatsAppColumns(sheetKey);
+  if (badge) {
+    badge.style.display = savedCols ? "inline" : "none";
+  }
+
+  container.innerHTML = def.columns.map(col => {
+    const isChecked = savedCols ? savedCols.includes(col.id) : Boolean(col.default);
+    return `
+      <label class="whatsapp-col-checkbox-label">
+        <input type="checkbox" data-col-id="${escapeHtml(col.id)}" ${isChecked ? "checked" : ""} style="accent-color: #25d366; width: 16px; height: 16px;">
+        <span>${escapeHtml(col.label)}</span>
+      </label>
+    `;
+  }).join("");
+
+  // Attach live listener to checkboxes
+  const cbs = container.querySelectorAll("input[type='checkbox']");
+  cbs.forEach(cb => {
+    cb.addEventListener("change", () => {
+      renderWhatsAppTableImage();
+    });
+  });
+}
+
+function getActiveWhatsAppSelectedColIds() {
+  const container = document.getElementById("whatsapp-columns-container");
+  if (!container) return [];
+  const cbs = container.querySelectorAll("input[type='checkbox']:checked");
+  return Array.from(cbs).map(cb => cb.getAttribute("data-col-id"));
+}
+
+function renderWhatsAppTableImage() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  const badge = document.getElementById("whatsapp-preview-badge");
+  if (!canvas) return;
+
+  const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+  if (!def) return;
+
+  const selectedColIds = getActiveWhatsAppSelectedColIds();
+  const activeCols = def.columns.filter(c => selectedColIds.includes(c.id));
+
+  if (activeCols.length === 0) {
+    canvas.width = 600;
+    canvas.height = 180;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#64748b";
+    ctx.font = "bold 16px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No columns selected! Please check at least 1 column on the left.", 300, 95);
+    if (badge) badge.textContent = "0 columns selected";
+    return;
+  }
+
+  const { rows, totals, filterDesc } = def.getData(currentWhatsAppContractor);
+  const includeTotals = Boolean(document.getElementById("whatsapp-include-totals-toggle")?.checked);
+  const datePeriodStr = def.getDatePeriod();
+
+  // Update filter hint in UI sidebar
+  const filterHintEl = document.getElementById("whatsapp-active-filter-hint");
+  if (filterHintEl) {
+    if (filterDesc) {
+      filterHintEl.style.display = "block";
+      filterHintEl.innerHTML = `🔍 <strong>Filter Synced:</strong> ${escapeHtml(filterDesc)} (${rows.length} rows)`;
+      filterHintEl.style.color = "#38bdf8";
+    } else {
+      filterHintEl.style.display = "block";
+      filterHintEl.innerHTML = `✓ <strong>Whole Table:</strong> Showing all ${rows.length} rows`;
+      filterHintEl.style.color = "#10b981";
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Layout Dimensions & Sizing
+  // ------------------------------------------------------------------
+  const SCALE = 2; // Ultra HD Retina
+  const PADDING_X = 24;
+  const HEADER_HEIGHT = 86;
+  const TABLE_HEADER_HEIGHT = 38;
+  const ROW_HEIGHT = 34;
+  const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
+  const FOOTER_HEIGHT = 32;
+
+  // Calculate dynamic column widths proportionally
+  const baseColWidths = activeCols.map(c => c.width || 100);
+  const totalBaseWidth = baseColWidths.reduce((a, b) => a + b, 0);
+
+  // Target minimum table width for crisp reading
+  const targetTableWidth = Math.max(900, Math.min(1400, totalBaseWidth + 100));
+  const colWidths = baseColWidths.map(w => Math.round((w / totalBaseWidth) * targetTableWidth));
+  const actualTableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+  const logicalWidth = actualTableWidth + (PADDING_X * 2);
+  const effectiveRowsHeight = Math.max(rows.length * ROW_HEIGHT, rows.length === 0 ? 60 : 0);
+  const logicalHeight = HEADER_HEIGHT + TABLE_HEADER_HEIGHT + effectiveRowsHeight + TOTAL_HEIGHT + FOOTER_HEIGHT + 16;
+
+  canvas.width = Math.round(logicalWidth * SCALE);
+  canvas.height = Math.round(logicalHeight * SCALE);
+  canvas.style.width = `${logicalWidth}px`;
+  canvas.style.height = `${logicalHeight}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.scale(SCALE, SCALE);
+
+  // Background Canvas
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+  // ------------------------------------------------------------------
+  // 1. TOP BRANDING & DETAILS BANNER
+  // ------------------------------------------------------------------
+  const bannerGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+  bannerGrad.addColorStop(0, "#0f172a");
+  bannerGrad.addColorStop(0.5, "#1e293b");
+  bannerGrad.addColorStop(1, "#0f172a");
+  ctx.fillStyle = bannerGrad;
+  ctx.fillRect(0, 0, logicalWidth, HEADER_HEIGHT);
+
+  // Decorative Accent Bar
+  const accentGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+  accentGrad.addColorStop(0, "#25d366");
+  accentGrad.addColorStop(0.5, "#38bdf8");
+  accentGrad.addColorStop(1, "#10b981");
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, HEADER_HEIGHT - 3.5, logicalWidth, 3.5);
+
+  // Brand Name
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "bold 10px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("CRAFTFLOW  •  HAND EMBROIDERY PRODUCTION SUITE", PADDING_X, 22);
+
+  // Sheet Title
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 17px Inter, -apple-system, sans-serif";
+  ctx.fillText(def.title, PADDING_X, 45);
+
+  // Subtitle & Badges
+  ctx.font = "600 11px Inter, -apple-system, sans-serif";
+
+  // Date Badge
+  drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 58, "#38bdf8", "rgba(56, 189, 248, 0.18)");
+
+  // Contractor / Filter Badge
+  const contText = currentWhatsAppContractor !== "all"
+    ? `👤 Contractor: ${currentWhatsAppContractor}`
+    : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
+  const badgeX = PADDING_X + 115 + (datePeriodStr.length * 6);
+  drawCanvasBadge(ctx, contText, badgeX, 58, "#25d366", "rgba(37, 211, 102, 0.18)");
+
+  // Record Count Badge (Right aligned)
+  const countText = filterDesc
+    ? `🔍 Filtered: ${rows.length} rows`
+    : `📦 All Records: ${rows.length}`;
+  ctx.fillStyle = filterDesc ? "#38bdf8" : "#cbd5e1";
+  ctx.font = "bold 11.5px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(countText, logicalWidth - PADDING_X, 45);
+
+  const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
+  ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 68);
+
+  // ------------------------------------------------------------------
+  // 2. TABLE HEADER ROW
+  // ------------------------------------------------------------------
+  let curY = HEADER_HEIGHT + 10;
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(PADDING_X, curY, actualTableWidth, TABLE_HEADER_HEIGHT);
+
+  let curX = PADDING_X;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 10.5px Inter, -apple-system, sans-serif";
+
+  activeCols.forEach((col, idx) => {
+    const colW = colWidths[idx];
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(curX, curY, colW, TABLE_HEADER_HEIGHT);
+
+    let textX = curX + (colW / 2);
+    ctx.textAlign = "center";
+    if (col.align === "left") {
+      textX = curX + 10;
+      ctx.textAlign = "left";
+    } else if (col.align === "right") {
+      textX = curX + colW - 10;
+      ctx.textAlign = "right";
+    }
+
+    ctx.fillStyle = "#ffffff";
+    drawTextWithTruncate(ctx, col.label, textX, curY + 23, colW - 16, col.align);
+    curX += colW;
+  });
+
+  curY += TABLE_HEADER_HEIGHT;
+
+  // Empty state handling if no records match
+  if (rows.length === 0) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, 60);
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PADDING_X, curY, actualTableWidth, 60);
+    ctx.fillStyle = "#64748b";
+    ctx.font = "italic 12px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No table records match active search or filters.", PADDING_X + (actualTableWidth / 2), curY + 35);
+    curY += 60;
+  }
+
+  // ------------------------------------------------------------------
+  // 3. DATA ROWS (Zebra Striping & Balance Highlights)
+  // ------------------------------------------------------------------
+  rows.forEach((row, rIdx) => {
+    const isEven = rIdx % 2 === 0;
+    const rowBg = isEven ? "#ffffff" : "#f8fafc";
+
+    ctx.fillStyle = rowBg;
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, ROW_HEIGHT);
+
+    curX = PADDING_X;
+    activeCols.forEach((col, cIdx) => {
+      const colW = colWidths[cIdx];
+      const rawVal = col.get(row, rIdx);
+      const isNum = Boolean(col.isNumeric);
+      const numVal = isNum ? (Number(rawVal) || 0) : 0;
+      const isBalHighlight = Boolean(col.isBalance) && numVal > 0;
+
+      // Highlight cell if pending balance > 0
+      if (isBalHighlight) {
+        ctx.fillStyle = "#ffe4e6"; // soft rose
+        ctx.fillRect(curX, curY, colW, ROW_HEIGHT);
+      }
+
+      // Border
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(curX, curY, colW, ROW_HEIGHT);
+
+      // Text Formatting
+      let displayStr = "";
+      if (isNum) {
+        displayStr = numVal.toLocaleString("en-US");
+      } else {
+        displayStr = String(rawVal != null ? rawVal : "-");
+      }
+
+      let textX = curX + (colW / 2);
+      ctx.textAlign = "center";
+      if (col.align === "left") {
+        textX = curX + 10;
+        ctx.textAlign = "left";
+      } else if (col.align === "right") {
+        textX = curX + colW - 10;
+        ctx.textAlign = "right";
+      }
+
+      // Font & Color Selection
+      if (isBalHighlight) {
+        ctx.fillStyle = "#e11d48"; // vibrant red/rose
+        ctx.font = "bold 11px Inter, sans-serif";
+      } else if (col.isStyleCode) {
+        ctx.fillStyle = "#0284c7"; // blue
+        ctx.font = "bold 11.5px Inter, sans-serif";
+      } else if (col.isContractor) {
+        ctx.fillStyle = "#0f172a"; // dark bold
+        ctx.font = "bold 11px Inter, sans-serif";
+      } else if (isNum) {
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "600 11px Inter, sans-serif";
+      } else {
+        ctx.fillStyle = "#334155";
+        ctx.font = "500 11px Inter, sans-serif";
+      }
+
+      drawTextWithTruncate(ctx, displayStr, textX, curY + 21, colW - 14, col.align);
+      curX += colW;
+    });
+
+    curY += ROW_HEIGHT;
+  });
+
+  // ------------------------------------------------------------------
+  // 4. TOTALS ROW (Optional Summary Row)
+  // ------------------------------------------------------------------
+  if (includeTotals && rows.length > 0) {
+    ctx.fillStyle = "#f1f5f9";
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, TOTAL_HEIGHT);
+
+    // Strong dividing top border
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(PADDING_X, curY);
+    ctx.lineTo(PADDING_X + actualTableWidth, curY);
+    ctx.stroke();
+
+    curX = PADDING_X;
+    let totalLabelDrawn = false;
+
+    activeCols.forEach((col, cIdx) => {
+      const colW = colWidths[cIdx];
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(curX, curY, colW, TOTAL_HEIGHT);
+
+      let textX = curX + (colW / 2);
+      ctx.textAlign = "center";
+      if (col.align === "left") {
+        textX = curX + 10;
+        ctx.textAlign = "left";
+      } else if (col.align === "right") {
+        textX = curX + colW - 10;
+        ctx.textAlign = "right";
+      }
+
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillStyle = "#0f172a";
+
+      if (totals[col.id] != null) {
+        const sumVal = totals[col.id].toLocaleString("en-US");
+        drawTextWithTruncate(ctx, sumVal, textX, curY + 23, colW - 14, col.align);
+      } else if (!totalLabelDrawn && col.align === "left") {
+        drawTextWithTruncate(ctx, `TOTAL (${rows.length}):`, textX, curY + 23, colW - 14, "left");
+        totalLabelDrawn = true;
+      } else if (!totalLabelDrawn && cIdx === 0) {
+        drawTextWithTruncate(ctx, "TOTAL:", textX, curY + 23, colW - 10, "center");
+        totalLabelDrawn = true;
+      }
+
+      curX += colW;
+    });
+
+    curY += TOTAL_HEIGHT;
+  }
+
+  // ------------------------------------------------------------------
+  // 5. FOOTER WATERMARK
+  // ------------------------------------------------------------------
+  curY += 8;
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "500 9.5px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
+
+  ctx.textAlign = "right";
+  ctx.fillText("Direct WhatsApp Export  •  Zero Clipping Guarantee", logicalWidth - PADDING_X, curY + 12);
+
+  ctx.restore();
+
+  // Update badge
+  if (badge) {
+    const filterNote = filterDesc ? ` • [Filtered: ${filterDesc}]` : " • [All Records]";
+    badge.textContent = `${rows.length} rows • ${activeCols.length} cols • ${logicalWidth * 2} × ${logicalHeight * 2} px Ultra HD 2x${filterNote}`;
+  }
+}
+
+function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
+  ctx.save();
+  ctx.font = "bold 10px Inter, sans-serif";
+  const metrics = ctx.measureText(text);
+  const w = metrics.width + 16;
+  const h = 20;
+  const r = 4;
+
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  ctx.roundRect(x, y - 13, w, h, r);
+  ctx.fill();
+
+  ctx.strokeStyle = textColor;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "left";
+  ctx.fillText(text, x + 8, y + 1);
+  ctx.restore();
+}
+
+function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
+  if (maxWidth <= 0) return;
+  text = String(text != null ? text : "");
+  if (ctx.measureText(text).width <= maxWidth) {
+    ctx.fillText(text, x, y);
+    return;
+  }
+
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  ctx.fillText(truncated + "…", x, y);
+}
+
+async function copyWhatsAppTableImageToClipboard() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  if (!canvas) return;
+
+  const btn = document.getElementById("btn-whatsapp-copy-clipboard");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>⏳</span> <span>Copying...</span>`;
+  }
+
+  try {
+    canvas.toBlob(async (blob) => {
+      if (!blob) throw new Error("Could not create image blob");
+
+      let copiedSuccessfully = false;
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          const item = new ClipboardItem({ "image/png": blob });
+          await navigator.clipboard.write([item]);
+          copiedSuccessfully = true;
+        } catch (clipErr) {
+          console.warn("Direct clipboard write failed:", clipErr);
+        }
+      }
+
+      if (copiedSuccessfully) {
+        showWhatsAppActionFeedback("Image Copied to Clipboard! Ab WhatsApp me jakar 'Ctrl + V' dabayein.", true);
+        if (typeof showToast === "function") {
+          showToast("Table image copied to clipboard! Paste directly into WhatsApp.", "success");
+        }
+        if (btn) {
+          btn.innerHTML = `<span>✅</span> <span>Copied to Clipboard!</span>`;
+          setTimeout(() => {
+            btn.innerHTML = origHtml;
+            btn.disabled = false;
+          }, 3500);
+        }
+      } else {
+        // Fallback: Download file automatically
+        downloadWhatsAppTableImage();
+        showWhatsAppActionFeedback("Image Downloaded! (Direct clipboard copy not permitted by browser)", true);
+        if (btn) {
+          btn.innerHTML = origHtml;
+          btn.disabled = false;
+        }
+      }
+    }, "image/png");
+  } catch (err) {
+    console.error("WhatsApp Copy error:", err);
+    downloadWhatsAppTableImage();
+    if (btn) {
+      btn.innerHTML = origHtml;
+      btn.disabled = false;
+    }
+  }
+}
+
+function downloadWhatsAppTableImage() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  if (!canvas) return;
+
+  const sheet = currentWhatsAppSheet || "table";
+  const cont = (currentWhatsAppContractor || "all").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const d = new Date().toISOString().slice(0, 10);
+  const filename = `CraftFlow_${sheet}_${cont}_${d}.png`;
+
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (typeof showToast === "function") {
+      showToast(`Image downloaded: ${filename}`, "success");
+    }
+  } catch (e) {
+    console.error("Failed to download canvas:", e);
+    if (typeof showToast === "function") {
+      showToast("Download failed. Please check browser permissions.", "error");
+    }
+  }
+}
+
+function showWhatsAppActionFeedback(msgText, isSuccess = true) {
+  const box = document.getElementById("whatsapp-action-status");
+  const textEl = document.getElementById("whatsapp-action-status-text");
+  if (!box || !textEl) return;
+
+  textEl.textContent = msgText;
+  box.style.display = "flex";
+  box.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
+  box.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
+  box.style.color = isSuccess ? "#10b981" : "#f43f5e";
+
+  if (window._whatsappStatusTimer) clearTimeout(window._whatsappStatusTimer);
+  window._whatsappStatusTimer = setTimeout(() => {
+    if (box) box.style.display = "none";
+  }, 6000);
+}
+
+// Auto-initialize when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initWhatsAppTableController);
+} else {
+  initWhatsAppTableController();
+}
+
 
