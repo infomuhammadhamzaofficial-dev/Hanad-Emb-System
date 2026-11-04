@@ -1229,6 +1229,16 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     ? window.db.getWorkDistribution()
     : [];
 
+  // Determine active category filter based on container view
+  let activeFilterCat = "";
+  if (containerId === "master-search-dist-preview") {
+    activeFilterCat = (document.getElementById("filter-category")?.value || "").trim().toLowerCase();
+  } else if (containerId === "rec-search-dist-preview") {
+    activeFilterCat = (document.getElementById("filter-rec-category")?.value || "").trim().toLowerCase();
+  } else if (containerId === "dis-search-dist-preview") {
+    activeFilterCat = (document.getElementById("filter-dis-category")?.value || "").trim().toLowerCase();
+  }
+
   // Match priority:
   // 1. Exact match on style_code
   let matches = distList.filter(d => (d.style_code || "").trim().toLowerCase() === cleanQuery);
@@ -1243,16 +1253,26 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     matches = distList.filter(d => (d.contractor_name || "").toLowerCase().includes(cleanQuery));
   }
 
+  // Filter by category if a specific category is selected (not "All Categories" / empty)
+  const isFilteringSpecificCat = Boolean(activeFilterCat && activeFilterCat !== "all" && activeFilterCat !== "all categories");
+  if (isFilteringSpecificCat) {
+    matches = matches.filter(d => {
+      const cat = (d.item || d.category || "").trim().toLowerCase();
+      return cat === activeFilterCat || cat.includes(activeFilterCat) || activeFilterCat.includes(cat);
+    });
+  }
+
   if (matches.length === 0) {
     if (rawQuery.length >= 3) {
+      const catNotice = isFilteringSpecificCat ? ` for [${activeFilterCat.toUpperCase()}]` : "";
       container.innerHTML = `
-        <div class="dist-live-card empty-notice" title="Style not recorded in Work Distribution">
+        <div class="dist-live-card empty-notice" title="Style not recorded in Work Distribution${catNotice}">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="12" cy="12" r="10"></circle>
             <line x1="12" y1="8" x2="12" y2="12"></line>
             <line x1="12" y1="16" x2="12.01" y2="16"></line>
           </svg>
-          <span>Dist: <em>Not Found in Distribution</em></span>
+          <span>Dist: <em>Not Found in Distribution${catNotice}</em></span>
         </div>
       `;
       container.style.display = "inline-flex";
@@ -1263,8 +1283,10 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     return;
   }
 
-  // Cap to top 2 matches to prevent toolbar overflow
-  const displayMatches = matches.slice(0, 2);
+  // When All Categories is selected, display up to 4 items so Shirt, Trouser, Dupatta all show side-by-side!
+  // When a specific category is chosen, display up to 3 matches.
+  const maxDisplay = isFilteringSpecificCat ? 3 : 4;
+  const displayMatches = matches.slice(0, maxDisplay);
   const remainingCount = matches.length - displayMatches.length;
 
   const cardsHtml = displayMatches.map(m => {
@@ -1272,14 +1294,23 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     const pcs = Number(m.pcs_qty) || 0;
     const rate = Number(m.rate) || 0;
     const style = m.style_code || "";
+    const category = (m.item || m.category || "SHIRT").toUpperCase();
+
+    let icon = "👕";
+    if (category.includes("TROUSER") || category.includes("PANT")) icon = "👖";
+    else if (category.includes("DUPATTA")) icon = "🧣";
+    else if (category.includes("GALA")) icon = "✨";
 
     return `
-      <div class="dist-live-card" title="Style: ${escapeHtml(style)} | Contractor: ${escapeHtml(contractor)} | ${pcs.toLocaleString()} Pcs @ Rs ${rate.toLocaleString()}">
+      <div class="dist-live-card" title="Style: ${escapeHtml(style)} | Category: ${escapeHtml(category)} | Contractor: ${escapeHtml(contractor)} | ${pcs.toLocaleString()} Pcs @ Rs ${rate.toLocaleString()}">
         <span class="dist-live-label">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"></polyline>
           </svg>
           <span>Dist:</span>
+        </span>
+        <span class="dist-live-chip cat" title="Item Category">
+          <span>${icon} ${escapeHtml(category)}</span>
         </span>
         <span class="dist-live-contractor">
           <span class="contractor-name">👤 ${escapeHtml(contractor)}</span>
@@ -3853,6 +3884,18 @@ function initModalHandlers() {
     }
   });
 
+  // When focus lands on remarks -> smooth scroll down so KPI summary cards are in view
+  if (remarksInput) {
+    remarksInput.addEventListener("focus", () => {
+      setTimeout(() => {
+        const kpiWrap = document.getElementById("modal-kpi-summary-wrapper");
+        if (kpiWrap && kpiWrap.style.display !== "none") {
+          kpiWrap.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }, 50);
+    });
+  }
+
   // Master Entry Form Submit
   const form = document.getElementById("form-master-entry");
   if (form) {
@@ -4302,6 +4345,17 @@ function handleLiveStyleFetch() {
 // Update all 6 Live KPIs in the modal reflecting Style Code + Category
 function updateModalPreviewBalances() {
   const code = (document.getElementById("entry-style-code")?.value || "").trim().toUpperCase();
+  const kpiWrapper = document.getElementById("modal-kpi-summary-wrapper");
+
+  // If Style Code is empty, keep KPI summary completely hidden
+  if (!code) {
+    if (kpiWrapper) kpiWrapper.style.display = "none";
+    return;
+  }
+
+  // Show KPI summary when a Style Code is entered
+  if (kpiWrapper) kpiWrapper.style.display = "block";
+
   const cat = (document.getElementById("entry-category")?.value || "Shirt").trim();
   const existing = window.db.findMasterByStyleAndCategory(code, cat);
 
@@ -4458,6 +4512,9 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
   const idInput = document.getElementById("entry-id");
   const badge = document.getElementById("style-fetch-status");
   if (badge) badge.style.display = "none";
+
+  const lastSavedBadge = document.getElementById("modal-last-saved-badge");
+  if (lastSavedBadge) lastSavedBadge.style.display = "none";
 
   populateDropdowns();
 
@@ -4741,6 +4798,21 @@ async function saveMasterEntryFromForm() {
 
   // Refresh all background tables and navigation badges immediately
   renderAll();
+
+  // Show Total Balance of last saved style in modal header badge
+  try {
+    const savedMaster = window.db.findMasterByStyleAndCategory(styleCode, category);
+    const totalBal = savedMaster
+      ? (savedMaster.total_balance !== undefined ? Number(savedMaster.total_balance) : (Number(savedMaster.balance_from_stock || 0) + Number(savedMaster.balance_from_hemb || 0)))
+      : 0;
+    const lastSavedBadge = document.getElementById("modal-last-saved-badge");
+    if (lastSavedBadge) {
+      lastSavedBadge.style.display = "inline-flex";
+      lastSavedBadge.innerHTML = `✓ Last Saved: <strong>${escapeHtml(styleCode)}</strong> [${escapeHtml(category)}] &nbsp;•&nbsp; Total Balance: <strong style="font-family: var(--font-mono); margin-left: 3px;">${totalBal.toLocaleString()} pcs</strong>`;
+    }
+  } catch (badgeErr) {
+    console.warn("Could not render last saved balance badge:", badgeErr);
+  }
 
   // PRESERVE CONTRACTOR FOR RAPID SUCCESSIVE BATCH ENTRY
   const preserveContractor = document.getElementById("entry-contractor")?.value || "";
