@@ -1434,9 +1434,12 @@ function renderMasterInventory() {
     const balHembClass = item.balance_from_hemb > 0 ? "balance-highlight-pink" : "balance-zero-green";
     const totalBalClass = item.total_balance > 0 ? "balance-highlight-pink" : "balance-zero-green";
 
-    const displayCont = (item.contractor_name && item.contractor_name !== "Unassigned" && item.contractor_name !== "-")
-      ? item.contractor_name
-      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "Unassigned");
+    const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
+    const displayCont = (distInfo && distInfo.contractor_name)
+      ? distInfo.contractor_name
+      : ((item.contractor_name && item.contractor_name !== "Unassigned" && item.contractor_name !== "-")
+        ? item.contractor_name
+        : "Unassigned");
 
     return `
       <tr>
@@ -1758,9 +1761,12 @@ function renderReceivingLog() {
     sumCut += (item.cut_qty || 0);
     sumRec += (item.received_qty || 0);
 
-    const displayCont = (item.contractor_name && item.contractor_name !== "-")
-      ? item.contractor_name
-      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
+    const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
+    const displayCont = (distInfo && distInfo.contractor_name)
+      ? distInfo.contractor_name
+      : ((item.contractor_name && item.contractor_name !== "-")
+        ? item.contractor_name
+        : "-");
 
     return `
       <tr>
@@ -1937,9 +1943,12 @@ function renderDispatchLog() {
     else if (rLower.includes("inline")) remarkBadge = `<span class="badge-tag inline">INLINE</span> `;
     else if (rLower.includes("issue") || rLower.includes("m-na")) remarkBadge = `<span class="badge-tag issue">ISSUE</span> `;
 
-    const displayCont = (item.contractor_name && item.contractor_name !== "-")
-      ? item.contractor_name
-      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
+    const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
+    const displayCont = (distInfo && distInfo.contractor_name)
+      ? distInfo.contractor_name
+      : ((item.contractor_name && item.contractor_name !== "-")
+        ? item.contractor_name
+        : "-");
 
     return `
       <tr>
@@ -2178,9 +2187,12 @@ function renderFinalStyleSheet() {
       remarkBadge = `<span class="badge-tag alter" style="margin-right: 4px;">ALTER</span>`;
     }
 
-    const displayCont = (item.contractor_name && item.contractor_name !== "-")
-      ? item.contractor_name
-      : (window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name || "-");
+    const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
+    const displayCont = (distInfo && distInfo.contractor_name)
+      ? distInfo.contractor_name
+      : ((item.contractor_name && item.contractor_name !== "-")
+        ? item.contractor_name
+        : "-");
 
     return `
       <tr>
@@ -6213,7 +6225,7 @@ async function deleteSheetPeriodAction(periodId) {
   }
 }
 
-function saveSheetSetupForm() {
+async function saveSheetSetupForm() {
   const periodName = (document.getElementById("sheet-setup-name")?.value || "").trim();
   const startDate = document.getElementById("sheet-setup-start-date")?.value || "";
   const endDate = document.getElementById("sheet-setup-end-date")?.value || "";
@@ -6226,25 +6238,29 @@ function saveSheetSetupForm() {
     return;
   }
 
-  window.db.addRateApprovalPeriod({
-    period_name: periodName,
-    start_date: startDate,
-    end_date: endDate,
-    department: dept,
-    status: status,
-    notes: notes
-  });
+  try {
+    await window.db.addRateApprovalPeriod({
+      period_name: periodName,
+      start_date: startDate,
+      end_date: endDate,
+      department: dept,
+      status: status,
+      notes: notes
+    });
 
-  populateRateApprovalPeriods();
+    populateRateApprovalPeriods();
 
-  const periodSelect = document.getElementById("select-rate-approval-period");
-  const periodInput = document.getElementById("input-rate-approval-period");
-  if (periodSelect) periodSelect.value = periodName;
-  if (periodInput) periodInput.value = periodName;
+    const periodSelect = document.getElementById("select-rate-approval-period");
+    const periodInput = document.getElementById("input-rate-approval-period");
+    if (periodSelect) periodSelect.value = periodName;
+    if (periodInput) periodInput.value = periodName;
 
-  closeModal("modal-sheet-setup");
-  renderPaymentSheet();
-  showToast(`✓ Sheet "${periodName}" configured and opened successfully!`, "success");
+    closeModal("modal-sheet-setup");
+    renderPaymentSheet();
+    showToast(`✓ Sheet "${periodName}" configured and synced to Neon successfully!`, "success");
+  } catch (err) {
+    showToast(`Error saving sheet period: ${err.message}`, "error");
+  }
 }
 
 function initPaymentSheetView() {
@@ -9115,7 +9131,7 @@ function openDistributionEntryModal(id) {
   }, 80);
 }
 
-function saveDistributionEntryAction(e) {
+async function saveDistributionEntryAction(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const idVal = document.getElementById("dist-entry-id")?.value;
@@ -9192,12 +9208,12 @@ function saveDistributionEntryAction(e) {
 
   try {
     if (isEdit) {
-      window.db.updateWorkDistributionEntry(parseInt(idVal, 10), payload);
-      showToast(`✓ Distribution entry for ${style_code} (${contractor_name}) updated!`);
+      await window.db.updateWorkDistributionEntry(parseInt(idVal, 10), payload);
+      showToast(`✓ Distribution entry for ${style_code} (${contractor_name}) updated and propagated across sheets!`);
       closeModal("modal-distribution-entry");
       renderAll();
     } else {
-      window.db.addWorkDistributionEntry(payload);
+      await window.db.addWorkDistributionEntry(payload);
       showToast(`✓ Style ${style_code} (${contractor_name}) save ho gaya! Agli entry ke liye Style Code par cursor ready hai.`);
 
       // Render updated list in background
@@ -9348,7 +9364,7 @@ function selectDistPeriodFromSetup(periodName) {
   showToast(`Switched to distribution period "${periodName}"`, "info");
 }
 
-function saveDistPeriodAction(e) {
+async function saveDistPeriodAction(e) {
   if (e && e.preventDefault) e.preventDefault();
 
   const titleInp = document.getElementById("dist-setup-name");
@@ -9374,7 +9390,7 @@ function saveDistPeriodAction(e) {
   };
 
   try {
-    window.db.saveDistributionPeriod(periodObj);
+    await window.db.saveDistributionPeriod(periodObj);
     populateDistributionPeriods();
 
     const select = document.getElementById("select-distribution-period");
@@ -9382,7 +9398,7 @@ function saveDistPeriodAction(e) {
 
     closeModal("modal-dist-period-setup");
     renderWorkDistribution();
-    showToast(`✓ Distribution period "${period_name}" created & active!`);
+    showToast(`✓ Distribution period "${period_name}" created & synced to Neon!`);
   } catch (err) {
     showToast(`Error saving period: ${err.message}`, "error");
   }
