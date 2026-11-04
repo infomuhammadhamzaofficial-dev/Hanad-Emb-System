@@ -571,6 +571,9 @@ class DatabaseService {
     } else if (entityType === "user") {
       title = `User Account: ${item.full_name || item.username} (@${item.username})`;
       subtitle = `Role: ${item.role} | Status: ${item.status}`;
+    } else if (entityType === "contractor") {
+      title = `Contractor: ${item.name || 'Unnamed'}`;
+      subtitle = `Phone: ${item.phone || 'Not Set'} | Status: ${item.status || 'Active'} | ID: #${item.id || '-'}`;
     } else {
       title = `${entityType} Item #${item.id || item.s_no || ''}`;
       subtitle = JSON.stringify(item).substring(0, 80);
@@ -814,6 +817,17 @@ class DatabaseService {
         users.push(data);
         this.saveUsers(users);
       }
+    } else if (entityType === "contractor") {
+      this.untrackDeletedRecord("contractor", data.id);
+      if (data.name) {
+        this.untrackDeletedRecord("contractor", data.name.trim().toLowerCase());
+      }
+      const contractors = this.getContractors();
+      if (!contractors.some(c => (c.name || '').toLowerCase() === (data.name || '').toLowerCase())) {
+        contractors.push(data);
+        this.saveContractors(contractors);
+      }
+      this.addContractorWithNeon(data).catch(() => null);
     }
 
     // Remove from Trash
@@ -852,6 +866,16 @@ class DatabaseService {
       this.trackDeletedRecord("payment", data.id);
       if (data.period && data.contractor_name && data.style_code) {
         this.trackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
+      }
+    } else if (entityType === "contractor") {
+      if (data.id) this.trackDeletedRecord("contractor", data.id);
+      if (data.name) this.trackDeletedRecord("contractor", (data.name || '').trim().toLowerCase());
+      const cfg = this.getConfig();
+      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+        this.executeNeonQuery(
+          `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
+          [data.id || 0, (data.name || '').trim().toLowerCase()]
+        ).catch(() => null);
       }
     }
 
@@ -1206,15 +1230,7 @@ class DatabaseService {
         `SELECT setval(pg_get_serial_sequence('receiving_log', 'id'), COALESCE((SELECT max(id) FROM receiving_log), 1));`
       ).catch(() => null);
 
-      // 2. Ensure contractor exists in Neon
-      if (record.contractor_name) {
-        await this.executeNeonQuery(
-          `INSERT INTO contractors (name, phone, status) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING;`,
-          [record.contractor_name, '', 'Active']
-        ).catch(e => console.warn("Neon contractor insert notice:", e.message));
-      }
-
-      // 3. Upsert Master record in Neon
+      // 2. Upsert Master record in Neon
       if (masterRecord) {
         await this.syncMasterRecordToNeon(masterRecord).catch(e => console.warn("Neon master sync notice:", e.message));
       }
@@ -1460,15 +1476,7 @@ class DatabaseService {
         `SELECT setval(pg_get_serial_sequence('dispatch_log', 'id'), COALESCE((SELECT max(id) FROM dispatch_log), 1));`
       ).catch(() => null);
 
-      // 2. Ensure contractor exists in Neon
-      if (record.contractor_name) {
-        await this.executeNeonQuery(
-          `INSERT INTO contractors (name, phone, status) VALUES ($1, $2, $3) ON CONFLICT (name) DO NOTHING;`,
-          [record.contractor_name, '', 'Active']
-        ).catch(e => console.warn("Neon contractor insert notice:", e.message));
-      }
-
-      // 3. Upsert Master record in Neon
+      // 2. Upsert Master record in Neon
       if (masterRecord) {
         await this.syncMasterRecordToNeon(masterRecord).catch(e => console.warn("Neon master sync notice:", e.message));
       }
@@ -1993,15 +2001,6 @@ class DatabaseService {
     if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
 
     try {
-      if (savedRecord && savedRecord.contractor_name) {
-        await this.executeNeonQuery(
-          `INSERT INTO contractors (name, phone, status)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (name) DO NOTHING;`,
-          [savedRecord.contractor_name, '', 'Active']
-        ).catch(e => console.warn("Neon contractor notice:", e.message));
-      }
-
       if (savedRecord) {
         await this.syncMasterRecordToNeon(savedRecord);
       }
@@ -2310,46 +2309,76 @@ class DatabaseService {
         { id: 13, name: "Naveed", phone: "03122232112", status: "Active" }
       ];
 
-      if (!Array.isArray(list) || list.length === 0) {
-        localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(defaultNeon));
-        return defaultNeon;
-      }
+      if (!Array.isArray(list)) list = [];
 
       let needsSave = false;
-      const normalized = list.map((item, idx) => {
-        if (typeof item === "string") {
+      const cleanMap = new Map();
+
+      // 1. Process and sanitize existing entries
+      list.forEach((item, idx) => {
+        if (!item) return;
+        let cName = typeof item === "string" ? item : (item.name || item.contractor_name || "");
+        cName = (cName || "").trim();
+        if (!cName) return;
+
+        // Strictly reject double/joint contractor combinations and filter placeholders
+        if (/[\/\\,+&]/.test(cName)) {
           needsSave = true;
-          const match = defaultNeon.find(d => d.name.toLowerCase() === item.toLowerCase());
-          return match ? { ...match } : { id: idx + 8, name: item, phone: "", status: "Active" };
+          return;
         }
-        if (!item.name && item.contractor_name) {
+        if (/^all\b/i.test(cName)) {
           needsSave = true;
-          item.name = item.contractor_name;
+          return;
         }
-        if (!item.phone) {
-          const match = defaultNeon.find(d => d.name.toLowerCase() === (item.name || "").toLowerCase());
-          if (match && match.phone) {
+
+        const cId = (typeof item === "object" && item.id) ? Number(item.id) : (idx + 14);
+        const lower = cName.toLowerCase();
+
+        // Check if contractor has been deleted
+        if (this.isRecordDeleted("contractor", cId, lower)) {
+          needsSave = true;
+          return;
+        }
+
+        // Deduplicate case-insensitively
+        if (cleanMap.has(lower)) {
+          needsSave = true;
+          const existing = cleanMap.get(lower);
+          if (!existing.phone && item.phone) existing.phone = item.phone;
+          if ((!existing.id || existing.id > cId) && cId) existing.id = cId;
+          return;
+        }
+
+        const phone = (typeof item === "object" && item.phone) ? item.phone : "";
+        const status = (typeof item === "object" && item.status) ? item.status : "Active";
+
+        cleanMap.set(lower, {
+          id: cId,
+          name: cName,
+          phone: phone,
+          status: status
+        });
+      });
+
+      // 2. Add base Neon contractors only if NOT deleted and NOT already present
+      defaultNeon.forEach(def => {
+        const defLower = def.name.toLowerCase();
+        if (this.isRecordDeleted("contractor", def.id, defLower)) return;
+        if (!cleanMap.has(defLower)) {
+          cleanMap.set(defLower, { ...def });
+          needsSave = true;
+        } else {
+          const existing = cleanMap.get(defLower);
+          if (!existing.phone && def.phone) {
+            existing.phone = def.phone;
             needsSave = true;
-            item.phone = match.phone;
           }
         }
-        if (!item.status) {
-          needsSave = true;
-          item.status = "Active";
-        }
-        return item;
       });
 
-      // Ensure all 6 base Neon contractors are always in the list
-      defaultNeon.forEach(def => {
-        const exists = normalized.some(n => (n.name || "").toLowerCase() === def.name.toLowerCase());
-        if (!exists) {
-          normalized.push({ ...def });
-          needsSave = true;
-        }
-      });
+      const normalized = Array.from(cleanMap.values()).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
 
-      if (needsSave) {
+      if (needsSave || raw !== JSON.stringify(normalized)) {
         localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(normalized));
       }
       return normalized;
@@ -2511,32 +2540,51 @@ class DatabaseService {
   }
 
   ensureContractorExists(name) {
-    if (!name) return;
-    const list = this.getContractors();
-    const exists = list.some(c => (c.name || "").toLowerCase() === name.toLowerCase());
-    if (!exists) {
-      this.addContractorWithNeon({ name: name, phone: "", status: "Active" }).catch(() => { });
-    }
+    // Strictly NO-OP: contractors are ONLY created explicitly from the Contractors tab by user action.
+    return;
   }
 
   async addContractorWithNeon(contractorData) {
+    if (!contractorData || !contractorData.name) {
+      throw new Error("Contractor name is required.");
+    }
+    const rawTrim = contractorData.name.trim();
+    const cleanName = rawTrim.replace(/([^\s/,\-+&]+)/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+    if (!cleanName) {
+      throw new Error("Contractor name cannot be empty.");
+    }
+    // Reject double / joint contractor combinations
+    if (/[\/\\,+&]/.test(cleanName)) {
+      throw new Error("Double / joint contractor names (with '/', '+', '&', ',') cannot be saved in Contractor Directory.");
+    }
+    // Reject filter placeholders
+    if (/^all\b/i.test(cleanName)) {
+      throw new Error("Invalid name: Contractor name cannot start with 'ALL'.");
+    }
+
+    this.clearCache();
     const list = this.getContractors();
-    const existing = list.find(c => (c.name || "").toLowerCase() === contractorData.name.trim().toLowerCase());
+    const cleanLower = cleanName.toLowerCase();
+    const existing = list.find(c => (c.name || "").trim().toLowerCase() === cleanLower);
     let savedObj = null;
 
     if (existing) {
-      existing.phone = contractorData.phone !== undefined ? contractorData.phone : existing.phone;
-      existing.status = contractorData.status || existing.status;
+      if (contractorData.phone !== undefined) existing.phone = contractorData.phone;
+      if (contractorData.status) existing.status = contractorData.status;
       savedObj = existing;
     } else {
       savedObj = {
-        id: list.length > 0 ? Math.max(...list.map(c => c.id || 0)) + 1 : 1,
-        name: contractorData.name.trim(),
+        id: list.length > 0 ? Math.max(...list.map(c => Number(c.id) || 0)) + 1 : 1,
+        name: cleanName,
         phone: contractorData.phone || "",
         status: contractorData.status || "Active"
       };
       list.push(savedObj);
     }
+
+    // Untrack any past deletion for this contractor
+    this.untrackDeletedRecord("contractor", savedObj.id);
+    this.untrackDeletedRecord("contractor", cleanLower);
 
     this.saveContractors(list);
 
@@ -2559,6 +2607,66 @@ class DatabaseService {
     }
 
     return { success: true, neonSynced: false, contractor: savedObj };
+  }
+
+  async deleteContractor(id, name) {
+    this.clearCache();
+    let list = this.getContractors();
+    const cleanName = (name || "").trim();
+    const cleanLower = cleanName.toLowerCase();
+    const numId = Number(id);
+
+    const toDelete = list.find(c => (numId && Number(c.id) === numId) || (c.name && c.name.trim().toLowerCase() === cleanLower));
+    const targetName = toDelete ? toDelete.name : cleanName;
+    const targetId = toDelete ? toDelete.id : numId;
+
+    if (!targetName && !targetId) {
+      return { success: false, error: "Contractor not found" };
+    }
+
+    // 1. Move to Trash
+    if (toDelete) {
+      this.moveToTrash("contractor", toDelete);
+    }
+
+    // 2. Track deletion tombstones so sync NEVER resurrects it
+    if (targetId) this.trackDeletedRecord("contractor", targetId);
+    if (targetName) {
+      this.trackDeletedRecord("contractor", targetName.trim().toLowerCase());
+    }
+
+    // 3. Remove from local list
+    list = list.filter(c => {
+      if (targetId && Number(c.id) === Number(targetId)) return false;
+      if (targetName && (c.name || "").trim().toLowerCase() === targetName.trim().toLowerCase()) return false;
+      return true;
+    });
+    this.saveContractors(list);
+    this.clearCache();
+
+    // 4. Delete from Neon cloud database
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      try {
+        await this.initNeonTables();
+        if (targetId) {
+          await this.executeNeonQuery(
+            `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
+            [targetId, targetName.trim().toLowerCase()]
+          );
+        } else {
+          await this.executeNeonQuery(
+            `DELETE FROM contractors WHERE LOWER(TRIM(name)) = $1;`,
+            [targetName.trim().toLowerCase()]
+          );
+        }
+        return { success: true, neonSynced: true };
+      } catch (err) {
+        console.warn("Neon contractor delete error:", err);
+        return { success: true, neonSynced: false, error: err.message };
+      }
+    }
+    return { success: true, neonSynced: false };
   }
 
   getContractorSummaries() {
@@ -3095,10 +3203,7 @@ class DatabaseService {
     this._styleContractorCache = {};
     this.clearCache();
 
-    // 2. Ensure new contractor is registered in contractors master table
-    await this.ensureContractorExists(cleanCont);
-
-    // 3. Update Master Inventory
+    // 2. Update Master Inventory
     const masterList = this.getMasterInventory();
     let masterChanged = false;
     masterList.forEach(m => {
@@ -4960,9 +5065,25 @@ class DatabaseService {
       // Invalidate memory cache so cloud sync writes reflect cleanly
       this.clearCache();
 
-      // Directly update localStorage with verified cloud truth (preserving any local entries not yet in cloud)
+      // Filter cloud contractors to exclude deleted, joint/double names, and filter placeholders
+      let cleanContRows = [];
       if (Array.isArray(contRows) && contRows.length > 0) {
-        localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(contRows));
+        const seenNames = new Set();
+        cleanContRows = contRows.filter(c => {
+          if (!c || !c.name) return false;
+          const cName = c.name.trim();
+          if (/[\/\\,+&]/.test(cName)) return false;
+          if (/^all\b/i.test(cName)) return false;
+          if (this.isRecordDeleted("contractor", c.id, cName.toLowerCase())) return false;
+          const lower = cName.toLowerCase();
+          if (seenNames.has(lower)) return false;
+          seenNames.add(lower);
+          return true;
+        });
+      }
+
+      if (cleanContRows.length > 0) {
+        localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(cleanContRows));
       } else {
         const existingCont = this.getContractors();
         if (existingCont && existingCont.length > 0) {
@@ -5172,6 +5293,21 @@ class DatabaseService {
         const ids = zombieMaster.map(m => Number(m.id)).filter(Boolean);
         if (ids.length > 0) {
           this.executeNeonQuery(`DELETE FROM master_inventory WHERE id IN (${ids.join(",")});`).catch(() => null);
+        }
+      }
+
+      // Background cleanup: Prune tombstoned or bogus contractors from Neon
+      if (Array.isArray(contRows) && contRows.length > 0) {
+        const zombieCont = contRows.filter(c => {
+          if (!c || !c.name) return false;
+          const cName = c.name.trim();
+          return /[\/\\,+&]/.test(cName) || /^all\b/i.test(cName) || this.isRecordDeleted("contractor", c.id, cName.toLowerCase());
+        });
+        if (zombieCont.length > 0) {
+          const ids = zombieCont.map(c => Number(c.id)).filter(Boolean);
+          if (ids.length > 0) {
+            this.executeNeonQuery(`DELETE FROM contractors WHERE id IN (${ids.join(",")});`).catch(() => null);
+          }
         }
       }
 

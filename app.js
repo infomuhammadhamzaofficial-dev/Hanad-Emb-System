@@ -13,6 +13,7 @@ function initApp() {
   try { initTheme(); } catch (e) { console.error("Theme init error:", e); }
   try { initAuthSystem(); } catch (e) { console.error("Auth init error:", e); }
   try { initUserManagementHandlers(); } catch (e) { console.error("User Mgmt init error:", e); }
+  try { initGlobalInputFormatters(); } catch (e) { console.error("Input formatters init error:", e); }
 
   // 2. Initialize Navigation & View Handlers (Isolated so no single view failure blocks the app)
   try { initNavigation(); } catch (e) { console.error("Navigation init error:", e); }
@@ -2796,12 +2797,22 @@ function initContractorsView() {
   if (form) {
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
-      const name = document.getElementById("cont-name")?.value.trim();
+      const name = toProperCase(document.getElementById("cont-name")?.value.trim());
       const phone = document.getElementById("cont-phone")?.value.trim();
       const status = document.getElementById("cont-status")?.value || "Active";
 
       if (!name) {
         showToast("Contractor Name is required!", "error");
+        return;
+      }
+
+      if (/[\/\\,+&]/.test(name)) {
+        showToast("Double/joint contractor names (with '/', '+', '&', ',') cannot be saved in Contractor Directory!", "error");
+        return;
+      }
+
+      if (/^all\b/i.test(name)) {
+        showToast("Invalid Name: Contractor name cannot start with 'ALL'!", "error");
         return;
       }
 
@@ -2811,23 +2822,31 @@ function initContractorsView() {
         saveBtn.textContent = "Saving...";
       }
 
-      const res = await window.db.addContractorWithNeon({ name, phone, status });
+      try {
+        const res = await window.db.addContractorWithNeon({ name, phone, status });
 
-      if (saveBtn) {
-        saveBtn.disabled = false;
-        saveBtn.textContent = "Save Contractor";
-      }
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save Contractor";
+        }
 
-      closeModal("modal-contractor");
-      form.reset();
-      renderAll();
+        closeModal("modal-contractor");
+        form.reset();
+        renderAll();
 
-      if (res.neonSynced) {
-        showToast(`✓ Contractor "${name}" saved & synced to Neon Cloud!`);
-      } else if (res.error) {
-        showToast(`Contractor saved locally (Neon: ${res.error})`, "error");
-      } else {
-        showToast(`Contractor "${name}" saved locally!`);
+        if (res.neonSynced) {
+          showToast(`✓ Contractor "${name}" saved & synced to Neon Cloud!`);
+        } else if (res.error) {
+          showToast(`Contractor saved locally (Neon: ${res.error})`, "error");
+        } else {
+          showToast(`Contractor "${name}" saved locally!`);
+        }
+      } catch (err) {
+        if (saveBtn) {
+          saveBtn.disabled = false;
+          saveBtn.textContent = "Save Contractor";
+        }
+        showToast(err.message, "error");
       }
     });
   }
@@ -3054,6 +3073,9 @@ function renderContractorsView() {
                   <button class="btn btn-secondary btn-sm" onclick="openEditContractorModal('${escapeHtml(c.name)}')" style="font-size: 0.75rem;">
                     ✏️ Edit
                   </button>
+                  <button class="btn btn-secondary btn-sm" onclick="deleteContractorAction(${c.id || 0}, '${escapeHtml(c.name)}')" style="font-size: 0.75rem; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.3);" title="Delete Contractor">
+                    🗑️ Delete
+                  </button>
                 </div>
               </div>
             `;
@@ -3065,6 +3087,30 @@ function renderContractorsView() {
 
   container.innerHTML = html;
 }
+
+async function deleteContractorAction(id, name) {
+  if (window.db && typeof window.db.canUserPerformAction === "function" && !window.db.canUserPerformAction("can_delete")) {
+    showToast("Permission Denied: You do not have permission to delete contractors.", "error");
+    return;
+  }
+  const cleanName = (name || "").trim();
+  const desc = cleanName ? `Contractor "${cleanName}"` : `Contractor #${id}`;
+  if (!confirm(`Are you sure you want to delete ${desc}?\n\nThis contractor will be removed from the directory and moved to Trash.`)) {
+    return;
+  }
+  try {
+    const res = await window.db.deleteContractor(id, cleanName);
+    if (res && res.success) {
+      renderAll();
+      showToast(`✓ Contractor "${cleanName || id}" moved to Trash.`, "success");
+    } else {
+      showToast(`Error deleting contractor: ${res?.error || "Unknown error"}`, "error");
+    }
+  } catch (err) {
+    showToast(`Error deleting contractor: ${err.message}`, "error");
+  }
+}
+window.deleteContractorAction = deleteContractorAction;
 
 // -------------------------------------------------------------
 // TAB 6: NEON POSTGRESQL CLOUD SYNC & SETTINGS
@@ -3483,7 +3529,13 @@ async function syncLiveFromNeon(isBackground = true) {
 
       if (dot && label) {
         dot.className = "status-dot connected";
-        label.textContent = `⚡ Live Connected (${res.count})`;
+        label.textContent = "⚡ Live Connected (1 Online)";
+        const quickBtn = document.getElementById("neon-quick-status");
+        if (quickBtn) {
+          const curUser = (window.db && typeof window.db.getCurrentUser === "function") ? window.db.getCurrentUser() : null;
+          const uName = curUser ? (curUser.full_name || curUser.username) : "Admin";
+          quickBtn.title = `Neon Cloud PostgreSQL Connected • 1 Online User (${uName}) • Auto-Sync Active`;
+        }
       }
 
       const lastSyncEl = document.getElementById("last-sync-time");
@@ -3531,8 +3583,14 @@ async function checkNeonStatus(forcedOnlineState) {
       ? window.db.getMasterInventory().length
       : 0;
     label.textContent = (cfg.autoSync !== false)
-      ? `⚡ Live Connected (${masterLen})`
+      ? "⚡ Live Connected (1 Online)"
       : "Neon Ready";
+    const quickBtn = document.getElementById("neon-quick-status");
+    if (quickBtn) {
+      const curUser = (window.db && typeof window.db.getCurrentUser === "function") ? window.db.getCurrentUser() : null;
+      const uName = curUser ? (curUser.full_name || curUser.username) : "Admin";
+      quickBtn.title = `Neon Cloud PostgreSQL Connected • 1 Online User (${uName})`;
+    }
   } else {
     dot.className = "status-dot";
     label.textContent = "Neon Local";
@@ -3635,7 +3693,91 @@ function focusActiveDateInput() {
   }
 }
 
+// -------------------------------------------------------------
+// TEXT CASE FORMATTERS (Auto-Capitalize Style Codes & Proper Case Contractors)
+// -------------------------------------------------------------
+function toProperCase(str) {
+  if (!str) return "";
+  return String(str).replace(/([^\s/,\-+&]+)/g, (word) => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+}
+window.toProperCase = toProperCase;
+
+function attachUppercaseInputHandler(selectorOrEl) {
+  const el = typeof selectorOrEl === "string" ? document.getElementById(selectorOrEl) : selectorOrEl;
+  if (!el || el._upperCaseAttached) return;
+  el._upperCaseAttached = true;
+  el.style.textTransform = "uppercase";
+
+  el.addEventListener("input", function () {
+    const start = this.selectionStart;
+    const end = this.selectionEnd;
+    const upper = this.value.toUpperCase();
+    if (this.value !== upper) {
+      this.value = upper;
+      if (start !== null && end !== null) {
+        this.setSelectionRange(start, end);
+      }
+    }
+  });
+
+  el.addEventListener("blur", function () {
+    this.value = this.value.trim().toUpperCase();
+  });
+}
+window.attachUppercaseInputHandler = attachUppercaseInputHandler;
+
+function attachProperCaseInputHandler(selectorOrEl) {
+  const el = typeof selectorOrEl === "string" ? document.getElementById(selectorOrEl) : selectorOrEl;
+  if (!el || el._properCaseAttached) return;
+  el._properCaseAttached = true;
+  el.style.textTransform = "capitalize";
+
+  el.addEventListener("input", function () {
+    const start = this.selectionStart;
+    const end = this.selectionEnd;
+    const oldVal = this.value;
+    const proper = toProperCase(oldVal);
+    if (oldVal !== proper) {
+      this.value = proper;
+      if (start !== null && end !== null) {
+        this.setSelectionRange(start, end);
+      }
+    }
+  });
+
+  el.addEventListener("blur", function () {
+    this.value = toProperCase(this.value.trim());
+  });
+}
+window.attachProperCaseInputHandler = attachProperCaseInputHandler;
+
+function initGlobalInputFormatters() {
+  const styleCodeIds = [
+    "entry-style-code",
+    "edit-log-style-code",
+    "dist-entry-style-code",
+    "payment-style-code"
+  ];
+  styleCodeIds.forEach(id => attachUppercaseInputHandler(id));
+
+  const contractorIds = [
+    "entry-contractor",
+    "edit-log-contractor",
+    "dist-entry-contractor",
+    "payment-contractor",
+    "cont-name"
+  ];
+  contractorIds.forEach(id => attachProperCaseInputHandler(id));
+}
+window.initGlobalInputFormatters = initGlobalInputFormatters;
+
 function initModalHandlers() {
+  // Enforce uppercase on style code and proper case on contractor name
+  attachUppercaseInputHandler("entry-style-code");
+  attachProperCaseInputHandler("entry-contractor");
+
   // Mode toggle tabs inside modal (Receiving vs Dispatch vs Both)
   const modeTabs = document.querySelectorAll(".form-toggle-tab");
   modeTabs.forEach(tab => {
@@ -3738,6 +3880,9 @@ function initModalHandlers() {
       el.addEventListener("change", () => updateEditLogModalPreview());
     }
   });
+
+  attachUppercaseInputHandler("edit-log-style-code");
+  attachProperCaseInputHandler("edit-log-contractor");
 }
 
 // -------------------------------------------------------------
@@ -4082,7 +4227,7 @@ function setFormMode(mode, autoFocusDate = true) {
 
 // STRICT Auto-Fetch matching on BOTH Style Code AND Category
 function handleLiveStyleFetch() {
-  const code = (document.getElementById("entry-style-code")?.value || "").trim();
+  const code = (document.getElementById("entry-style-code")?.value || "").trim().toUpperCase();
   const cat = (document.getElementById("entry-category")?.value || "Shirt").trim();
   const badge = document.getElementById("style-fetch-status");
 
@@ -4109,11 +4254,11 @@ function handleLiveStyleFetch() {
     // Auto-fill contractor (check master first, then distribution sheet!)
     const contInp = document.getElementById("entry-contractor");
     if (existing.contractor_name && existing.contractor_name !== "Unassigned" && existing.contractor_name !== "-") {
-      if (contInp) contInp.value = existing.contractor_name;
+      if (contInp) contInp.value = toProperCase(existing.contractor_name);
     } else {
       const distInfo = window.db.getContractorForStyle(code, cat);
       if (distInfo && distInfo.contractor_name && contInp) {
-        contInp.value = distInfo.contractor_name;
+        contInp.value = toProperCase(distInfo.contractor_name);
       }
     }
 
@@ -4147,7 +4292,7 @@ function handleLiveStyleFetch() {
     const distInfo = window.db.getContractorForStyle(code, cat);
     const contInp = document.getElementById("entry-contractor");
     if (distInfo && distInfo.contractor_name && contInp) {
-      contInp.value = distInfo.contractor_name;
+      contInp.value = toProperCase(distInfo.contractor_name);
     }
   }
 
@@ -4156,7 +4301,7 @@ function handleLiveStyleFetch() {
 
 // Update all 6 Live KPIs in the modal reflecting Style Code + Category
 function updateModalPreviewBalances() {
-  const code = (document.getElementById("entry-style-code")?.value || "").trim();
+  const code = (document.getElementById("entry-style-code")?.value || "").trim().toUpperCase();
   const cat = (document.getElementById("entry-category")?.value || "Shirt").trim();
   const existing = window.db.findMasterByStyleAndCategory(code, cat);
 
@@ -4322,9 +4467,9 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     title.textContent = `Edit Style Entry (${itemToEdit.style_code} [${itemToEdit.category}])`;
     idInput.value = itemToEdit.id;
     document.getElementById("entry-sr").value = itemToEdit.sr_no || "";
-    document.getElementById("entry-style-code").value = itemToEdit.style_code || "";
+    document.getElementById("entry-style-code").value = (itemToEdit.style_code || "").toUpperCase();
     document.getElementById("entry-category").value = itemToEdit.category || "Shirt";
-    document.getElementById("entry-contractor").value = itemToEdit.contractor_name || "";
+    document.getElementById("entry-contractor").value = toProperCase(itemToEdit.contractor_name || "");
     document.getElementById("entry-cut-qty").value = itemToEdit.cut_qty || 0;
     document.getElementById("entry-received-qty").value = 0;
     document.getElementById("entry-dispatch-qty").value = 0;
@@ -4389,9 +4534,9 @@ async function saveMasterEntryFromForm() {
   const currentMode = document.getElementById("current-form-mode")?.value || "receiving";
   const idVal = document.getElementById("entry-id")?.value;
 
-  const styleCode = (document.getElementById("entry-style-code")?.value || "").trim();
+  const styleCode = (document.getElementById("entry-style-code")?.value || "").trim().toUpperCase();
   const category = (document.getElementById("entry-category")?.value || "Shirt").trim();
-  const contractor = (document.getElementById("entry-contractor")?.value || "").trim();
+  const contractor = toProperCase((document.getElementById("entry-contractor")?.value || "").trim());
   const ship = (document.getElementById("entry-ship")?.value || "").trim();
   const cutQty = parseInt(document.getElementById("entry-cut-qty")?.value, 10) || 0;
   const remarks = (document.getElementById("entry-remarks")?.value || "").trim();
@@ -4740,9 +4885,9 @@ function openEditLogModal(entry) {
     document.getElementById("edit-log-qty").value = entry.dispatch_qty || 0;
   }
 
-  document.getElementById("edit-log-style-code").value = entry.style_code || "";
+  document.getElementById("edit-log-style-code").value = (entry.style_code || "").toUpperCase();
   document.getElementById("edit-log-category").value = entry.category || "Shirt";
-  document.getElementById("edit-log-contractor").value = entry.contractor_name || "";
+  document.getElementById("edit-log-contractor").value = toProperCase(entry.contractor_name || "");
   document.getElementById("edit-log-remarks").value = entry.remarks || "";
 
   updateEditLogModalPreview();
@@ -4793,9 +4938,9 @@ async function saveEditLogFromForm() {
   const type = document.getElementById("edit-log-type")?.value;
   const challan = (document.getElementById("edit-log-challan")?.value || "").trim();
   const dateStr = (document.getElementById("edit-log-date")?.value || "").trim();
-  const styleCode = (document.getElementById("edit-log-style-code")?.value || "").trim();
+  const styleCode = (document.getElementById("edit-log-style-code")?.value || "").trim().toUpperCase();
   const category = (document.getElementById("edit-log-category")?.value || "Shirt").trim();
-  const contractor = (document.getElementById("edit-log-contractor")?.value || "").trim();
+  const contractor = toProperCase((document.getElementById("edit-log-contractor")?.value || "").trim());
   const cutQty = parseInt(document.getElementById("edit-log-cut-qty")?.value, 10) || 0;
   const qty = parseInt(document.getElementById("edit-log-qty")?.value, 10) || 0;
   const remarks = (document.getElementById("edit-log-remarks")?.value || "").trim();
@@ -7772,6 +7917,9 @@ function initPaymentModalHandlers() {
     categorySelect.addEventListener("change", handlePaymentStyleAutoFetch);
   }
 
+  attachUppercaseInputHandler("payment-style-code");
+  attachProperCaseInputHandler("payment-contractor");
+
   // Live Rate Auto-calculation: Total Rate = Carigar Rate + Commission
   const carigarInput = document.getElementById("payment-carigar-rate");
   const commissionInput = document.getElementById("payment-commission");
@@ -8129,7 +8277,7 @@ async function savePaymentEntryFromForm() {
   const id = document.getElementById("payment-entry-id")?.value;
   const styleCode = (document.getElementById("payment-style-code")?.value || "").trim().toUpperCase();
   const category = (document.getElementById("payment-category")?.value || "SHIRT").trim().toUpperCase();
-  const contractor = (document.getElementById("payment-contractor")?.value || "").trim();
+  const contractor = toProperCase((document.getElementById("payment-contractor")?.value || "").trim());
   const period = (document.getElementById("payment-period-input")?.value || "11-SEP-2026 TO 25-SEP-2026").trim();
   const ship = (document.getElementById("payment-ship")?.value || "").trim();
   const srNo = parseInt(document.getElementById("payment-sr")?.value, 10) || 0;
@@ -8635,6 +8783,9 @@ function initWorkDistributionView() {
     styleInput.addEventListener("input", handleDistStyleAutoFetch);
     styleInput.addEventListener("change", handleDistStyleAutoFetch);
   }
+
+  attachUppercaseInputHandler("dist-entry-style-code");
+  attachProperCaseInputHandler("dist-entry-contractor");
 
   const distEntryForm = document.getElementById("form-distribution-entry");
   if (distEntryForm) {
@@ -9149,7 +9300,7 @@ async function saveDistributionEntryAction(e) {
   const period = document.getElementById("dist-entry-period")?.value || getActiveDistributionPeriod();
   const sr_no = parseInt(document.getElementById("dist-entry-sr")?.value, 10) || null;
   const style_code = (document.getElementById("dist-entry-style-code")?.value || "").trim().toUpperCase();
-  const contractor_name = (document.getElementById("dist-entry-contractor")?.value || "").trim().toUpperCase();
+  const contractor_name = toProperCase((document.getElementById("dist-entry-contractor")?.value || "").trim());
   const pcs_qty = parseInt(document.getElementById("dist-entry-pcs-qty")?.value, 10) || 0;
   const rate = parseFloat(document.getElementById("dist-entry-rate")?.value) || 0;
   const item = document.getElementById("dist-entry-item")?.value || "SHIRT";
@@ -10889,6 +11040,9 @@ function renderTrashView() {
     } else if (item.entity_type === "user") {
       badgeClass = "badge-trash-user";
       badgeLabel = "👤 User";
+    } else if (item.entity_type === "contractor") {
+      badgeClass = "badge-trash-master";
+      badgeLabel = "👷 Contractor";
     }
 
     // Format deletion date

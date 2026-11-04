@@ -1955,6 +1955,23 @@ input.app-input:focus {
   box-shadow: 0 0 0 2px var(--primary-glow);
 }
 
+/* Style Code inputs: Always Capital / Uppercase */
+#entry-style-code,
+#edit-log-style-code,
+#dist-entry-style-code,
+#payment-style-code {
+  text-transform: uppercase !important;
+}
+
+/* Contractor Name inputs: Proper Case visual feedback */
+#entry-contractor,
+#edit-log-contractor,
+#dist-entry-contractor,
+#payment-contractor,
+#cont-name {
+  text-transform: capitalize;
+}
+
 select.app-select option {
   background: var(--bg-card);
   color: var(--text-main);
@@ -2999,10 +3016,8 @@ body.modal-open {
   width: 100dvw;
   height: 100vh;
   height: 100dvh;
-  /* Fix: mobile address-bar-aware full height */
-  background: radial-gradient(circle at 50% 20%, rgba(99, 102, 241, 0.18) 0%, rgba(10, 15, 29, 0.97) 60%, #060912 100%);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* Dark grey background default */
+  background: #0f172a;
   z-index: 100000;
   display: flex;
   align-items: center;
@@ -3010,6 +3025,16 @@ body.modal-open {
   padding: 1.5rem;
   overscroll-behavior: none;
   touch-action: none;
+  transition: background-color 0.25s ease;
+}
+
+[data-theme="dark"] .auth-screen-overlay,
+:root:not([data-theme="light"]) .auth-screen-overlay {
+  background: #0f172a !important;
+}
+
+[data-theme="light"] .auth-screen-overlay {
+  background: #f8fafc !important;
 }
 
 #auth-screen-overlay[style*="flex"]~.mobile-bottom-nav,
@@ -3018,14 +3043,55 @@ body.auth-locked .mobile-bottom-nav {
 }
 
 .auth-card {
-  background: var(--bg-card);
-  border: 1px solid rgba(16, 185, 129, 0.35);
+  background: #1e293b;
+  border: 1px solid #334155;
   border-radius: var(--radius-lg);
   width: 100%;
   max-width: 440px;
   padding: 2.5rem 2.25rem;
-  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.85), 0 0 35px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 25px rgba(16, 185, 129, 0.12);
   animation: authFadeIn 0.35s ease-out;
+  transition: background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+
+[data-theme="dark"] .auth-card,
+:root:not([data-theme="light"]) .auth-card {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .auth-card .app-input,
+:root:not([data-theme="light"]) .auth-card .app-input {
+  background: #0f172a !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .auth-card label,
+:root:not([data-theme="light"]) .auth-card label {
+  color: #cbd5e1 !important;
+}
+
+[data-theme="light"] .auth-card {
+  background: #ffffff !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 20px 45px -10px rgba(15, 23, 42, 0.08), 0 4px 18px rgba(0, 0, 0, 0.04) !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .auth-card .app-input {
+  background: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .auth-card label {
+  color: #334155 !important;
+}
+
+[data-theme="light"] .auth-card .auth-sub {
+  color: #64748b !important;
 }
 
 @keyframes authFadeIn {
@@ -7579,7 +7645,10 @@ label {
 
   /* 2. Solid backgrounds & overflow cleanup */
   .auth-screen-overlay {
-    background: #0b0f19 !important;
+    background: #0f172a !important;
+  }
+  [data-theme="light"] .auth-screen-overlay {
+    background: #f8fafc !important;
   }
 
   .dash-hero-card {
