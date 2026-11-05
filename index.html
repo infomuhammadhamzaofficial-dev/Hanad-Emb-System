@@ -33,7 +33,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.svg?v=20">
-  <link rel="stylesheet" href="style.css?v=30">
+  <link rel="stylesheet" href="style.css?v=31">
   <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=21">
   <link rel="shortcut icon" href="icon-192.svg?v=21">
 </head>
@@ -4850,13 +4850,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=29"></script>
-  <script src="db.js?v=30"></script>
-  <script src="app.js?v=30"></script>
+  <script src="data.js?v=31"></script>
+  <script src="db.js?v=31"></script>
+  <script src="app.js?v=31"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=31').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

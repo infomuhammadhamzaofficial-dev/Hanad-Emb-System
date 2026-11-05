@@ -92,40 +92,85 @@ class DatabaseService {
     ];
     legacyKeys.forEach(k => localStorage.removeItem(k));
 
-    // One-time fix: Remove the reappearing '26-Oct-2026 TO 10-Nov-2026' trash item permanently
-    // This distribution period was destroyed by user but kept reappearing due to missing tombstone logic
+    // Self-healing: Reset corrupted deleted periods tombstones so Neon periods are NEVER blocked!
     try {
-      const fixKey = "hand_emb_trash_ghost_fix_v1";
-      if (localStorage.getItem(fixKey) !== "done") {
-        // 1. Remove from trash localStorage (find by original_id or period_name in data)
-        const trashRaw = localStorage.getItem("hand_emb_trash_v1");
-        if (trashRaw) {
-          const trashList = JSON.parse(trashRaw);
-          const targetPeriodNameLower = "26-oct-2026 to 10-nov-2026";
-          const filteredTrash = trashList.filter(t => {
-            if (t.entity_type !== "distribution_period") return true;
-            const pName = (t.data?.period_name || t.title || "").trim().toLowerCase();
-            return !pName.includes("26-oct-2026") && !pName.includes("10-nov-2026");
-          });
-          // Record all removed trash IDs as permanently destroyed
-          const removedIds = trashList
-            .filter(t => !filteredTrash.some(f => f.id === t.id))
-            .map(t => t.id);
-          if (removedIds.length > 0) {
-            const destroyedList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
-            removedIds.forEach(id => { if (!destroyedList.includes(id)) destroyedList.push(id); });
-            localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedList));
-            localStorage.setItem("hand_emb_trash_v1", JSON.stringify(filteredTrash));
-          }
-          // 2. Tombstone the period name in deleted dist periods
-          const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-          if (!deletedDPs.includes(targetPeriodNameLower)) {
-            deletedDPs.push(targetPeriodNameLower);
-            localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
-          }
+      localStorage.removeItem("hand_emb_deleted_periods_v1");
+      localStorage.removeItem("hand_emb_deleted_dist_periods_v1");
+      localStorage.removeItem("hand_emb_trash_ghost_fix_v1");
+
+      // Ensure active rate approval periods are populated in localStorage
+      const defaultRatePeriods = [
+        {
+          id: "period_11sep_25sep_2026",
+          period_name: "11-SEP-2026 TO 25-SEP-2026",
+          start_date: "2026-09-11",
+          end_date: "2026-09-25",
+          department: "Hand Embroidery Department",
+          status: "Active",
+          notes: "Default Sheet Period"
+        },
+        {
+          id: "period_1792395630658",
+          period_name: "11-OCT-2026 TO 25-OCT-2026",
+          start_date: "2026-10-11",
+          end_date: "2026-10-25",
+          department: "Hand Embroidery Department",
+          status: "Active",
+          notes: "Default Sheet Period"
         }
-        localStorage.setItem(fixKey, "done");
+      ];
+
+      const rawRap = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
+      let rapList = [];
+      if (rawRap) {
+        try {
+          const parsed = JSON.parse(rawRap);
+          if (Array.isArray(parsed) && parsed.length > 0) rapList = parsed;
+        } catch (e) { }
       }
+      defaultRatePeriods.forEach(defP => {
+        if (!rapList.some(p => (p.period_name || '').trim().toLowerCase() === defP.period_name.toLowerCase())) {
+          rapList.push(defP);
+        }
+      });
+      localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(rapList));
+
+      // Ensure active distribution periods are populated in localStorage
+      const defaultDistPeriods = [
+        {
+          id: "dist_period_11oct_25oct_2026",
+          period_name: "11-Oct-2026 TO 25-Oct-2026",
+          start_date: "2026-10-11",
+          end_date: "2026-10-25",
+          department: "Hand Embroidery Department",
+          status: "Active",
+          notes: "Contractor Work Distribution"
+        },
+        {
+          id: "dist_period_1793775943735_se4ho",
+          period_name: "26-Oct-2026 TO 10-Nov-2026",
+          start_date: "2026-10-26",
+          end_date: "2026-11-10",
+          department: "Hand Embroidery Department",
+          status: "Active",
+          notes: "Contractor Work Distribution"
+        }
+      ];
+
+      const rawDp = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
+      let dpList = [];
+      if (rawDp) {
+        try {
+          const parsed = JSON.parse(rawDp);
+          if (Array.isArray(parsed) && parsed.length > 0) dpList = parsed;
+        } catch (e) { }
+      }
+      defaultDistPeriods.forEach(defP => {
+        if (!dpList.some(p => (p.period_name || '').trim().toLowerCase() === defP.period_name.toLowerCase())) {
+          dpList.push(defP);
+        }
+      });
+      localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(dpList));
     } catch (e) { }
   }
 
@@ -2917,8 +2962,6 @@ class DatabaseService {
   // RATE APPROVAL SHEET PERIODS MANAGEMENT
   // -------------------------------------------------------------
   getRateApprovalPeriods() {
-    const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
-
     const defaultPeriods = [
       {
         id: "period_11sep_25sep_2026",
@@ -2928,29 +2971,49 @@ class DatabaseService {
         department: "Hand Embroidery Department",
         status: "Active",
         notes: "Default Sheet Period"
+      },
+      {
+        id: "period_1792395630658",
+        period_name: "11-OCT-2026 TO 25-OCT-2026",
+        start_date: "2026-10-11",
+        end_date: "2026-10-25",
+        department: "Hand Embroidery Department",
+        status: "Active",
+        notes: "Default Sheet Period"
       }
-    ].filter(p => !deletedPeriods.has(p.period_name.toLowerCase()));
+    ];
 
     const raw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
-    let list = defaultPeriods;
+    let list = [];
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          list = parsed.filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()));
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          list = parsed.filter(p => p && (p.period_name || "").trim());
         }
       } catch (e) {
-        list = defaultPeriods;
+        list = [];
       }
     }
 
-    // Auto-discover any custom periods from payment sheet entries (excluding deleted!)
+    if (!list || list.length === 0) {
+      list = [...defaultPeriods];
+    } else {
+      // Ensure known default active periods are present
+      defaultPeriods.forEach(dp => {
+        if (!list.some(p => (p.period_name || "").trim().toLowerCase() === dp.period_name.toLowerCase())) {
+          list.push(dp);
+        }
+      });
+    }
+
+    // Auto-discover any custom periods from payment sheet entries
     const paymentSheets = this.getPaymentSheets();
-    const existingNames = new Set(list.map(p => p.period_name.toLowerCase()));
+    const existingNames = new Set(list.map(p => (p.period_name || "").toLowerCase()));
     paymentSheets.forEach(p => {
       const pName = (p.period || "").trim();
       const pNameLower = pName.toLowerCase();
-      if (pName && !existingNames.has(pNameLower) && !deletedPeriods.has(pNameLower)) {
+      if (pName && !existingNames.has(pNameLower) && pNameLower !== "all") {
         existingNames.add(pNameLower);
         list.push({
           id: `period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -2969,12 +3032,11 @@ class DatabaseService {
   }
 
   saveRateApprovalPeriods(list) {
-    const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
-    const filtered = (list || []).filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()));
-    localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(filtered));
+    const valid = (list || []).filter(p => p && (p.period_name || "").trim());
+    localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(valid));
     this.triggerAutoSyncIfEnabled();
-    if (Array.isArray(filtered)) {
-      filtered.forEach(p => this.pushRateApprovalPeriodToNeonAsync(p).catch(() => null));
+    if (Array.isArray(valid)) {
+      valid.forEach(p => this.pushRateApprovalPeriodToNeonAsync(p).catch(() => null));
     }
   }
 
@@ -3457,40 +3519,49 @@ class DatabaseService {
   // DISTRIBUTION PERIODS MANAGEMENT (Bi-Monthly Cycles)
   // -------------------------------------------------------------
   getDistributionPeriods() {
-    const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
-
-    const defaultPeriods = (typeof INITIAL_DISTRIBUTION_PERIODS !== "undefined")
-      ? INITIAL_DISTRIBUTION_PERIODS.filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()) && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026")
-      : [
-        {
-          id: "dist_period_11oct_25oct_2026",
-          period_name: "11-Oct-2026 TO 25-Oct-2026",
-          start_date: "2026-10-11",
-          end_date: "2026-10-25",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Contractor Work Distribution"
-        }
-      ];
+    const defaultPeriods = [
+      {
+        id: "dist_period_11oct_25oct_2026",
+        period_name: "11-Oct-2026 TO 25-Oct-2026",
+        start_date: "2026-10-11",
+        end_date: "2026-10-25",
+        department: "Hand Embroidery Department",
+        status: "Active",
+        notes: "Contractor Work Distribution"
+      },
+      {
+        id: "dist_period_1793775943735_se4ho",
+        period_name: "26-Oct-2026 TO 10-Nov-2026",
+        start_date: "2026-10-26",
+        end_date: "2026-11-10",
+        department: "Hand Embroidery Department",
+        status: "Active",
+        notes: "Contractor Work Distribution"
+      }
+    ];
 
     const raw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
-    let list = defaultPeriods;
+    let list = [];
     if (raw) {
       try {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed.filter(p => {
-            const pLower = (p.period_name || "").trim().toLowerCase();
-            return !deletedPeriods.has(pLower) && pLower !== "26-sep-2026 to 10-oct-2026";
-          });
+          list = parsed.filter(p => p && (p.period_name || "").trim() && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
         }
       } catch (e) {
-        list = defaultPeriods;
+        list = [];
       }
     }
 
     if (!list || list.length === 0) {
-      list = defaultPeriods;
+      list = [...defaultPeriods];
+    } else {
+      // Ensure known active distribution periods exist
+      defaultPeriods.forEach(dp => {
+        if (!list.some(p => (p.period_name || "").trim().toLowerCase() === dp.period_name.toLowerCase())) {
+          list.push(dp);
+        }
+      });
     }
 
     localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(list));
@@ -3498,12 +3569,11 @@ class DatabaseService {
   }
 
   saveDistributionPeriods(list) {
-    const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
-    const filtered = (list || []).filter(p => !deletedPeriods.has((p.period_name || "").toLowerCase()));
-    localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(filtered));
+    const valid = (list || []).filter(p => p && (p.period_name || "").trim());
+    localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(valid));
     this.triggerAutoSyncIfEnabled();
-    if (Array.isArray(filtered)) {
-      filtered.forEach(p => this.pushDistributionPeriodToNeonAsync(p).catch(() => null));
+    if (Array.isArray(valid)) {
+      valid.forEach(p => this.pushDistributionPeriodToNeonAsync(p).catch(() => null));
     }
   }
 
@@ -4999,12 +5069,6 @@ class DatabaseService {
       }
 
       // 7. Sync Rate Approval Periods
-      const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
-      for (const delName of deletedPeriods) {
-        await this.executeNeonQuery("DELETE FROM rate_approval_periods WHERE TRIM(LOWER(period_name)) = $1;", [delName]).catch(() => null);
-        await this.executeNeonQuery("DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1;", [delName]).catch(() => null);
-      }
-
       const periods = this.getRateApprovalPeriods();
       for (const pr of periods) {
         await this.executeNeonQuery(
@@ -5102,6 +5166,14 @@ class DatabaseService {
 
   async fetchFromNeon() {
     try {
+      const prevRecRaw = localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "";
+      const prevDisRaw = localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "";
+      const prevMasterRaw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "";
+      const prevPeriodRaw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS) || "";
+      const prevDistPeriodRaw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS) || "";
+      const prevPayRaw = localStorage.getItem(DB_KEYS.PAYMENT_SHEET) || "";
+      const prevDistRaw = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION) || "";
+
       // Execute all 9 table queries simultaneously with Promise.all (drops load time from 4s down to ~400ms!)
       const [
         masterRes,
@@ -5175,11 +5247,6 @@ class DatabaseService {
           localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(existingCont));
         }
       }
-
-      // Track pre-sync raw strings to detect modifications
-      const prevRecRaw = localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "";
-      const prevDisRaw = localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "";
-      const prevMasterRaw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "";
 
       // 1. Receiving Logs: Cloud (Neon) is the single source of truth
       const offlineRecDrafts = (this.getReceivingLogs() || []).filter(r => r._is_offline_draft === true);
@@ -5263,17 +5330,26 @@ class DatabaseService {
         localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify(mergedPay));
       }
 
-      if (Array.isArray(rawPeriodRows)) {
-        const cloudPeriods = rawPeriodRows.filter(p => !deletedPeriodsSet.has((p.period_name || "").trim().toLowerCase()));
+      // Sync Rate Approval Periods from Neon Cloud (Neon is the database of truth)
+      if (Array.isArray(rawPeriodRows) && rawPeriodRows.length > 0) {
+        const cloudPeriods = rawPeriodRows.map(p => ({
+          id: p.id,
+          period_name: (p.period_name || "").trim(),
+          start_date: p.start_date || "",
+          end_date: p.end_date || "",
+          department: p.department || "Hand Embroidery Department",
+          status: p.status || "Active",
+          notes: p.notes || "",
+          created_at: p.created_at
+        })).filter(p => !!p.period_name);
+
         const localPeriods = this.getRateApprovalPeriods() || [];
         const mergedPeriods = [...cloudPeriods];
         for (const lp of localPeriods) {
           const lpNameLower = (lp.period_name || "").trim().toLowerCase();
-          if (!deletedPeriodsSet.has(lpNameLower)) {
-            if (!mergedPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
-              mergedPeriods.push(lp);
-              this.pushRateApprovalPeriodToNeonAsync(lp).catch(() => null);
-            }
+          if (lpNameLower && !mergedPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
+            mergedPeriods.push(lp);
+            this.pushRateApprovalPeriodToNeonAsync(lp).catch(() => null);
           }
         }
         localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(mergedPeriods));
@@ -5282,17 +5358,27 @@ class DatabaseService {
       if (Array.isArray(distRows)) {
         localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(distRows));
       }
-      if (Array.isArray(rawDistPeriodRows)) {
-        const cloudDistPeriods = rawDistPeriodRows.filter(p => !deletedDistPeriodsSet.has((p.period_name || "").trim().toLowerCase()) && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
+
+      // Sync Distribution Periods from Neon Cloud (Neon is the database of truth)
+      if (Array.isArray(rawDistPeriodRows) && rawDistPeriodRows.length > 0) {
+        const cloudDistPeriods = rawDistPeriodRows.map(p => ({
+          id: p.id,
+          period_name: (p.period_name || "").trim(),
+          start_date: p.start_date || "",
+          end_date: p.end_date || "",
+          department: p.department || "Hand Embroidery Department",
+          status: p.status || "Active",
+          notes: p.notes || "",
+          created_at: p.created_at
+        })).filter(p => !!p.period_name);
+
         const localDistPeriods = this.getDistributionPeriods() || [];
         const mergedDistPeriods = [...cloudDistPeriods];
         for (const lp of localDistPeriods) {
           const lpNameLower = (lp.period_name || "").trim().toLowerCase();
-          if (!deletedDistPeriodsSet.has(lpNameLower) && lpNameLower !== "26-sep-2026 to 10-oct-2026") {
-            if (!mergedDistPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
-              mergedDistPeriods.push(lp);
-              this.pushDistributionPeriodToNeonAsync(lp).catch(() => null);
-            }
+          if (lpNameLower && !mergedDistPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
+            mergedDistPeriods.push(lp);
+            this.pushDistributionPeriodToNeonAsync(lp).catch(() => null);
           }
         }
         localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(mergedDistPeriods));
@@ -5356,11 +5442,19 @@ class DatabaseService {
       const postRecRaw = localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "";
       const postDisRaw = localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "";
       const postMasterRaw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "";
+      const postPeriodRaw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS) || "";
+      const postDistPeriodRaw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS) || "";
+      const postPayRaw = localStorage.getItem(DB_KEYS.PAYMENT_SHEET) || "";
+      const postDistRaw = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION) || "";
 
       this._lastSyncHasChanges =
         prevRecRaw !== postRecRaw ||
         prevDisRaw !== postDisRaw ||
-        prevMasterRaw !== postMasterRaw;
+        prevMasterRaw !== postMasterRaw ||
+        prevPeriodRaw !== postPeriodRaw ||
+        prevDistPeriodRaw !== postDistPeriodRaw ||
+        prevPayRaw !== postPayRaw ||
+        prevDistRaw !== postDistRaw;
 
       // Background cleanup: Prune any tombstoned deleted records from Neon so the cloud stays clean
       // ONLY prune if the record was explicitly deleted AND NOT present in the active local list!

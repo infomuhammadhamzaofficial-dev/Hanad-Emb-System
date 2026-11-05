@@ -568,6 +568,8 @@ function renderAll(forceAll = false) {
   // Lightweight global updates: KPIs, Dropdowns and Permissions
   try { renderKPIs(); } catch (e) { console.error("renderKPIs error:", e); }
   try { populateDropdowns(); } catch (e) { console.error("populateDropdowns error:", e); }
+  try { populateDistributionPeriods(); } catch (e) { console.error("populateDistributionPeriods error:", e); }
+  try { populateRateApprovalPeriods(); } catch (e) { console.error("populateRateApprovalPeriods error:", e); }
   try { renderNavigation(); } catch (e) { console.error("renderNavigation error:", e); }
 
   // Mark all tabs dirty so inactive tabs don't re-render until opened
@@ -3466,8 +3468,10 @@ function getDataSignature() {
     const rawP = localStorage.getItem("hand_emb_payment_sheet_v2") || "";
     const rawW = localStorage.getItem("hand_emb_work_distribution_v1") || "";
     const rawC = localStorage.getItem("hand_emb_contractors_v2") || "";
+    const rawRap = localStorage.getItem("hand_emb_rate_approval_periods_v1") || "";
+    const rawDp = localStorage.getItem("hand_emb_distribution_periods_v1") || "";
 
-    const str = `${rawR}#${rawD}#${rawM}#${rawP.length}#${rawW.length}#${rawC.length}`;
+    const str = `${rawR}#${rawD}#${rawM}#${rawP.length}#${rawW.length}#${rawC.length}#${rawRap}#${rawDp}`;
     let hash = 0x811c9dc5;
     for (let i = 0; i < str.length; i += 7) {
       hash ^= str.charCodeAt(i);
@@ -6327,6 +6331,8 @@ function populateRateApprovalPeriods() {
 
     if (curVal && Array.from(periodSelect.options).some(o => o.value === curVal)) {
       periodSelect.value = curVal;
+    } else if (periods.length > 0) {
+      periodSelect.value = periods[0].period_name;
     }
   }
 
