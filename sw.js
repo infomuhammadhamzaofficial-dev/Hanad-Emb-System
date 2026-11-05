@@ -2,7 +2,7 @@
 // CraftFlow - Service Worker for PWA (Lightweight & Deduplicated Cache)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v31';
+const CACHE_NAME = 'craftflow-cache-v33';
 const STATIC_ASSETS = [
   './',
   './index.html',

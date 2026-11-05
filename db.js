@@ -2197,6 +2197,72 @@ class DatabaseService {
       console.warn("Storage write error:", e);
     }
     this.triggerAutoSyncIfEnabled();
+    this.pushFinalStylesToNeonAsync().catch(() => null);
+  }
+
+  async pushFinalStylesToNeonAsync() {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+
+    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+    const fullStyles = this.getFinalStyles();
+
+    try {
+      await this.initNeonTables();
+      await this.executeNeonQuery("DELETE FROM final_style_report WHERE report_date = $1::date;", [reportDate]);
+      for (let i = 0; i < fullStyles.length; i++) {
+        const s = fullStyles[i];
+        await this.executeNeonQuery(
+          `INSERT INTO final_style_report 
+           (report_date, serial_no, style_code, category, contractor_name, cut_qty, received_qty, balance_from_stock, balance_from_hemb, time_remarks)
+           VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+          [
+            reportDate,
+            s.s_no || (i + 1),
+            (s.style_code || '').trim().toUpperCase(),
+            (s.category || 'Shirt').trim(),
+            (s.contractor_name || '').trim(),
+            Number(s.cut_qty) || 0,
+            Number(s.received_qty) || 0,
+            Number(s.balance_from_stock) || 0,
+            Number(s.balance_from_hemb) || 0,
+            (s.time_remarks || '').trim()
+          ]
+        );
+      }
+      console.log(`✓ Neon Synced: final_style_report for ${reportDate} (${fullStyles.length} items)`);
+    } catch (err) {
+      console.warn("Neon final_style_report push notice:", err.message);
+    }
+  }
+
+  async loadFinalStylesForDate(dateStr) {
+    const targetDate = dateStr || this.getReportDate();
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      try {
+        const res = await this.executeNeonQuery(
+          "SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;",
+          [targetDate]
+        );
+        const rows = res?.rows || (Array.isArray(res) ? res : []);
+        if (rows.length > 0) {
+          const mapped = rows.map((r, idx) => ({
+            s_no: parseInt(r.serial_no, 10) || (idx + 1),
+            style_code: (r.style_code || "").trim(),
+            category: (r.category || "Shirt").trim(),
+            dispatch_from_hemb: 0,
+            time_remarks: (r.time_remarks || "").trim()
+          }));
+          localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mapped));
+          this.clearCache(DB_KEYS.FINAL_STYLES);
+          return mapped;
+        }
+      } catch (err) {
+        console.warn("loadFinalStylesForDate error:", err);
+      }
+    }
+    return JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
   }
 
   addFinalStyle(styleCode, category, timeRemarks = "") {
@@ -5151,6 +5217,9 @@ class DatabaseService {
         ).catch(() => null);
       }
 
+      // 10. Sync Daily Final Styles to Neon
+      await this.pushFinalStylesToNeonAsync().catch(() => null);
+
       const cfg = this.getConfig();
       cfg.lastSyncTime = new Date().toISOString();
       this.saveConfig(cfg);
@@ -5173,8 +5242,11 @@ class DatabaseService {
       const prevDistPeriodRaw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS) || "";
       const prevPayRaw = localStorage.getItem(DB_KEYS.PAYMENT_SHEET) || "";
       const prevDistRaw = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION) || "";
+      const prevFinalRaw = localStorage.getItem(DB_KEYS.FINAL_STYLES) || "";
 
-      // Execute all 9 table queries simultaneously with Promise.all (drops load time from 4s down to ~400ms!)
+      const currentReportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+
+      // Execute all table queries simultaneously with Promise.all (drops load time from 4s down to ~400ms!)
       const [
         masterRes,
         contRes,
@@ -5185,7 +5257,8 @@ class DatabaseService {
         periodRes,
         distRes,
         distPeriodRes,
-        trashRes
+        trashRes,
+        finalStyleRes
       ] = await Promise.all([
         this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
         this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
@@ -5196,7 +5269,8 @@ class DatabaseService {
         this.executeNeonQuery("SELECT * FROM rate_approval_periods ORDER BY created_at DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null)
+        this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
+        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null)
       ]);
 
       const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
@@ -5209,6 +5283,7 @@ class DatabaseService {
       const rawDistRows = distRes?.rows || (Array.isArray(distRes) ? distRes : []);
       const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
       const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
+      const rawFinalRows = finalStyleRes?.rows || (Array.isArray(finalStyleRes) ? finalStyleRes : []);
 
       const deletedPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
       const deletedDistPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
@@ -5434,6 +5509,24 @@ class DatabaseService {
         localStorage.setItem(DB_KEYS.TRASH, JSON.stringify(mergedTrash));
       }
 
+      // Sync Daily Final Styles from Neon Cloud (Neon is the database of truth)
+      if (Array.isArray(rawFinalRows) && rawFinalRows.length > 0) {
+        const mappedFinal = rawFinalRows.map((r, idx) => ({
+          s_no: parseInt(r.serial_no, 10) || (idx + 1),
+          style_code: (r.style_code || "").trim(),
+          category: (r.category || "Shirt").trim(),
+          dispatch_from_hemb: 0,
+          time_remarks: (r.time_remarks || "").trim()
+        }));
+        localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mappedFinal));
+        this.clearCache(DB_KEYS.FINAL_STYLES);
+      } else {
+        const localFinal = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+        if (localFinal.length > 0) {
+          this.pushFinalStylesToNeonAsync().catch(() => null);
+        }
+      }
+
       // Rebuild master aggregations and clean any orphan styles that have 0 receiving and 0 dispatch logs
       this.rebuildAllMastersFromLogs();
       this.syncAllDistributionContractorsToLogsAndMaster();
@@ -5446,6 +5539,7 @@ class DatabaseService {
       const postDistPeriodRaw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS) || "";
       const postPayRaw = localStorage.getItem(DB_KEYS.PAYMENT_SHEET) || "";
       const postDistRaw = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION) || "";
+      const postFinalRaw = localStorage.getItem(DB_KEYS.FINAL_STYLES) || "";
 
       this._lastSyncHasChanges =
         prevRecRaw !== postRecRaw ||
@@ -5454,7 +5548,8 @@ class DatabaseService {
         prevPeriodRaw !== postPeriodRaw ||
         prevDistPeriodRaw !== postDistPeriodRaw ||
         prevPayRaw !== postPayRaw ||
-        prevDistRaw !== postDistRaw;
+        prevDistRaw !== postDistRaw ||
+        prevFinalRaw !== postFinalRaw;
 
       // Background cleanup: Prune any tombstoned deleted records from Neon so the cloud stays clean
       // ONLY prune if the record was explicitly deleted AND NOT present in the active local list!

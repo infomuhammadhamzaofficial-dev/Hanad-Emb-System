@@ -2052,9 +2052,14 @@ function initFinalStyleView() {
     datePicker.value = window.db.getReportDate();
     updateDateDisplay(datePicker.value);
 
-    datePicker.addEventListener("change", (e) => {
+    datePicker.addEventListener("change", async (e) => {
       window.db.setReportDate(e.target.value);
       updateDateDisplay(e.target.value);
+      if (typeof window.db.loadFinalStylesForDate === "function") {
+        await window.db.loadFinalStylesForDate(e.target.value);
+      }
+      renderFinalStyleSheet();
+      updateDailySheetArrivalsBanner();
     });
   }
 
@@ -12249,7 +12254,7 @@ function renderWhatsAppTableImage() {
   // ------------------------------------------------------------------
   const SCALE = 2; // Ultra HD Retina
   const PADDING_X = 24;
-  const HEADER_HEIGHT = 86;
+  const HEADER_HEIGHT = 98;
   const TABLE_HEADER_HEIGHT = 38;
   const ROW_HEIGHT = 34;
   const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
@@ -12314,14 +12319,14 @@ function renderWhatsAppTableImage() {
   ctx.font = "600 11px Inter, -apple-system, sans-serif";
 
   // Date Badge
-  drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 58, "#38bdf8", "rgba(56, 189, 248, 0.18)");
+  const dateBadgeWidth = drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 70, "#38bdf8", "rgba(56, 189, 248, 0.18)");
 
   // Contractor / Filter Badge
   const contText = currentWhatsAppContractor !== "all"
     ? `👤 Contractor: ${currentWhatsAppContractor}`
     : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
-  const badgeX = PADDING_X + 115 + (datePeriodStr.length * 6);
-  drawCanvasBadge(ctx, contText, badgeX, 58, "#25d366", "rgba(37, 211, 102, 0.18)");
+  const badgeX = PADDING_X + dateBadgeWidth + 10;
+  drawCanvasBadge(ctx, contText, badgeX, 70, "#25d366", "rgba(37, 211, 102, 0.18)");
 
   // Record Count Badge (Right aligned)
   const countText = filterDesc
@@ -12335,7 +12340,7 @@ function renderWhatsAppTableImage() {
   const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
   ctx.fillStyle = "#64748b";
   ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
-  ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 68);
+  ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 70);
 
   // ------------------------------------------------------------------
   // 2. TABLE HEADER ROW
@@ -12520,9 +12525,6 @@ function renderWhatsAppTableImage() {
   ctx.textAlign = "left";
   ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
 
-  ctx.textAlign = "right";
-  ctx.fillText("Direct WhatsApp Export  •  Zero Clipping Guarantee", logicalWidth - PADDING_X, curY + 12);
-
   ctx.restore();
 
   // Update badge
@@ -12553,6 +12555,7 @@ function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
   ctx.textAlign = "left";
   ctx.fillText(text, x + 8, y + 1);
   ctx.restore();
+  return w;
 }
 
 function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
