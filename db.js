@@ -91,6 +91,42 @@ class DatabaseService {
       "hand_emb_config_v1"
     ];
     legacyKeys.forEach(k => localStorage.removeItem(k));
+
+    // One-time fix: Remove the reappearing '26-Oct-2026 TO 10-Nov-2026' trash item permanently
+    // This distribution period was destroyed by user but kept reappearing due to missing tombstone logic
+    try {
+      const fixKey = "hand_emb_trash_ghost_fix_v1";
+      if (localStorage.getItem(fixKey) !== "done") {
+        // 1. Remove from trash localStorage (find by original_id or period_name in data)
+        const trashRaw = localStorage.getItem("hand_emb_trash_v1");
+        if (trashRaw) {
+          const trashList = JSON.parse(trashRaw);
+          const targetPeriodNameLower = "26-oct-2026 to 10-nov-2026";
+          const filteredTrash = trashList.filter(t => {
+            if (t.entity_type !== "distribution_period") return true;
+            const pName = (t.data?.period_name || t.title || "").trim().toLowerCase();
+            return !pName.includes("26-oct-2026") && !pName.includes("10-nov-2026");
+          });
+          // Record all removed trash IDs as permanently destroyed
+          const removedIds = trashList
+            .filter(t => !filteredTrash.some(f => f.id === t.id))
+            .map(t => t.id);
+          if (removedIds.length > 0) {
+            const destroyedList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+            removedIds.forEach(id => { if (!destroyedList.includes(id)) destroyedList.push(id); });
+            localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedList));
+            localStorage.setItem("hand_emb_trash_v1", JSON.stringify(filteredTrash));
+          }
+          // 2. Tombstone the period name in deleted dist periods
+          const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+          if (!deletedDPs.includes(targetPeriodNameLower)) {
+            deletedDPs.push(targetPeriodNameLower);
+            localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
+          }
+        }
+        localStorage.setItem(fixKey, "done");
+      }
+    } catch (e) { }
   }
 
   // Sanitize legacy numeric IDs from tombstone storage so new sequential IDs are never blocked
@@ -876,6 +912,24 @@ class DatabaseService {
       if (data.period && data.contractor_name && data.style_code) {
         this.trackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
       }
+    } else if (entityType === "distribution_period") {
+      // Tombstone the distribution period so it never resurfaces from Neon sync
+      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+      if (!deletedDPs.includes(pNameLower)) {
+        deletedDPs.push(pNameLower);
+        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
+      }
+      // Also track by ID so sync never re-adds it
+      if (data.id) this.trackDeletedRecord("distribution_period", data.id);
+      // Delete from Neon distribution_periods table
+      const cfgDP = this.getConfig();
+      if (cfgDP.neonConnectionString || cfgDP.neonEndpointUrl) {
+        this.executeNeonQuery(
+          `DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
+          [data.id || '', pNameLower]
+        ).catch(() => null);
+      }
     } else if (entityType === "contractor") {
       if (data.id) this.trackDeletedRecord("contractor", data.id);
       if (data.name) this.trackDeletedRecord("contractor", (data.name || '').trim().toLowerCase());
@@ -886,6 +940,13 @@ class DatabaseService {
           [data.id || 0, (data.name || '').trim().toLowerCase()]
         ).catch(() => null);
       }
+    }
+
+    // Permanently record this trash ID as destroyed so Neon sync never re-adds it
+    const destroyedList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+    if (!destroyedList.includes(trashId)) {
+      destroyedList.push(trashId);
+      localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedList));
     }
 
     list = list.filter(t => t.id !== trashId);
@@ -911,8 +972,23 @@ class DatabaseService {
         this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
       } else if (entityType === "distribution") {
         this.trackDeletedRecord("distribution", data.id);
+      } else if (entityType === "distribution_period") {
+        // Tombstone so Neon sync never re-adds this period
+        const pNameLower = (data.period_name || "").trim().toLowerCase();
+        const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+        if (pNameLower && !deletedDPs.includes(pNameLower)) {
+          deletedDPs.push(pNameLower);
+          localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
+        }
+        if (data.id) this.trackDeletedRecord("distribution_period", data.id);
       } else if (entityType === "payment") {
         this.trackDeletedRecord("payment", data.id);
+      }
+      // Always record trash ID as permanently destroyed
+      const dList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+      if (!dList.includes(trashItem.id)) {
+        dList.push(trashItem.id);
+        localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(dList));
       }
     });
 
@@ -5231,8 +5307,24 @@ class DatabaseService {
       }
 
       // Merge Cloud Trash Items with local Trash
+      // Filter out any trash items that have been permanently destroyed (tombstoned)
       if (Array.isArray(rawTrashRows) && rawTrashRows.length > 0) {
-        const parsedTrash = rawTrashRows.map(t => ({
+        const permanentlyDestroyed = new Set(JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]"));
+        const deletedDistPeriodsForTrash = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
+
+        const parsedTrash = rawTrashRows
+          .filter(t => {
+            // Skip if this trash ID was permanently destroyed
+            if (permanentlyDestroyed.has(t.id)) return false;
+            // Skip distribution_period items whose period_name is in deleted list
+            if (t.entity_type === "distribution_period") {
+              const rawData = typeof t.item_data === "string" ? JSON.parse(t.item_data || "{}") : (t.item_data || {});
+              const pNameLower = (rawData.period_name || "").trim().toLowerCase();
+              if (pNameLower && deletedDistPeriodsForTrash.has(pNameLower)) return false;
+            }
+            return true;
+          })
+          .map(t => ({
           id: t.id,
           original_id: t.original_id,
           entity_type: t.entity_type,
@@ -5246,6 +5338,8 @@ class DatabaseService {
         const localTrash = this.getTrashItems() || [];
         const mergedTrash = [...parsedTrash];
         for (const localItem of localTrash) {
+          // Skip permanently destroyed items — never re-add them
+          if (permanentlyDestroyed.has(localItem.id)) continue;
           if (!mergedTrash.some(mt => mt.id === localItem.id)) {
             mergedTrash.push(localItem);
             this.pushTrashItemToNeonAsync(localItem).catch(() => null);
