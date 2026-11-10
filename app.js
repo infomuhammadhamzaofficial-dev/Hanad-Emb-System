@@ -2063,40 +2063,61 @@ function initFinalStyleView() {
     });
   }
 
-  // When Style Code is selected, update available categories
-  const quickSelect = document.getElementById("quick-style-select");
-  if (quickSelect) {
-    quickSelect.addEventListener("change", (e) => {
-      const selectedCode = e.target.value;
-      if (selectedCode) {
-        const categories = window.db.getCategoriesForStyle(selectedCode);
-        const catSelect = document.getElementById("quick-category-select");
-        if (catSelect && categories.length > 0) {
-          catSelect.value = categories[0];
-        }
+  // Live Style Code autocomplete & category update for Daily Sheet quick add
+  const quickStyleInput = document.getElementById("quick-style-input");
+  const quickSelect = document.getElementById("quick-style-select"); // backward compatibility if present
+
+  const handleQuickStyleChange = (val) => {
+    const selectedCode = (val || "").trim().toUpperCase();
+    if (selectedCode) {
+      const categories = window.db.getCategoriesForStyle(selectedCode);
+      const catSelect = document.getElementById("quick-category-select");
+      if (catSelect && categories.length > 0) {
+        catSelect.value = categories[0];
       }
-    });
+    }
+  };
+
+  if (quickStyleInput) {
+    attachUppercaseInputHandler("quick-style-input");
+    quickStyleInput.addEventListener("input", (e) => handleQuickStyleChange(e.target.value));
+    quickStyleInput.addEventListener("change", (e) => handleQuickStyleChange(e.target.value));
+  }
+  if (quickSelect) {
+    quickSelect.addEventListener("change", (e) => handleQuickStyleChange(e.target.value));
   }
 
-  // Add to daily sheet button
+  // Add to daily sheet button (Strict Duplication Prevention)
   document.getElementById("btn-add-final-style")?.addEventListener("click", () => {
+    const styleInp = document.getElementById("quick-style-input");
     const styleSelect = document.getElementById("quick-style-select");
     const catSelect = document.getElementById("quick-category-select");
     const remarksInput = document.getElementById("quick-remarks-input");
 
-    const code = styleSelect?.value?.trim();
+    const code = (styleInp ? styleInp.value : (styleSelect ? styleSelect.value : "")).trim().toUpperCase();
     const cat = catSelect?.value?.trim() || "Shirt";
     const remarks = remarksInput?.value?.trim() || "";
 
     if (!code) {
-      showToast("Please select a Style Code first!", "error");
+      showToast("Please enter or select a Style Code first!", "error");
+      styleInp?.focus();
       return;
     }
 
-    window.db.addFinalStyle(code, cat, remarks);
+    const res = window.db.addFinalStyle(code, cat, remarks);
     renderFinalStyleSheet();
-    showToast(`Added ${code} (${cat}) to Daily Sheet!`);
+    updateDailySheetArrivalsBanner();
 
+    if (res && res.isNew === false) {
+      showToast(`Style "${code}" (${cat}) pehle se Daily Sheet mein mojood hai (Duplicate add nahi kiya gaya).`, "info");
+    } else {
+      showToast(`✓ Style "${code}" (${cat}) Daily Sheet mein add ho gaya!`);
+    }
+
+    if (styleInp) {
+      styleInp.value = "";
+      styleInp.focus();
+    }
     if (remarksInput) remarksInput.value = "";
   });
 
@@ -2116,17 +2137,18 @@ function initFinalStyleView() {
     activeStyles.forEach(s => {
       // STRICT MATCH on both style_code AND category
       const alreadyInSheet = currentFinal.some(f =>
-        f.style_code.toLowerCase() === s.style_code.toLowerCase() &&
-        f.category.toLowerCase() === s.category.toLowerCase()
+        (f.style_code || "").trim().toUpperCase() === (s.style_code || "").trim().toUpperCase() &&
+        (f.category || "Shirt").trim().toUpperCase() === (s.category || "Shirt").trim().toUpperCase()
       );
       if (!alreadyInSheet) {
-        window.db.addFinalStyle(s.style_code, s.category, s.remarks || "");
-        addedCount++;
+        const res = window.db.addFinalStyle(s.style_code, s.category, s.remarks || "");
+        if (res && res.isNew) addedCount++;
       }
     });
 
     renderFinalStyleSheet();
-    showToast(`Added ${addedCount} active running styles to today's sheet!`);
+    updateDailySheetArrivalsBanner();
+    showToast(`Added ${addedCount} active running styles to Daily Sheet! (Duplicates skipped)`);
   });
 
   // Print button
@@ -3798,7 +3820,8 @@ function initGlobalInputFormatters() {
     "entry-style-code",
     "edit-log-style-code",
     "dist-entry-style-code",
-    "payment-style-code"
+    "payment-style-code",
+    "quick-style-input"
   ];
   styleCodeIds.forEach(id => attachUppercaseInputHandler(id));
 
@@ -6432,6 +6455,22 @@ async function deleteSheetPeriodAction(periodId) {
   if (confirm("Are you sure you want to delete this sheet period? Any entries recorded for this period will also be removed permanently.")) {
     const success = await window.db.deleteRateApprovalPeriod(periodId);
     if (success) {
+      // Clear form inputs in sheet setup modal so the deleted period is wiped from the form!
+      const nameInput = document.getElementById("sheet-setup-name");
+      const currentFormName = (nameInput?.value || "").trim().toLowerCase();
+      const deletedObj = success.data || {};
+      const deletedName = (deletedObj.period_name || "").trim().toLowerCase();
+
+      if (currentFormName === deletedName || currentFormName === String(periodId).trim().toLowerCase()) {
+        if (nameInput) nameInput.value = "";
+        const sDate = document.getElementById("sheet-setup-start-date");
+        const eDate = document.getElementById("sheet-setup-end-date");
+        const notes = document.getElementById("sheet-setup-notes");
+        if (sDate) sDate.value = "";
+        if (eDate) eDate.value = "";
+        if (notes) notes.value = "";
+      }
+
       // If the currently active sheet was deleted, switch to the first remaining sheet or "all"
       const remaining = window.db.getRateApprovalPeriods();
       const currentActive = getActiveRateApprovalPeriod();
@@ -7935,31 +7974,31 @@ function togglePaymentFloorFields(channel) {
 function clearUploadedPaymentImage() {
   const hiddenData = document.getElementById("payment-image-data");
   const fileInput = document.getElementById("payment-file-input");
-  const promptBox = document.getElementById("payment-upload-prompt");
   const previewBox = document.getElementById("payment-preview-box");
   const previewImg = document.getElementById("payment-preview-img");
   const filenameEl = document.getElementById("payment-preview-filename");
+  const removeBtn = document.getElementById("btn-remove-image");
 
   if (hiddenData) hiddenData.value = "";
   if (fileInput) fileInput.value = "";
   if (previewImg) previewImg.src = "";
-  if (filenameEl) filenameEl.textContent = "Sample Image";
-  if (promptBox) promptBox.style.display = "flex";
+  if (filenameEl) filenameEl.textContent = "";
   if (previewBox) previewBox.style.display = "none";
+  if (removeBtn) removeBtn.style.display = "none";
 }
 
 function setPaymentImagePreview(base64Data, filename = "Uploaded Image") {
   const hiddenData = document.getElementById("payment-image-data");
-  const promptBox = document.getElementById("payment-upload-prompt");
   const previewBox = document.getElementById("payment-preview-box");
   const previewImg = document.getElementById("payment-preview-img");
   const filenameEl = document.getElementById("payment-preview-filename");
+  const removeBtn = document.getElementById("btn-remove-image");
 
   if (hiddenData) hiddenData.value = base64Data;
-  if (previewImg) previewImg.src = base64Data;
+  if (previewImg) { previewImg.src = base64Data; previewImg.style.display = "none"; }
   if (filenameEl) filenameEl.textContent = filename;
-  if (promptBox) promptBox.style.display = "none";
-  if (previewBox) previewBox.style.display = "flex";
+  if (previewBox) previewBox.style.display = "none"; // compact UI: no large preview
+  if (removeBtn) removeBtn.style.display = "inline-flex";
 }
 
 function initPaymentModalHandlers() {
@@ -8039,12 +8078,12 @@ function initPaymentModalHandlers() {
   if (balStockInput) balStockInput.addEventListener("input", recalcTotalBalance);
   if (balHembInput) balHembInput.addEventListener("input", recalcTotalBalance);
 
-  // Image Upload Handling
+  // Image Upload Handling (compact button UI)
   const fileInput = document.getElementById("payment-file-input");
   const triggerUploadBtn = document.getElementById("btn-trigger-upload");
   const changeImageBtn = document.getElementById("btn-change-image");
   const removeImageBtn = document.getElementById("btn-remove-image");
-  const uploadZone = document.getElementById("payment-image-zone");
+  // uploadZone removed — compact button replaces the drag-drop zone
 
   if (triggerUploadBtn && fileInput) {
     triggerUploadBtn.addEventListener("click", () => fileInput.click());
@@ -8118,21 +8157,44 @@ function initPaymentModalHandlers() {
     });
   }
 
-  if (uploadZone) {
-    uploadZone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      uploadZone.classList.add("dragover");
-    });
+  // Drag-drop removed (compact button UI). uploadZone no longer exists.
 
-    uploadZone.addEventListener("dragleave", () => {
-      uploadZone.classList.remove("dragover");
-    });
+  // ── Tab key navigation: Remarks → Save → Cancel → Style Code ──
+  const payRemarks = document.getElementById("payment-remarks-1");
+  const paySaveBtn = document.getElementById("btn-save-payment-entry");
+  const payCancelBtn = document.getElementById("btn-cancel-payment-entry");
+  const payStyleCode = document.getElementById("payment-style-code");
 
-    uploadZone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      uploadZone.classList.remove("dragover");
-      const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-      if (file) handleSelectedFile(file);
+  if (payRemarks) {
+    payRemarks.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        paySaveBtn?.focus();
+      }
+    });
+  }
+
+  if (paySaveBtn) {
+    paySaveBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        payCancelBtn?.focus();
+      } else if (e.key === "Tab" && e.shiftKey) {
+        e.preventDefault();
+        payRemarks?.focus();
+      }
+    });
+  }
+
+  if (payCancelBtn) {
+    payCancelBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        payStyleCode?.focus();
+      } else if (e.key === "Tab" && e.shiftKey) {
+        e.preventDefault();
+        paySaveBtn?.focus();
+      }
     });
   }
 }
@@ -8254,6 +8316,8 @@ function openPaymentEntryModal(id = null, prefillData = null) {
   }
 
   openModal("modal-payment-entry");
+  // Default focus: Style Code input
+  setTimeout(() => { document.getElementById("payment-style-code")?.focus(); }, 80);
 }
 
 function handlePaymentStyleAutoFetch() {
@@ -8450,12 +8514,42 @@ async function savePaymentEntryFromForm() {
     if (id) {
       await window.db.updatePaymentSheet(parseInt(id, 10), entryData);
       showToast(`✓ Rate approval entry for "${styleCode}" updated successfully!`);
+      closeModal("modal-payment-entry");
     } else {
       await window.db.addPaymentSheet(entryData);
       showToast(`✓ New Rate approval entry for "${styleCode}" recorded successfully!`);
-    }
 
-    closeModal("modal-payment-entry");
+      // ── Form reset after new entry (stay open) ──
+      const savedPeriod = (document.getElementById("payment-period-input")?.value || "").trim();
+      const savedPeriodBadge = document.getElementById("payment-modal-period-badge")?.textContent || savedPeriod;
+
+      // Reset form but keep period
+      const formEl = document.getElementById("form-payment-entry");
+      if (formEl) formEl.reset();
+
+      // Restore period (form.reset() clears hidden fields too)
+      if (document.getElementById("payment-period-input")) document.getElementById("payment-period-input").value = savedPeriod;
+      const badge = document.getElementById("payment-modal-period-badge");
+      if (badge) badge.textContent = savedPeriodBadge;
+
+      // Clear image
+      clearUploadedPaymentImage();
+
+      // Hide alert box
+      const alertBox = document.getElementById("modal-payment-alert");
+      if (alertBox) alertBox.style.display = "none";
+
+      // Auto-increment SR NO
+      const currentList = window.db.getPaymentSheets();
+      const periodItems = currentList.filter(it => (it.period || "").trim().toLowerCase() === savedPeriod.trim().toLowerCase());
+      if (document.getElementById("payment-sr")) document.getElementById("payment-sr").value = periodItems.length + 1;
+
+      // Reset category to default
+      if (document.getElementById("payment-category")) document.getElementById("payment-category").value = "SHIRT";
+
+      // Focus Style Code
+      setTimeout(() => { document.getElementById("payment-style-code")?.focus(); }, 50);
+    }
 
     // Automatically align the view period to the entry's period so user sees it right away
     if (period) {
@@ -8873,6 +8967,60 @@ function initWorkDistributionView() {
   const distEntryForm = document.getElementById("form-distribution-entry");
   if (distEntryForm) {
     distEntryForm.addEventListener("submit", saveDistributionEntryAction);
+  }
+
+  // Exact Tab Key Navigation Loop requested by user:
+  // Remarks -> Tab -> Save Button -> Tab -> Cancel Button -> Tab -> Style Code (Loops back seamlessly)
+  const distRemarksInput = document.getElementById("dist-entry-remarks");
+  const distSaveBtn = document.getElementById("btn-save-dist-entry");
+  const distCancelBtn = document.getElementById("btn-cancel-dist-entry");
+  const distStyleCodeInput = document.getElementById("dist-entry-style-code");
+
+  if (distRemarksInput) {
+    distRemarksInput.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && !e.shiftKey) {
+        e.preventDefault();
+        distSaveBtn?.focus();
+      }
+    });
+  }
+
+  if (distSaveBtn) {
+    distSaveBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") {
+        if (!e.shiftKey) {
+          e.preventDefault();
+          distCancelBtn?.focus();
+        } else {
+          e.preventDefault();
+          distRemarksInput?.focus();
+        }
+      }
+    });
+  }
+
+  if (distCancelBtn) {
+    distCancelBtn.addEventListener("keydown", (e) => {
+      if (e.key === "Tab") {
+        if (!e.shiftKey) {
+          e.preventDefault();
+          distStyleCodeInput?.focus();
+          distStyleCodeInput?.select();
+        } else {
+          e.preventDefault();
+          distSaveBtn?.focus();
+        }
+      }
+    });
+  }
+
+  if (distStyleCodeInput) {
+    distStyleCodeInput.addEventListener("keydown", (e) => {
+      if (e.key === "Tab" && e.shiftKey) {
+        e.preventDefault();
+        distCancelBtn?.focus();
+      }
+    });
   }
 
   // 7. Period Setup Form listeners
@@ -9454,22 +9602,33 @@ async function saveDistributionEntryAction(e) {
       renderAll();
 
       // Form close nahi hoga, continuous entry ke liye fields reset aur focus Style Code par
+      // Sirf selected time period aur next serial number show hoga, baaqi pura form empty
+      const idInput = document.getElementById("dist-entry-id");
+      const titleEl = document.getElementById("dist-entry-modal-title");
       const styleInput = document.getElementById("dist-entry-style-code");
+      const contInput = document.getElementById("dist-entry-contractor");
       const pcsInput = document.getElementById("dist-entry-pcs-qty");
       const rateInput = document.getElementById("dist-entry-rate");
       const totalInput = document.getElementById("dist-entry-total");
+      const itemInput = document.getElementById("dist-entry-item");
+      const floorInput = document.getElementById("dist-entry-floor");
       const remarksInput = document.getElementById("dist-entry-remarks");
       const srInput = document.getElementById("dist-entry-sr");
 
+      if (idInput) idInput.value = "";
+      if (titleEl) titleEl.textContent = "📦 Work Distribution Entry";
       if (styleInput) styleInput.value = "";
+      if (contInput) contInput.value = "";
       if (pcsInput) pcsInput.value = "";
       if (rateInput) rateInput.value = "";
       if (totalInput) totalInput.value = "Rs. 0";
+      if (itemInput) itemInput.value = "SHIRT";
+      if (floorInput) floorInput.value = "";
       if (remarksInput) remarksInput.value = "";
 
-      // Auto-increment SR NO for the next entry
+      // Selected period remains untouched, auto-increment SR NO for next entry
       if (srInput) {
-        const activePeriod = getActiveDistributionPeriod();
+        const activePeriod = document.getElementById("dist-entry-period")?.value || getActiveDistributionPeriod();
         const currentList = window.db.getWorkDistribution().filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
         srInput.value = currentList.length + 1;
       }
@@ -9477,6 +9636,7 @@ async function saveDistributionEntryAction(e) {
       // Next entry ke liye Style Code text box par focus
       if (styleInput) {
         styleInput.focus();
+        styleInput.select();
       }
     }
   } catch (err) {
@@ -9638,7 +9798,7 @@ async function saveDistPeriodAction(e) {
   }
 }
 
-function deleteDistPeriodAction(periodKey) {
+async function deleteDistPeriodAction(periodKey) {
   if (!window.db.canUserPerformAction("can_delete")) {
     showToast("Permission Denied: You cannot delete distribution periods.", "error");
     return;
@@ -9657,7 +9817,31 @@ function deleteDistPeriodAction(periodKey) {
 
   if (confirm(promptMsg)) {
     try {
-      window.db.deleteDistributionPeriod(periodKey);
+      await window.db.deleteDistributionPeriod(periodKey);
+
+      // Clear setup form fields if this period was shown in the form
+      const nameInput = document.getElementById("dist-setup-name");
+      if (nameInput && nameInput.value.trim().toLowerCase() === name.trim().toLowerCase()) {
+        nameInput.value = "";
+        const sDate = document.getElementById("dist-setup-start-date");
+        const eDate = document.getElementById("dist-setup-end-date");
+        const notes = document.getElementById("dist-setup-notes");
+        if (sDate) sDate.value = "";
+        if (eDate) eDate.value = "";
+        if (notes) notes.value = "";
+      }
+
+      // If active period was deleted, switch to next available or blank
+      const remaining = window.db.getDistributionPeriods();
+      const currentActive = getActiveDistributionPeriod();
+      if (!remaining.some(r => (r.period_name || "").toLowerCase() === currentActive.toLowerCase())) {
+        const nextPeriod = remaining.length > 0 ? remaining[0].period_name : "";
+        const sel = document.getElementById("select-distribution-period");
+        const entrySel = document.getElementById("dist-entry-period");
+        if (sel) sel.value = nextPeriod;
+        if (entrySel) entrySel.value = nextPeriod;
+      }
+
       populateDistributionPeriods();
       renderDistPeriodSetupList();
       renderWorkDistribution();

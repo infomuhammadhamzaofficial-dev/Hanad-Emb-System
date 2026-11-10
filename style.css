@@ -2442,18 +2442,10 @@ input[type="date"].app-input {
   background: var(--primary);
 }
 
-/* Final Style Report Layout (Second Image + Summary Sidebar) */
+/* Final Style Report Layout - Full Width Table */
 .final-style-grid {
-  display: grid;
-  grid-template-columns: 1fr 340px;
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (max-width: 1200px) {
-  .final-style-grid {
-    grid-template-columns: 1fr;
-  }
+  display: block;
+  width: 100%;
 }
 
 .report-header-banner {

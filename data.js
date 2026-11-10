@@ -40,21 +40,8 @@ const INITIAL_FINAL_STYLES = [];
 
 // ====================================================================
 // WORK DISTRIBUTION MASTER DATA: 6 CONTRACTORS BI-MONTHLY CYCLES
-// Exactly matching the Distribution Sheet (26-Sep-2026 TO 10-Oct-2026)
+// Clean Cloud Integration - Neon is the Single Source of Truth
 // ====================================================================
 
-const INITIAL_DISTRIBUTION_PERIODS = [
-  {
-    id: "dist_period_11oct_25oct_2026",
-    period_name: "11-Oct-2026 TO 25-Oct-2026",
-    start_date: "2026-10-11",
-    end_date: "2026-10-25",
-    department: "Hand Embroidery Department",
-    status: "Active",
-    notes: "Contractor Work Distribution"
-  }
-];
-
+const INITIAL_DISTRIBUTION_PERIODS = [];
 const INITIAL_WORK_DISTRIBUTION = [];
-
-

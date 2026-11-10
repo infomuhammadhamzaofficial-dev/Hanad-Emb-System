@@ -47,8 +47,52 @@ class DatabaseService {
     this.cleanCorruptedNumericTombstones();
     this.initLocalStorage();
     this.deduplicateMasterInventorySerialNumbers();
+    this.deduplicateFinalStyles();
     this.syncAllDistributionContractorsToLogsAndMaster();
     this._neonTablesReady = false;
+  }
+
+  // -------------------------------------------------------------
+  // Deduplicate Daily Sheet Final Styles (Strict: Style Code + Category)
+  // Ensures style is single per (style_code + category); distinct categories stay separate
+  // -------------------------------------------------------------
+  deduplicateFinalStyles() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+      if (!Array.isArray(raw) || raw.length === 0) return;
+      const seen = new Set();
+      const cleaned = [];
+      let hadDuplicates = false;
+
+      for (let i = 0; i < raw.length; i++) {
+        const item = raw[i];
+        if (!item) continue;
+        const code = (item.style_code || "").trim().toUpperCase();
+        const cat = (item.category || "Shirt").trim();
+        if (!code) continue;
+
+        const key = `${code}:::${cat.toUpperCase()}`;
+        if (seen.has(key)) {
+          hadDuplicates = true;
+          continue;
+        }
+        seen.add(key);
+        cleaned.push({
+          s_no: cleaned.length + 1,
+          style_code: code,
+          category: cat,
+          dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+          time_remarks: (item.time_remarks || "").trim()
+        });
+      }
+
+      if (hadDuplicates) {
+        localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(cleaned));
+        this.clearCache(DB_KEYS.FINAL_STYLES);
+      }
+    } catch (e) {
+      console.warn("deduplicateFinalStyles notice:", e);
+    }
   }
 
   // -------------------------------------------------------------
@@ -91,87 +135,6 @@ class DatabaseService {
       "hand_emb_config_v1"
     ];
     legacyKeys.forEach(k => localStorage.removeItem(k));
-
-    // Self-healing: Reset corrupted deleted periods tombstones so Neon periods are NEVER blocked!
-    try {
-      localStorage.removeItem("hand_emb_deleted_periods_v1");
-      localStorage.removeItem("hand_emb_deleted_dist_periods_v1");
-      localStorage.removeItem("hand_emb_trash_ghost_fix_v1");
-
-      // Ensure active rate approval periods are populated in localStorage
-      const defaultRatePeriods = [
-        {
-          id: "period_11sep_25sep_2026",
-          period_name: "11-SEP-2026 TO 25-SEP-2026",
-          start_date: "2026-09-11",
-          end_date: "2026-09-25",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Default Sheet Period"
-        },
-        {
-          id: "period_1792395630658",
-          period_name: "11-OCT-2026 TO 25-OCT-2026",
-          start_date: "2026-10-11",
-          end_date: "2026-10-25",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Default Sheet Period"
-        }
-      ];
-
-      const rawRap = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
-      let rapList = [];
-      if (rawRap) {
-        try {
-          const parsed = JSON.parse(rawRap);
-          if (Array.isArray(parsed) && parsed.length > 0) rapList = parsed;
-        } catch (e) { }
-      }
-      defaultRatePeriods.forEach(defP => {
-        if (!rapList.some(p => (p.period_name || '').trim().toLowerCase() === defP.period_name.toLowerCase())) {
-          rapList.push(defP);
-        }
-      });
-      localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(rapList));
-
-      // Ensure active distribution periods are populated in localStorage
-      const defaultDistPeriods = [
-        {
-          id: "dist_period_11oct_25oct_2026",
-          period_name: "11-Oct-2026 TO 25-Oct-2026",
-          start_date: "2026-10-11",
-          end_date: "2026-10-25",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Contractor Work Distribution"
-        },
-        {
-          id: "dist_period_1793775943735_se4ho",
-          period_name: "26-Oct-2026 TO 10-Nov-2026",
-          start_date: "2026-10-26",
-          end_date: "2026-11-10",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Contractor Work Distribution"
-        }
-      ];
-
-      const rawDp = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
-      let dpList = [];
-      if (rawDp) {
-        try {
-          const parsed = JSON.parse(rawDp);
-          if (Array.isArray(parsed) && parsed.length > 0) dpList = parsed;
-        } catch (e) { }
-      }
-      defaultDistPeriods.forEach(defP => {
-        if (!dpList.some(p => (p.period_name || '').trim().toLowerCase() === defP.period_name.toLowerCase())) {
-          dpList.push(defP);
-        }
-      });
-      localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(dpList));
-    } catch (e) { }
   }
 
   // Sanitize legacy numeric IDs from tombstone storage so new sequential IDs are never blocked
@@ -2146,14 +2109,28 @@ class DatabaseService {
   getFinalStyles() {
     return this._getCached(DB_KEYS.FINAL_STYLES, () => {
       const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
-      return raw.map((entry, idx) => {
+      const seen = new Set();
+      const result = [];
+
+      for (let idx = 0; idx < raw.length; idx++) {
+        const entry = raw[idx];
+        if (!entry) continue;
+        const code = (entry.style_code || "").trim().toUpperCase();
+        const cat = (entry.category || "Shirt").trim();
+        if (!code) continue;
+
+        // Ensure strict uniqueness: single entry per (style_code + category)
+        const key = `${code}:::${cat.toUpperCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
         // STRICT MATCH on style_code AND category
-        const master = this.findMasterByStyleAndCategory(entry.style_code, entry.category);
+        const master = this.findMasterByStyleAndCategory(code, cat);
         if (master) {
-          return {
-            s_no: entry.s_no || idx + 1,
-            style_code: entry.style_code,
-            category: entry.category || master.category || "Shirt",
+          result.push({
+            s_no: result.length + 1,
+            style_code: code,
+            category: cat,
             contractor_name: master.contractor_name || "",
             cut_qty: master.cut_qty || 0,
             received_qty: master.received_qty || 0,
@@ -2162,12 +2139,12 @@ class DatabaseService {
             balance_from_hemb: master.balance_from_hemb || 0,
             time_remarks: entry.time_remarks || "",
             master_found: true
-          };
+          });
         } else {
-          return {
-            s_no: entry.s_no || idx + 1,
-            style_code: entry.style_code,
-            category: entry.category || "Shirt",
+          result.push({
+            s_no: result.length + 1,
+            style_code: code,
+            category: cat,
             contractor_name: entry.contractor_name || "-",
             cut_qty: entry.cut_qty || 0,
             received_qty: entry.received_qty || 0,
@@ -2176,20 +2153,42 @@ class DatabaseService {
             balance_from_hemb: entry.balance_from_hemb || 0,
             time_remarks: entry.time_remarks || "",
             master_found: false
-          };
+          });
         }
-      });
+      }
+      return result;
     });
   }
 
   saveFinalStyles(list) {
-    const minimal = list.map((item, idx) => ({
-      s_no: idx + 1,
-      style_code: (item.style_code || "").trim(),
-      category: (item.category || "Shirt").trim(),
-      dispatch_from_hemb: item.dispatch_from_hemb || 0,
-      time_remarks: (item.time_remarks || "").trim()
-    }));
+    if (!Array.isArray(list)) list = [];
+    const seen = new Set();
+    const minimal = [];
+
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      if (!item) continue;
+      const code = (item.style_code || "").trim().toUpperCase();
+      const cat = (item.category || "Shirt").trim();
+      if (!code) continue;
+
+      // Strict uniqueness per (style_code + category)
+      const key = `${code}:::${cat.toUpperCase()}`;
+      if (seen.has(key)) {
+        // Skip duplicate row
+        continue;
+      }
+      seen.add(key);
+
+      minimal.push({
+        s_no: minimal.length + 1,
+        style_code: code,
+        category: cat,
+        dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+        time_remarks: (item.time_remarks || "").trim()
+      });
+    }
+
     this.clearCache(DB_KEYS.FINAL_STYLES);
     try {
       localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(minimal));
@@ -2247,13 +2246,25 @@ class DatabaseService {
         );
         const rows = res?.rows || (Array.isArray(res) ? res : []);
         if (rows.length > 0) {
-          const mapped = rows.map((r, idx) => ({
-            s_no: parseInt(r.serial_no, 10) || (idx + 1),
-            style_code: (r.style_code || "").trim(),
-            category: (r.category || "Shirt").trim(),
-            dispatch_from_hemb: 0,
-            time_remarks: (r.time_remarks || "").trim()
-          }));
+          const seen = new Set();
+          const mapped = [];
+          for (let idx = 0; idx < rows.length; idx++) {
+            const r = rows[idx];
+            const code = (r.style_code || "").trim().toUpperCase();
+            const cat = (r.category || "Shirt").trim();
+            if (!code) continue;
+            const key = `${code}:::${cat.toUpperCase()}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+
+            mapped.push({
+              s_no: mapped.length + 1,
+              style_code: code,
+              category: cat,
+              dispatch_from_hemb: 0,
+              time_remarks: (r.time_remarks || "").trim()
+            });
+          }
           localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mapped));
           this.clearCache(DB_KEYS.FINAL_STYLES);
           return mapped;
@@ -2266,32 +2277,40 @@ class DatabaseService {
   }
 
   addFinalStyle(styleCode, category, timeRemarks = "") {
-    const cleanCode = (styleCode || "").trim();
+    const cleanCode = (styleCode || "").trim().toUpperCase();
     const cleanCat = (category || "Shirt").trim();
-    if (!cleanCode) return this.getFinalStyles();
+    if (!cleanCode) return { success: false, isNew: false, list: this.getFinalStyles() };
 
     const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    
+    // Strict match on BOTH style_code AND category
     const existingIndex = raw.findIndex(i =>
-      (i.style_code || "").trim().toLowerCase() === cleanCode.toLowerCase() &&
-      (i.category || "").trim().toLowerCase() === cleanCat.toLowerCase()
+      (i.style_code || "").trim().toUpperCase() === cleanCode &&
+      (i.category || "Shirt").trim().toUpperCase() === cleanCat.toUpperCase()
     );
 
+    if (existingIndex >= 0) {
+      // Style + Category already exists in this sheet!
+      // Do NOT create a duplicate row! Keep it single.
+      if (timeRemarks && !raw[existingIndex].time_remarks) {
+        raw[existingIndex].time_remarks = timeRemarks.trim();
+        this.saveFinalStyles(raw);
+      }
+      return { success: true, isNew: false, list: this.getFinalStyles() };
+    }
+
+    // New unique style + category: append
     const entryToSave = {
-      s_no: existingIndex >= 0 ? raw[existingIndex].s_no : raw.length + 1,
+      s_no: raw.length + 1,
       style_code: cleanCode,
       category: cleanCat,
       dispatch_from_hemb: 0,
       time_remarks: (timeRemarks || "").trim()
     };
-
-    if (existingIndex >= 0) {
-      raw[existingIndex] = entryToSave;
-    } else {
-      raw.push(entryToSave);
-    }
+    raw.push(entryToSave);
 
     this.saveFinalStyles(raw);
-    return this.getFinalStyles();
+    return { success: true, isNew: true, list: this.getFinalStyles() };
   }
 
   updateFinalStyleRemarks(sNo, newRemarks) {
@@ -2426,10 +2445,10 @@ class DatabaseService {
       const balHemb = master ? (Number(master.balance_from_hemb) || 0) : Math.max(0, cutQty - totalRec);
       const balPending = cutQty - totalRec; // Remaining pieces to complete receiving
 
-      // Check if already in Daily Sheet
+      // Check if already in Daily Sheet (Strict on BOTH style_code AND category)
       const inDailySheet = currentFinal.some(f =>
-        (f.style_code || "").trim().toLowerCase() === g.style_code.toLowerCase() &&
-        (f.category || "").trim().toLowerCase() === g.category.toLowerCase()
+        (f.style_code || "").trim().toUpperCase() === (g.style_code || "").trim().toUpperCase() &&
+        (f.category || "Shirt").trim().toUpperCase() === (g.category || "Shirt").trim().toUpperCase()
       );
 
       const item = {
@@ -3028,78 +3047,31 @@ class DatabaseService {
   // RATE APPROVAL SHEET PERIODS MANAGEMENT
   // -------------------------------------------------------------
   getRateApprovalPeriods() {
-    const defaultPeriods = [
-      {
-        id: "period_11sep_25sep_2026",
-        period_name: "11-SEP-2026 TO 25-SEP-2026",
-        start_date: "2026-09-11",
-        end_date: "2026-09-25",
-        department: "Hand Embroidery Department",
-        status: "Active",
-        notes: "Default Sheet Period"
-      },
-      {
-        id: "period_1792395630658",
-        period_name: "11-OCT-2026 TO 25-OCT-2026",
-        start_date: "2026-10-11",
-        end_date: "2026-10-25",
-        department: "Hand Embroidery Department",
-        status: "Active",
-        notes: "Default Sheet Period"
-      }
-    ];
-
-    const raw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
-    let list = [];
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed.filter(p => p && (p.period_name || "").trim());
+    return this._getCached(DB_KEYS.RATE_APPROVAL_PERIODS, () => {
+      const raw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
+      let list = [];
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list = parsed.filter(p => p && (p.period_name || "").trim());
+          }
+        } catch (e) {
+          list = [];
         }
-      } catch (e) {
-        list = [];
       }
-    }
 
-    if (!list || list.length === 0) {
-      list = [...defaultPeriods];
-    } else {
-      // Ensure known default active periods are present
-      defaultPeriods.forEach(dp => {
-        if (!list.some(p => (p.period_name || "").trim().toLowerCase() === dp.period_name.toLowerCase())) {
-          list.push(dp);
-        }
-      });
-    }
+      // Filter out any tombstoned deleted periods so deleted periods NEVER return
+      const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
+      list = list.filter(p => !deletedPeriods.has((p.period_name || "").trim().toLowerCase()));
 
-    // Auto-discover any custom periods from payment sheet entries
-    const paymentSheets = this.getPaymentSheets();
-    const existingNames = new Set(list.map(p => (p.period_name || "").toLowerCase()));
-    paymentSheets.forEach(p => {
-      const pName = (p.period || "").trim();
-      const pNameLower = pName.toLowerCase();
-      if (pName && !existingNames.has(pNameLower) && pNameLower !== "all") {
-        existingNames.add(pNameLower);
-        list.push({
-          id: `period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-          period_name: pName,
-          start_date: "",
-          end_date: "",
-          department: "Hand Embroidery Department",
-          status: "Active",
-          notes: "Auto-discovered from entries"
-        });
-      }
+      return list;
     });
-
-    localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(list));
-    return list;
   }
 
   saveRateApprovalPeriods(list) {
     const valid = (list || []).filter(p => p && (p.period_name || "").trim());
-    localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(valid));
+    this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
     if (Array.isArray(valid)) {
       valid.forEach(p => this.pushRateApprovalPeriodToNeonAsync(p).catch(() => null));
@@ -3196,14 +3168,15 @@ class DatabaseService {
     // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
     const sheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
     const linkedSheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
-    localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify(sheets));
+    this._setCached(DB_KEYS.PAYMENT_SHEET, sheets);
 
     // Move to Trash (Soft Delete) with attached payment entries
     const trashItem = this.moveToTrash("period", toDelete, { linkedEntries: linkedSheets });
 
     // 3. Filter rate approval periods locally
     list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
-    localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(list));
+    this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, list);
+    this.clearCache(DB_KEYS.RATE_APPROVAL_PERIODS);
 
     // 4. Delete from Neon PostgreSQL cloud database so polling timer doesn't bring it back!
     const cfg = this.getConfig();
@@ -3585,58 +3558,31 @@ class DatabaseService {
   // DISTRIBUTION PERIODS MANAGEMENT (Bi-Monthly Cycles)
   // -------------------------------------------------------------
   getDistributionPeriods() {
-    const defaultPeriods = [
-      {
-        id: "dist_period_11oct_25oct_2026",
-        period_name: "11-Oct-2026 TO 25-Oct-2026",
-        start_date: "2026-10-11",
-        end_date: "2026-10-25",
-        department: "Hand Embroidery Department",
-        status: "Active",
-        notes: "Contractor Work Distribution"
-      },
-      {
-        id: "dist_period_1793775943735_se4ho",
-        period_name: "26-Oct-2026 TO 10-Nov-2026",
-        start_date: "2026-10-26",
-        end_date: "2026-11-10",
-        department: "Hand Embroidery Department",
-        status: "Active",
-        notes: "Contractor Work Distribution"
-      }
-    ];
-
-    const raw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
-    let list = [];
-    if (raw) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          list = parsed.filter(p => p && (p.period_name || "").trim() && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
+    return this._getCached(DB_KEYS.DISTRIBUTION_PERIODS, () => {
+      const raw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
+      let list = [];
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            list = parsed.filter(p => p && (p.period_name || "").trim() && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
+          }
+        } catch (e) {
+          list = [];
         }
-      } catch (e) {
-        list = [];
       }
-    }
 
-    if (!list || list.length === 0) {
-      list = [...defaultPeriods];
-    } else {
-      // Ensure known active distribution periods exist
-      defaultPeriods.forEach(dp => {
-        if (!list.some(p => (p.period_name || "").trim().toLowerCase() === dp.period_name.toLowerCase())) {
-          list.push(dp);
-        }
-      });
-    }
+      // Filter out any tombstoned deleted distribution periods so deleted periods NEVER return
+      const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
+      list = list.filter(p => !deletedPeriods.has((p.period_name || "").trim().toLowerCase()));
 
-    localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(list));
-    return list;
+      return list;
+    });
   }
 
   saveDistributionPeriods(list) {
     const valid = (list || []).filter(p => p && (p.period_name || "").trim());
-    localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(valid));
+    this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
     if (Array.isArray(valid)) {
       valid.forEach(p => this.pushDistributionPeriodToNeonAsync(p).catch(() => null));
@@ -3731,8 +3677,12 @@ class DatabaseService {
     const linkedDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() === pNameLower);
     const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
 
+    const remainingDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() !== pNameLower);
+    this._setCached(DB_KEYS.WORK_DISTRIBUTION, remainingDist);
+
     list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
-    localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(list));
+    this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, list);
+    this.clearCache(DB_KEYS.DISTRIBUTION_PERIODS);
 
     const cfg = this.getConfig();
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
@@ -5393,20 +5343,14 @@ class DatabaseService {
               image_data: p.image_data || ""
             };
           });
-        // Merge local payment sheets that may not have synced to cloud yet
-        const localPay = this.getPaymentSheets() || [];
-        const mergedPay = [...parsedPay];
-        for (const lp of localPay) {
-          if (!mergedPay.some(mp => Number(mp.id) === Number(lp.id))) {
-            mergedPay.push(lp);
-            this.syncPaymentSheetToNeon(lp).catch(() => null);
-          }
-        }
-        localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify(mergedPay));
+        // Only retain local offline drafts (if user created an entry while offline)
+        const offlinePayDrafts = (this.getPaymentSheets() || []).filter(p => p._is_offline_draft === true);
+        const finalPayList = [...offlinePayDrafts, ...parsedPay];
+        this._setCached(DB_KEYS.PAYMENT_SHEET, finalPayList);
       }
 
       // Sync Rate Approval Periods from Neon Cloud (Neon is the database of truth)
-      if (Array.isArray(rawPeriodRows) && rawPeriodRows.length > 0) {
+      if (Array.isArray(rawPeriodRows)) {
         const cloudPeriods = rawPeriodRows.map(p => ({
           id: p.id,
           period_name: (p.period_name || "").trim(),
@@ -5416,26 +5360,22 @@ class DatabaseService {
           status: p.status || "Active",
           notes: p.notes || "",
           created_at: p.created_at
-        })).filter(p => !!p.period_name);
+        })).filter(p => !!p.period_name && !deletedPeriodsSet.has((p.period_name || "").trim().toLowerCase()));
 
-        const localPeriods = this.getRateApprovalPeriods() || [];
-        const mergedPeriods = [...cloudPeriods];
-        for (const lp of localPeriods) {
-          const lpNameLower = (lp.period_name || "").trim().toLowerCase();
-          if (lpNameLower && !mergedPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
-            mergedPeriods.push(lp);
-            this.pushRateApprovalPeriodToNeonAsync(lp).catch(() => null);
-          }
-        }
-        localStorage.setItem(DB_KEYS.RATE_APPROVAL_PERIODS, JSON.stringify(mergedPeriods));
+        // Neon Cloud is single source of truth - directly sync to local cache
+        const offlinePeriodDrafts = (this.getRateApprovalPeriods() || []).filter(p => p._is_offline_draft === true);
+        const finalPeriodList = [...offlinePeriodDrafts, ...cloudPeriods];
+        this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, finalPeriodList);
       }
 
       if (Array.isArray(distRows)) {
-        localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(distRows));
+        const offlineDistDrafts = (this.getWorkDistribution() || []).filter(w => w._is_offline_draft === true);
+        const finalDistList = [...offlineDistDrafts, ...distRows];
+        this._setCached(DB_KEYS.WORK_DISTRIBUTION, finalDistList);
       }
 
       // Sync Distribution Periods from Neon Cloud (Neon is the database of truth)
-      if (Array.isArray(rawDistPeriodRows) && rawDistPeriodRows.length > 0) {
+      if (Array.isArray(rawDistPeriodRows)) {
         const cloudDistPeriods = rawDistPeriodRows.map(p => ({
           id: p.id,
           period_name: (p.period_name || "").trim(),
@@ -5445,18 +5385,12 @@ class DatabaseService {
           status: p.status || "Active",
           notes: p.notes || "",
           created_at: p.created_at
-        })).filter(p => !!p.period_name);
+        })).filter(p => !!p.period_name && !deletedDistPeriodsSet.has((p.period_name || "").trim().toLowerCase()));
 
-        const localDistPeriods = this.getDistributionPeriods() || [];
-        const mergedDistPeriods = [...cloudDistPeriods];
-        for (const lp of localDistPeriods) {
-          const lpNameLower = (lp.period_name || "").trim().toLowerCase();
-          if (lpNameLower && !mergedDistPeriods.some(mp => (mp.period_name || "").trim().toLowerCase() === lpNameLower || mp.id === lp.id)) {
-            mergedDistPeriods.push(lp);
-            this.pushDistributionPeriodToNeonAsync(lp).catch(() => null);
-          }
-        }
-        localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(mergedDistPeriods));
+        // Neon Cloud is single source of truth - directly sync to local cache
+        const offlineDistPeriodDrafts = (this.getDistributionPeriods() || []).filter(p => p._is_offline_draft === true);
+        const finalDistPeriodList = [...offlineDistPeriodDrafts, ...cloudDistPeriods];
+        this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, finalDistPeriodList);
       }
 
       if (userRows.length > 0) {
@@ -5511,13 +5445,25 @@ class DatabaseService {
 
       // Sync Daily Final Styles from Neon Cloud (Neon is the database of truth)
       if (Array.isArray(rawFinalRows) && rawFinalRows.length > 0) {
-        const mappedFinal = rawFinalRows.map((r, idx) => ({
-          s_no: parseInt(r.serial_no, 10) || (idx + 1),
-          style_code: (r.style_code || "").trim(),
-          category: (r.category || "Shirt").trim(),
-          dispatch_from_hemb: 0,
-          time_remarks: (r.time_remarks || "").trim()
-        }));
+        const seenFinal = new Set();
+        const mappedFinal = [];
+        for (let idx = 0; idx < rawFinalRows.length; idx++) {
+          const r = rawFinalRows[idx];
+          const code = (r.style_code || "").trim().toUpperCase();
+          const cat = (r.category || "Shirt").trim();
+          if (!code) continue;
+          const key = `${code}:::${cat.toUpperCase()}`;
+          if (seenFinal.has(key)) continue;
+          seenFinal.add(key);
+
+          mappedFinal.push({
+            s_no: mappedFinal.length + 1,
+            style_code: code,
+            category: cat,
+            dispatch_from_hemb: 0,
+            time_remarks: (r.time_remarks || "").trim()
+          });
+        }
         localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mappedFinal));
         this.clearCache(DB_KEYS.FINAL_STYLES);
       } else {
