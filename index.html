@@ -1350,17 +1350,22 @@
         style="background: rgba(245, 158, 11, 0.08); border: 1px dashed rgba(245, 158, 11, 0.4); border-radius: var(--radius-md); padding: 0.65rem 1rem; margin-bottom: 0.85rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
         <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap; width: 100%;">
           <span style="font-size: 1.25rem;">📦</span>
-          <div style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+          <div
+            style="flex: 1; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
             <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
               <span style="color: #f59e0b; font-weight: 800; font-size: 0.85rem;">Inward Arrivals:</span>
-              <div style="display: inline-flex; gap: 0.25rem; background: var(--bg-card); padding: 2px 4px; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.3);">
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-arrivals-today" style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Today</button>
-                <button type="button" class="btn btn-warning btn-xs" id="btn-banner-arrivals-sheet" style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Sheet Date</button>
-                <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-arrivals-latest" style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Latest</button>
+              <div
+                style="display: inline-flex; gap: 0.25rem; background: var(--bg-card); padding: 2px 4px; border-radius: var(--radius-sm); border: 1px solid rgba(245, 158, 11, 0.3);">
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-arrivals-today"
+                  style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Today</button>
+                <button type="button" class="btn btn-warning btn-xs" id="btn-banner-arrivals-sheet"
+                  style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Sheet Date</button>
+                <button type="button" class="btn btn-secondary btn-xs" id="btn-banner-arrivals-latest"
+                  style="padding: 1px 7px; font-size: 0.72rem; font-weight: 700;">Latest</button>
               </div>
             </div>
-            <span id="sheet-arrivals-summary-text"
-              style="font-size: 0.8rem; color: var(--text-muted);">Checking incoming styles...</span>
+            <span id="sheet-arrivals-summary-text" style="font-size: 0.8rem; color: var(--text-muted);">Checking
+              incoming styles...</span>
           </div>
         </div>
       </div>
@@ -1377,8 +1382,8 @@
           Select Style to Add:
         </span>
 
-        <input type="text" class="app-input" id="quick-style-input"
-          placeholder="Type Style Code (e.g. JLS-27-010)..." list="audit-styles-datalist" autocomplete="off"
+        <input type="text" class="app-input" id="quick-style-input" placeholder="Type Style Code (e.g. JLS-27-010)..."
+          list="audit-styles-datalist" autocomplete="off"
           style="width: 220px; font-weight: 700; font-family: var(--font-mono);">
 
         <select class="app-select" id="quick-category-select">
@@ -3282,14 +3287,18 @@
           <!-- Section 1: Image Upload (Compact Button) -->
           <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.75rem;">
             <input type="file" id="payment-file-input" accept="image/*" style="display:none;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-trigger-upload" style="padding: 4px 10px; font-size:0.8rem;">📷 Image</button>
-            <span id="payment-preview-filename" style="font-size:0.75rem; color:var(--text-muted); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-remove-image" style="display:none; color:var(--accent-rose); padding:2px 8px; font-size:0.75rem;">✕ Remove</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-trigger-upload"
+              style="padding: 4px 10px; font-size:0.8rem;">📷 Image</button>
+            <span id="payment-preview-filename"
+              style="font-size:0.75rem; color:var(--text-muted); flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-remove-image"
+              style="display:none; color:var(--accent-rose); padding:2px 8px; font-size:0.75rem;">✕ Remove</button>
           </div>
           <!-- Hidden preview box (populated when image selected, used for edit display) -->
           <div id="payment-preview-box" style="display:none;">
             <img id="payment-preview-img" src="" alt="Preview" style="display:none;">
-            <button type="button" class="btn btn-secondary btn-sm" id="btn-change-image" style="display:none;">Change</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="btn-change-image"
+              style="display:none;">Change</button>
           </div>
 
           <!-- Section 1: Style & Contractor Identification -->
@@ -3455,8 +3464,10 @@
             <div style="display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap;">
               <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('DORIE')">🧵
                 DORIE</button>
-              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY BALANCE')">⏳ PCS PAY BALANCE</button>
-              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY RECEIVE')">💵 PCS PAY RECEIVE</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY BALANCE')">⏳
+                PCS PAY BALANCE</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY RECEIVE')">💵
+                PCS PAY RECEIVE</button>
             </div>
           </div>
 
@@ -3485,7 +3496,8 @@
           <button type="submit" class="btn btn-primary" id="btn-save-payment-entry">
             ✓ Save Rate Approval Entry
           </button>
-          <button type="button" class="btn btn-secondary" id="btn-cancel-payment-entry" onclick="closeModal('modal-payment-entry')">Cancel</button>
+          <button type="button" class="btn btn-secondary" id="btn-cancel-payment-entry"
+            onclick="closeModal('modal-payment-entry')">Cancel</button>
         </div>
       </form>
     </div>
@@ -4372,7 +4384,8 @@
               <span class="badge-tag"
                 style="background: rgba(245, 158, 11, 0.2); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-size: 0.72rem; font-weight: 800;">Smart
                 Inward Tracker</span>
-              <span id="arrivals-target-sheet-badge" class="badge-tag success" style="font-size: 0.72rem; font-weight: 800;">Target Sheet: Daily Sheet</span>
+              <span id="arrivals-target-sheet-badge" class="badge-tag success"
+                style="font-size: 0.72rem; font-weight: 800;">Target Sheet: Daily Sheet</span>
             </h2>
             <p style="font-size: 0.785rem; color: var(--text-muted); margin: 2px 0 0 0;">
               Live tracking for incoming styles, daily received quantities, dispatches, and warehouse stock balances.
