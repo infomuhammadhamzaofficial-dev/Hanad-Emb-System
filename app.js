@@ -7719,6 +7719,9 @@ function renderPaymentSheet() {
     return qMatch && cMatch && sMatch && contMatch;
   });
 
+  // Sort ascending by sr_no (1, 2, 3 ...) so row 1 always shows first
+  filtered.sort((a, b) => (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0) - (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0));
+
   // -------------------------------------------------------------
   // RENDER 1: EXCEL RATE APPROVAL TABLE
   // -------------------------------------------------------------
@@ -7790,12 +7793,12 @@ function renderPaymentSheet() {
           ? window.db.getContractorForStyle(styleCode, working)
           : null;
         const contName = item.contractor_name || (distAssigned ? distAssigned.contractor_name : "");
-        const rate = item.rate_per_pc || (distAssigned && distAssigned.rate ? distAssigned.rate : "");
+        const rate = (item.rate_per_pc && Number(item.rate_per_pc) > 0) ? item.rate_per_pc : "";
         const cutQty = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
         const prodQty = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
-        const carigarRate = item.carigar_rate != null ? item.carigar_rate : 0;
-        const commission = item.commission != null ? item.commission : 0;
-        const rateTotal = item.rate_total != null ? item.rate_total : (item.rate_per_pc || 0);
+        const carigarRate = (item.carigar_rate != null && Number(item.carigar_rate) > 0) ? Number(item.carigar_rate) : 0;
+        const commission = (item.commission != null && Number(item.commission) > 0) ? Number(item.commission) : 0;
+        const rateTotal = (item.rate_total != null && Number(item.rate_total) > 0) ? Number(item.rate_total) : 0;
         const prevPaid = parseInt(item.previous_paid_pcs, 10) || 0;
         const remarks1 = item.remarks_1 || item.remarks || "";
 
@@ -7827,12 +7830,12 @@ function renderPaymentSheet() {
             </td>
             <td style="text-align: center; vertical-align: middle; font-size: 0.775rem;">${escapeHtml(working)}</td>
             <td style="text-align: center; vertical-align: middle; font-weight: 600;">${escapeHtml(contName)}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${rate || '-'}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${rate ? rate : ''}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700;">${cutQty.toLocaleString()}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; color: #10b981; font-size: 0.875rem;">${prodQty.toLocaleString()}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${carigarRate > 0 ? carigarRate.toLocaleString() : '-'}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${commission > 0 ? commission.toLocaleString() : '-'}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700; color: #10b981;">${rateTotal > 0 ? rateTotal.toLocaleString() : (carigarRate + commission > 0 ? (carigarRate + commission).toLocaleString() : '-')}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${carigarRate > 0 ? carigarRate.toLocaleString() : ''}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${commission > 0 ? commission.toLocaleString() : ''}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700; color: #10b981;">${rateTotal > 0 ? rateTotal.toLocaleString() : (carigarRate + commission > 0 ? (carigarRate + commission).toLocaleString() : '')}</td>
             <td class="cell-rate-remarks" style="text-align: center; vertical-align: middle; font-size: 0.72rem; line-height: 1.05; padding: 2px 4px !important;">
               <div class="remarks-text" style="line-height: 1.05; word-break: break-word;">
                 ${escapeHtml(remarks1)}
@@ -7880,9 +7883,9 @@ function renderPaymentSheet() {
             <td class="total-qty-cell" style="padding: 4px 6px; font-size: 0.925rem; font-weight: 900; color: #10b981; border: 2px solid #000; text-align: center; vertical-align: middle;">
               ${fCumulative.toLocaleString()}
             </td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
             <td style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); vertical-align: middle; text-align: center; padding: 3px 4px;">
               (Prod: ${fProd.toLocaleString()} pcs)
             </td>
@@ -9399,8 +9402,8 @@ function renderDistributionContractorChips(entries) {
 
   let html = `
     <button type="button" class="contractor-chip ${!active ? 'active' : ''}" onclick="filterDistByContractorChip('')">
-      <span>ALL CONTRACTORS</span>
-      <span class="chip-count">${allPcs.toLocaleString()} pcs</span>
+      <span class="chip-name">ALL CONTRACTORS</span>
+      <span class="chip-val chip-count">${allPcs.toLocaleString()} pcs</span>
     </button>
   `;
 
@@ -9409,8 +9412,8 @@ function renderDistributionContractorChips(entries) {
     const isAct = active === c;
     html += `
       <button type="button" class="contractor-chip ${isAct ? 'active' : ''}" onclick="filterDistByContractorChip('${c}')">
-        <span>${c}</span>
-        <span class="chip-count">${pcs.toLocaleString()} pcs</span>
+        <span class="chip-name">${c}</span>
+        <span class="chip-val chip-count">${pcs.toLocaleString()} pcs</span>
       </button>
     `;
   });
@@ -9419,8 +9422,8 @@ function renderDistributionContractorChips(entries) {
     const isAct = active === "JOINT";
     html += `
       <button type="button" class="contractor-chip ${isAct ? 'active' : ''}" onclick="filterDistByContractorChip('JOINT')">
-        <span>JOINT / COMBINED</span>
-        <span class="chip-count">${jointPcs.toLocaleString()} pcs</span>
+        <span class="chip-name">JOINT / COMBINED</span>
+        <span class="chip-val chip-count">${jointPcs.toLocaleString()} pcs</span>
       </button>
     `;
   }

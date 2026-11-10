@@ -3435,32 +3435,10 @@
           <input type="hidden" id="payment-commission" value="0">
           <input type="hidden" id="payment-rate-total" value="0">
 
-          <div
-            style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.35rem; margin-top: 0.5rem;">
-            <span style="font-size: 0.775rem; font-weight: 700; color: #f59e0b;">
-              ⚡ Balances (Auto-fetched from Master Inventory):
-            </span>
-            <span class="badge-tag success" style="font-size: 0.65rem;">Auto-Master Sync Enabled</span>
-          </div>
-          <div class="form-grid-3">
-            <div class="form-group">
-              <label for="payment-bal-stock">BALANCE FROM STOCK:</label>
-              <input type="number" class="app-input" id="payment-bal-stock" min="0" placeholder="0"
-                style="font-family: var(--font-mono);">
-            </div>
-
-            <div class="form-group">
-              <label for="payment-bal-hemb">BALANCE FROM H-EMB:</label>
-              <input type="number" class="app-input" id="payment-bal-hemb" placeholder="0"
-                style="font-family: var(--font-mono);">
-            </div>
-
-            <div class="form-group">
-              <label for="payment-total-balance">TOTAL BALANCE:</label>
-              <input type="number" class="app-input" id="payment-total-balance" placeholder="0"
-                style="font-weight: 800; font-family: var(--font-mono);">
-            </div>
-          </div>
+          <!-- Hidden inputs for balances (auto-managed in background from Master Inventory) -->
+          <input type="hidden" id="payment-bal-stock" value="0">
+          <input type="hidden" id="payment-bal-hemb" value="0">
+          <input type="hidden" id="payment-total-balance" value="0">
 
           <!-- Section 4: Remarks Matching Excel Sheet -->
           <div class="form-section-title" style="margin-top: 1.25rem; color: #f59e0b;">
@@ -3471,16 +3449,14 @@
           </div>
 
           <div class="form-group" style="margin-bottom: 0.85rem;">
-            <label for="payment-remarks-1">Remarks (e.g. PAY BALANCE, PAY RECEIVE, DORIE):</label>
+            <label for="payment-remarks-1">Remarks (e.g. PCS PAY BALANCE, PCS PAY RECEIVE, DORIE):</label>
             <input type="text" class="app-input" id="payment-remarks-1"
               placeholder="e.g. 102 PCS PAY BALANCE / 1446 PCS PAY RECEIVE">
             <div style="display: flex; gap: 0.35rem; margin-top: 0.35rem; flex-wrap: wrap;">
               <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('DORIE')">🧵
                 DORIE</button>
-              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PAY BALANCE')">⏳ PAY
-                BALANCE</button>
-              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PAY RECEIVE')">💵 PAY
-                RECEIVE</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY BALANCE')">⏳ PCS PAY BALANCE</button>
+              <button type="button" class="btn btn-secondary btn-xs" onclick="appendModalRemark1('PCS PAY RECEIVE')">💵 PCS PAY RECEIVE</button>
             </div>
           </div>
 

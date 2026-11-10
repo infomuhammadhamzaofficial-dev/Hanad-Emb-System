@@ -902,7 +902,7 @@
 html {
   width: 100%;
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior-x: none;
@@ -920,7 +920,7 @@ body {
   /* Mobile browser address-bar-aware viewport height */
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: clip;
   position: relative;
   overscroll-behavior-x: none;
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -933,15 +933,14 @@ body {
   position: relative;
 }
 
-/* Header & Navbar */
+/* Header & Navbar - Sticky at top during scroll */
 .app-header {
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  background: var(--bg-header);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+  background: var(--bg-app) !important;
   border-bottom: 1px solid var(--border-color);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.16) !important;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -2259,8 +2258,6 @@ input[type="date"].app-input {
 /* Sticky Totals Footer */
 .master-table tfoot td,
 .master-table tfoot th,
-.table-rate-approval tfoot td,
-.table-rate-approval tfoot th,
 .table-dist-sheet tfoot td,
 .table-dist-sheet tfoot th {
   position: sticky;
@@ -2268,6 +2265,14 @@ input[type="date"].app-input {
   z-index: 9;
   background: var(--bg-card) !important;
   box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.06);
+}
+
+.table-rate-approval tfoot td,
+.table-rate-approval tfoot th {
+  position: static !important;
+  bottom: auto !important;
+  z-index: auto !important;
+  box-shadow: none !important;
 }
 
 .master-table,
@@ -4356,7 +4361,7 @@ body.auth-locked .mobile-bottom-nav {
   html, body {
     width: 100% !important;
     max-width: 100% !important;
-    overflow-x: hidden !important;
+    overflow-x: clip !important;
     position: relative !important;
     overscroll-behavior-x: none !important;
   }
@@ -5427,11 +5432,18 @@ body.auth-locked .mobile-bottom-nav {
 
 /* Table Footer - Total Pcs Qt */
 .table-rate-approval tfoot td {
+  position: static !important;
+  bottom: auto !important;
+  z-index: auto !important;
   border-top: 2px solid #000;
   font-weight: 800;
   background: #f9fafb;
   text-align: center !important;
   vertical-align: middle !important;
+}
+
+#container-excel-table {
+  padding-bottom: 12px;
 }
 
 [data-theme="dark"] .table-rate-approval tfoot td {
@@ -5502,6 +5514,24 @@ body.auth-locked .mobile-bottom-nav {
   cursor: pointer;
   transition: all 0.15s ease;
   user-select: none;
+  color: var(--text-main) !important;
+}
+
+.contractor-chip span,
+.contractor-chip .chip-name {
+  color: var(--text-main) !important;
+  font-weight: 700;
+}
+
+.contractor-chip .chip-val,
+.contractor-chip .chip-count {
+  font-family: var(--font-mono);
+  background: rgba(56, 189, 248, 0.16) !important;
+  color: #38bdf8 !important;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.725rem;
+  font-weight: 700;
 }
 
 .contractor-chip:hover {
@@ -5511,22 +5541,73 @@ body.auth-locked .mobile-bottom-nav {
 }
 
 .contractor-chip.active {
-  background: var(--primary-glow);
-  border-color: var(--primary);
-  color: var(--primary);
+  background: var(--primary) !important;
+  border-color: var(--primary) !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4) !important;
 }
 
-.contractor-chip .chip-name {
-  color: var(--text-main);
+.contractor-chip.active span,
+.contractor-chip.active .chip-name,
+.contractor-chip.active .chip-val,
+.contractor-chip.active .chip-count {
+  color: #ffffff !important;
 }
 
-.contractor-chip .chip-val {
-  font-family: var(--font-mono);
-  background: rgba(16, 185, 129, 0.15);
-  color: #10b981;
-  padding: 1px 6px;
-  border-radius: 4px;
-  font-size: 0.725rem;
+.contractor-chip.active .chip-val,
+.contractor-chip.active .chip-count {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* Dark Theme Specific High-Contrast for Contractor Chips & Filters */
+[data-theme="dark"] .contractor-chip {
+  background: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .contractor-chip span,
+[data-theme="dark"] .contractor-chip .chip-name {
+  color: #f8fafc !important;
+}
+
+[data-theme="dark"] .contractor-chip .chip-val,
+[data-theme="dark"] .contractor-chip .chip-count {
+  background: rgba(56, 189, 248, 0.2) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+}
+
+[data-theme="dark"] .contractor-chip:hover {
+  background: #334155 !important;
+  border-color: #60a5fa !important;
+}
+
+[data-theme="dark"] .contractor-chip:hover span,
+[data-theme="dark"] .contractor-chip:hover .chip-name {
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .contractor-chip.active {
+  background: #2563eb !important;
+  border-color: #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+[data-theme="dark"] .contractor-chip.active span,
+[data-theme="dark"] .contractor-chip.active .chip-name,
+[data-theme="dark"] .contractor-chip.active .chip-val,
+[data-theme="dark"] .contractor-chip.active .chip-count {
+  color: #ffffff !important;
+}
+
+/* Ensure Select dropdown and options are clearly readable in dark theme */
+[data-theme="dark"] select.app-select,
+[data-theme="dark"] .app-select,
+[data-theme="dark"] select.app-select option,
+[data-theme="dark"] .app-select option {
+  background: #1e293b !important;
+  color: #f8fafc !important;
 }
 
 .table-dist-sheet thead th {
@@ -7104,7 +7185,7 @@ body.auth-locked .mobile-bottom-nav {
   body {
     touch-action: pan-y !important;
     -webkit-overflow-scrolling: touch !important;
-    overflow-x: hidden !important;
+    overflow-x: clip !important;
     max-width: 100% !important;
     overscroll-behavior-x: none !important;
   }
@@ -7116,9 +7197,9 @@ body.auth-locked .mobile-bottom-nav {
 
   /* --- 2. Zero-Lag Sticky Header: Solid GPU-free background on mobile --- */
   .app-header {
-    position: sticky;
-    top: 0;
-    z-index: 50;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 1000 !important;
     will-change: auto !important;
     background: var(--bg-app) !important;
     /* Eliminating blur filter on mobile: live blur shaders kill mobile frame rates */
