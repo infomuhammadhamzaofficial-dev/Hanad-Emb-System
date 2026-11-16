@@ -2440,9 +2440,12 @@ class DatabaseService {
 
       const cutQty = master ? (Number(master.cut_qty) || 0) : g.max_cut_in_logs;
       const totalRec = master ? (Number(master.received_qty) || 0) : g.date_received_qty;
-      const totalDis = master ? (Number(master.dispatched_qty) || 0) : 0;
-      const balStock = master ? (Number(master.balance_from_stock) || 0) : (totalRec - totalDis);
-      const balHemb = master ? (Number(master.balance_from_hemb) || 0) : Math.max(0, cutQty - totalRec);
+      // Master inventory stores dispatch on dispatch_from_hemb. dispatched_qty is never written,
+      // so reading it reported every arrival as 0 pcs dispatched.
+      const totalDis = master ? (Number(master.dispatch_from_hemb) || 0) : 0;
+      // Stock is cut still at cutting (cut - received). H-Emb WIP is received minus dispatched.
+      const balStock = master ? (Number(master.balance_from_stock) || 0) : Math.max(0, cutQty - totalRec);
+      const balHemb = master ? (Number(master.balance_from_hemb) || 0) : (totalRec - totalDis);
       const balPending = cutQty - totalRec; // Remaining pieces to complete receiving
 
       // Check if already in Daily Sheet (Strict on BOTH style_code AND category)
