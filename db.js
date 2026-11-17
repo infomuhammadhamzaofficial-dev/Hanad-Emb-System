@@ -247,6 +247,62 @@ class DatabaseService {
       localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify(DEFAULT_NEON_CONFIG));
     }
 
+    // Purge known phantom distribution period entry & enforce local trash tombstone filtering on startup
+    try {
+      const destroyedTrash = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+      let destroyedChanged = false;
+      if (!destroyedTrash.includes("dist_period_1793775690007_7dn1b")) {
+        destroyedTrash.push("dist_period_1793775690007_7dn1b");
+        destroyedChanged = true;
+      }
+      if (destroyedChanged) {
+        localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedTrash));
+      }
+
+      const deletedDistPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+      if (!deletedDistPeriods.includes("26-oct-2026 to 10-nov-2026")) {
+        deletedDistPeriods.push("26-oct-2026 to 10-nov-2026");
+        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDistPeriods));
+      }
+
+      const isPhantomTombstoned = localStorage.getItem("hand_emb_phantom_tombstone_v36") === "true";
+      if (!isPhantomTombstoned) {
+        localStorage.setItem("hand_emb_phantom_tombstone_v36", "true");
+        setTimeout(() => {
+          this.trackDeletedRecord("distribution_period", "dist_period_1793775690007_7dn1b");
+          this.trackDeletedRecord("distribution_period", "26-oct-2026 to 10-nov-2026");
+          this.trackDeletedRecord("trash_destroyed", "dist_period_1793775690007_7dn1b");
+        }, 1500);
+      }
+
+      const rawTrash = localStorage.getItem(DB_KEYS.TRASH);
+      if (rawTrash) {
+        const parsedTrash = JSON.parse(rawTrash);
+        if (Array.isArray(parsedTrash)) {
+          const destroyedSet = new Set(destroyedTrash.map(x => String(x).toLowerCase()));
+          const deletedDistSet = new Set(deletedDistPeriods.map(x => String(x).toLowerCase()));
+          const filteredTrash = parsedTrash.filter(t => {
+            if (!t) return false;
+            const tid = String(t.id || "").toLowerCase();
+            const oid = String(t.original_id || "").toLowerCase();
+            if (destroyedSet.has(tid) || (oid && destroyedSet.has(oid))) return false;
+            if (this.isRecordDeleted("trash_destroyed", t.id, t.original_id)) return false;
+            if (t.entity_type === "distribution_period") {
+              const pName = ((t.data && t.data.period_name) || "").trim().toLowerCase();
+              if (pName && deletedDistSet.has(pName)) return false;
+            }
+            return true;
+          });
+          if (filteredTrash.length !== parsedTrash.length) {
+            localStorage.setItem(DB_KEYS.TRASH, JSON.stringify(filteredTrash));
+            this.clearCache(DB_KEYS.TRASH);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("Trash phantom cleanup notice:", e);
+    }
+
     // Automatically rebuild multi-challan master records from existing logs
     try {
       this.rebuildAllMastersFromLogs();
@@ -478,26 +534,81 @@ class DatabaseService {
   }
 
   trackDeletedRecord(type, identifier) {
-    if (!identifier) return;
+    if (!identifier && identifier !== 0) return;
     const records = this.getDeletedRecords();
     if (!records[type]) records[type] = [];
     const cleanId = String(identifier).trim().toLowerCase();
+    if (!cleanId) return;
     if (!records[type].includes(cleanId)) {
       records[type].push(cleanId);
       localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(records));
     }
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      const tombstoneKey = `${type}:::${cleanId}`.slice(0, 255);
+      this.executeNeonQuery(
+        `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier)
+         VALUES ($1, $2, $3)
+         ON CONFLICT (tombstone_key) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP;`,
+        [tombstoneKey, String(type).slice(0, 50), cleanId.slice(0, 255)]
+      ).catch((err) => {
+        if (err && err.message && err.message.toLowerCase().includes("deleted_tombstones")) {
+          this.ensureNeonTrashTableReady().then(() => {
+            this.executeNeonQuery(
+              `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (tombstone_key) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP;`,
+              [tombstoneKey, String(type).slice(0, 50), cleanId.slice(0, 255)]
+            ).catch(() => null);
+          }).catch(() => null);
+        }
+      });
+    }
   }
 
   untrackDeletedRecord(type, identifier) {
-    if (!identifier) return;
+    if (!identifier && identifier !== 0) return;
     try {
       const records = this.getDeletedRecords();
-      if (!records[type] || !Array.isArray(records[type])) return;
       const cleanId = String(identifier).trim().toLowerCase();
-      const idx = records[type].indexOf(cleanId);
-      if (idx !== -1) {
-        records[type].splice(idx, 1);
-        localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(records));
+      if (!cleanId) return;
+      if (records[type] && Array.isArray(records[type])) {
+        const idx = records[type].indexOf(cleanId);
+        if (idx !== -1) {
+          records[type].splice(idx, 1);
+          localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(records));
+        }
+      }
+      const cfg = this.getConfig();
+      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+        const tombstoneKey = `${type}:::${cleanId}`.slice(0, 255);
+        this.executeNeonQuery("DELETE FROM deleted_tombstones WHERE tombstone_key = $1;", [tombstoneKey]).catch(() => null);
+      }
+    } catch (e) { }
+  }
+
+  markTrashDestroyed(trashId, originalId = "") {
+    try {
+      const destroyedList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+      let changed = false;
+      if (trashId) {
+        const cleanTrashId = String(trashId).trim();
+        if (cleanTrashId && !destroyedList.includes(cleanTrashId)) {
+          destroyedList.push(cleanTrashId);
+          changed = true;
+        }
+        this.trackDeletedRecord("trash_destroyed", cleanTrashId);
+      }
+      if (originalId !== undefined && originalId !== null && String(originalId).trim() !== "") {
+        const cleanOrigId = String(originalId).trim();
+        if (!destroyedList.includes(cleanOrigId)) {
+          destroyedList.push(cleanOrigId);
+          changed = true;
+        }
+        this.trackDeletedRecord("trash_destroyed", cleanOrigId);
+      }
+      if (changed) {
+        localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedList));
       }
     } catch (e) { }
   }
@@ -705,10 +816,20 @@ class DatabaseService {
       this.recalculateMasterForStyleAndCategory(data.style_code, data.category);
 
     } else if (entityType === "final_style") {
+      const reportDate = data.report_date || this.getReportDate() || new Date().toISOString().split("T")[0];
+      const cleanCode = (data.style_code || "").trim().toUpperCase();
+      const cleanCat = (data.category || "Shirt").trim();
+      if (cleanCode) {
+        this.untrackDeletedRecord("final_style", `${reportDate}|${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
+        this.untrackDeletedRecord("final_style", `${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
+      }
       const finalStyles = this.getFinalStyles();
-      const existing = finalStyles.findIndex(f => f.s_no === data.s_no);
+      const existing = finalStyles.findIndex(f =>
+        (f.style_code || "").trim().toUpperCase() === cleanCode &&
+        (f.category || "Shirt").trim().toUpperCase() === cleanCat.toUpperCase()
+      );
       if (existing !== -1) {
-        finalStyles[existing] = data;
+        finalStyles[existing] = { ...finalStyles[existing], ...data };
       } else {
         finalStyles.push(data);
         finalStyles.sort((a, b) => (Number(a.s_no) || 0) - (Number(b.s_no) || 0));
@@ -751,7 +872,10 @@ class DatabaseService {
       const payList = this.getPaymentSheets();
       this.untrackDeletedRecord("payment", data.id);
       if (data.period && data.contractor_name && data.style_code) {
-        this.untrackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
+        this.untrackDeletedRecord("payment", `${(data.period || '').trim()}|${(data.contractor_name || '').trim()}|${(data.style_code || '').trim()}`);
+      }
+      if (data.period && data.style_code) {
+        this.untrackDeletedRecord("payment", `${(data.period || '').trim()}|${(data.style_code || '').trim()}|${(data.category || data.working || 'SHIRT').trim()}`);
       }
       const existingId = payList.some(p => Number(p.id) === Number(data.id));
       if (existingId) {
@@ -765,6 +889,8 @@ class DatabaseService {
       const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
       const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
       localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(filteredPeriods));
+      if (data.id) this.untrackDeletedRecord("period", data.id);
+      if (pNameLower) this.untrackDeletedRecord("period", pNameLower);
 
       const periods = this.getRateApprovalPeriods();
       if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
@@ -777,7 +903,10 @@ class DatabaseService {
         meta.linkedEntries.forEach(p => {
           this.untrackDeletedRecord("payment", p.id);
           if (p.period && p.contractor_name && p.style_code) {
-            this.untrackDeletedRecord("payment", `${p.period}|${p.contractor_name}|${p.style_code}`);
+            this.untrackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.contractor_name || '').trim()}|${(p.style_code || '').trim()}`);
+          }
+          if (p.period && p.style_code) {
+            this.untrackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.style_code || '').trim()}|${(p.category || p.working || 'SHIRT').trim()}`);
           }
           if (!payList.some(item => Number(item.id) === Number(p.id))) {
             payList.push(p);
@@ -791,6 +920,8 @@ class DatabaseService {
       const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
       const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
       localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(filteredPeriods));
+      if (data.id) this.untrackDeletedRecord("distribution_period", data.id);
+      if (pNameLower) this.untrackDeletedRecord("distribution_period", pNameLower);
 
       const periods = this.getDistributionPeriods();
       if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
@@ -840,119 +971,201 @@ class DatabaseService {
     return { success: true, item: trashItem };
   }
 
+  async _tombstoneAndPurgeTrashItemFromNeon(trashItem, purgeFromNeonTable = true) {
+    if (!trashItem) return;
+    const entityType = trashItem.entity_type;
+    const data = trashItem.data || {};
+    const cfg = this.getConfig();
+    const hasNeon = Boolean(cfg.neonConnectionString || cfg.neonEndpointUrl);
+    const reportDate = data.report_date || this.getReportDate() || new Date().toISOString().split("T")[0];
+    const neonOps = [];
+
+    if (entityType === "receiving") {
+      this.trackDeletedRecord("receiving", data.id);
+      if (data.challan_rec) {
+        this.trackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
+      }
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM receiving_log WHERE id = $1 OR (LOWER(TRIM(style_code)) = LOWER(TRIM($2)) AND LOWER(TRIM(category)) = LOWER(TRIM($3)) AND LOWER(TRIM(challan_rec)) = LOWER(TRIM($4)));`,
+            [Number(data.id) || 0, data.style_code || '', data.category || '', data.challan_rec || '']
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "dispatch") {
+      this.trackDeletedRecord("dispatch", data.id);
+      if (data.challan_dis) {
+        this.trackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
+      }
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM dispatch_log WHERE id = $1 OR (LOWER(TRIM(style_code)) = LOWER(TRIM($2)) AND LOWER(TRIM(category)) = LOWER(TRIM($3)) AND LOWER(TRIM(challan_dis)) = LOWER(TRIM($4)));`,
+            [Number(data.id) || 0, data.style_code || '', data.category || '', data.challan_dis || '']
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "master") {
+      this.trackDeletedRecord("master", data.id);
+      this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM master_inventory WHERE id = $1 OR (LOWER(TRIM(style_code)) = LOWER(TRIM($2)) AND LOWER(TRIM(category)) = LOWER(TRIM($3)));`,
+            [Number(data.id) || 0, data.style_code || '', data.category || '']
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "final_style") {
+      const codeLower = (data.style_code || "").trim().toLowerCase();
+      const catLower = (data.category || "Shirt").trim().toLowerCase();
+      if (codeLower) {
+        this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
+        this.trackDeletedRecord("final_style", `${codeLower}|${catLower}`);
+      }
+      if (hasNeon && purgeFromNeonTable && codeLower) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM final_style_report WHERE UPPER(TRIM(style_code)) = UPPER(TRIM($1)) AND UPPER(TRIM(category)) = UPPER(TRIM($2));`,
+            [(data.style_code || '').trim(), (data.category || 'Shirt').trim()]
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "distribution") {
+      this.trackDeletedRecord("distribution", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.trackDeletedRecord("distribution", `${(data.period || '').trim()}|${(data.contractor_name || '').trim()}|${(data.style_code || '').trim()}`);
+      }
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM work_distribution WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));`,
+            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', data.period || '']
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "payment") {
+      this.trackDeletedRecord("payment", data.id);
+      if (data.period && data.contractor_name && data.style_code) {
+        this.trackDeletedRecord("payment", `${(data.period || '').trim()}|${(data.contractor_name || '').trim()}|${(data.style_code || '').trim()}`);
+      }
+      if (data.period && data.style_code) {
+        this.trackDeletedRecord("payment", `${(data.period || '').trim()}|${(data.style_code || '').trim()}|${(data.category || data.working || 'SHIRT').trim()}`);
+      }
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM payment_sheet WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));`,
+            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', data.period || '']
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "period") {
+      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      if (pNameLower) {
+        const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
+        if (!deletedPeriods.includes(pNameLower)) {
+          deletedPeriods.push(pNameLower);
+          localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(deletedPeriods));
+        }
+        this.trackDeletedRecord("period", pNameLower);
+      }
+      if (data.id) this.trackDeletedRecord("period", data.id);
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
+            [String(data.id || ''), pNameLower]
+          ).catch(() => null)
+        );
+        if (pNameLower) {
+          neonOps.push(
+            this.executeNeonQuery(
+              `DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1;`,
+              [pNameLower]
+            ).catch(() => null)
+          );
+        }
+      }
+    } else if (entityType === "distribution_period") {
+      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      if (pNameLower) {
+        const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
+        if (!deletedDPs.includes(pNameLower)) {
+          deletedDPs.push(pNameLower);
+          localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
+        }
+        this.trackDeletedRecord("distribution_period", pNameLower);
+      }
+      if (data.id) this.trackDeletedRecord("distribution_period", data.id);
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
+            [String(data.id || ''), pNameLower]
+          ).catch(() => null)
+        );
+        if (pNameLower) {
+          neonOps.push(
+            this.executeNeonQuery(
+              `DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1;`,
+              [pNameLower]
+            ).catch(() => null)
+          );
+        }
+      }
+    } else if (entityType === "contractor") {
+      if (data.id) this.trackDeletedRecord("contractor", data.id);
+      if (data.name) this.trackDeletedRecord("contractor", (data.name || '').trim().toLowerCase());
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
+            [Number(data.id) || 0, (data.name || '').trim().toLowerCase()]
+          ).catch(() => null)
+        );
+      }
+    }
+
+    // Permanently record both trash ID and original_id as destroyed so Neon sync never re-adds it
+    this.markTrashDestroyed(trashItem.id, trashItem.original_id || data?.id);
+
+    if (neonOps.length > 0) {
+      await Promise.all(neonOps);
+    }
+  }
+
   async destroyFromTrash(trashId) {
     let list = this.getTrashItems();
     const trashItem = list.find(t => t.id === trashId);
     if (!trashItem) return false;
 
-    const entityType = trashItem.entity_type;
-    const data = trashItem.data;
-
-    // Permanent tombstone confirmation
-    if (entityType === "receiving") {
-      this.trackDeletedRecord("receiving", data.id);
-      if (data.challan_rec) this.trackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
-    } else if (entityType === "dispatch") {
-      this.trackDeletedRecord("dispatch", data.id);
-      if (data.challan_dis) this.trackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
-    } else if (entityType === "master") {
-      this.trackDeletedRecord("master", data.id);
-      this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
-    } else if (entityType === "distribution") {
-      this.trackDeletedRecord("distribution", data.id);
-      if (data.period && data.contractor_name && data.style_code) {
-        this.trackDeletedRecord("distribution", `${data.period}|${data.contractor_name}|${data.style_code}`);
-      }
-    } else if (entityType === "payment") {
-      this.trackDeletedRecord("payment", data.id);
-      if (data.period && data.contractor_name && data.style_code) {
-        this.trackDeletedRecord("payment", `${data.period}|${data.contractor_name}|${data.style_code}`);
-      }
-    } else if (entityType === "distribution_period") {
-      // Tombstone the distribution period so it never resurfaces from Neon sync
-      const pNameLower = (data.period_name || "").trim().toLowerCase();
-      const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-      if (!deletedDPs.includes(pNameLower)) {
-        deletedDPs.push(pNameLower);
-        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
-      }
-      // Also track by ID so sync never re-adds it
-      if (data.id) this.trackDeletedRecord("distribution_period", data.id);
-      // Delete from Neon distribution_periods table
-      const cfgDP = this.getConfig();
-      if (cfgDP.neonConnectionString || cfgDP.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
-          [data.id || '', pNameLower]
-        ).catch(() => null);
-      }
-    } else if (entityType === "contractor") {
-      if (data.id) this.trackDeletedRecord("contractor", data.id);
-      if (data.name) this.trackDeletedRecord("contractor", (data.name || '').trim().toLowerCase());
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
-          [data.id || 0, (data.name || '').trim().toLowerCase()]
-        ).catch(() => null);
-      }
-    }
-
-    // Permanently record this trash ID as destroyed so Neon sync never re-adds it
-    const destroyedList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
-    if (!destroyedList.includes(trashId)) {
-      destroyedList.push(trashId);
-      localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedList));
-    }
+    const data = trashItem.data || {};
+    await this._tombstoneAndPurgeTrashItemFromNeon(trashItem, true);
 
     list = list.filter(t => t.id !== trashId);
     this.saveTrashItems(list);
-    // Remove from Neon cloud trash_items table asynchronously
-    this.deleteTrashItemFromNeonAsync(trashId);
+    // Remove from Neon cloud trash_items table (by both trashId and original_id)
+    await this.deleteTrashItemFromNeonAsync(trashId, String(trashItem.original_id || data?.id || ''));
     return true;
   }
 
   async emptyTrash() {
     const list = this.getTrashItems();
-    list.forEach(trashItem => {
-      const entityType = trashItem.entity_type;
-      const data = trashItem.data;
-      if (entityType === "receiving") {
-        this.trackDeletedRecord("receiving", data.id);
-        if (data.challan_rec) this.trackDeletedRecord("receiving", `${data.style_code}|${data.category}|${data.challan_rec}`);
-      } else if (entityType === "dispatch") {
-        this.trackDeletedRecord("dispatch", data.id);
-        if (data.challan_dis) this.trackDeletedRecord("dispatch", `${data.style_code}|${data.category}|${data.challan_dis}`);
-      } else if (entityType === "master") {
-        this.trackDeletedRecord("master", data.id);
-        this.trackDeletedRecord("master", `${data.style_code}|${data.category}`);
-      } else if (entityType === "distribution") {
-        this.trackDeletedRecord("distribution", data.id);
-      } else if (entityType === "distribution_period") {
-        // Tombstone so Neon sync never re-adds this period
-        const pNameLower = (data.period_name || "").trim().toLowerCase();
-        const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-        if (pNameLower && !deletedDPs.includes(pNameLower)) {
-          deletedDPs.push(pNameLower);
-          localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
-        }
-        if (data.id) this.trackDeletedRecord("distribution_period", data.id);
-      } else if (entityType === "payment") {
-        this.trackDeletedRecord("payment", data.id);
-      }
-      // Always record trash ID as permanently destroyed
-      const dList = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
-      if (!dList.includes(trashItem.id)) {
-        dList.push(trashItem.id);
-        localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(dList));
-      }
-    });
+    for (const trashItem of list) {
+      await this._tombstoneAndPurgeTrashItemFromNeon(trashItem, true);
+    }
 
     this.saveTrashItems([]);
-    // Truncate Neon trash_items table asynchronously
+    // Clear Neon trash_items table
     const cfg = this.getConfig();
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      this.executeNeonQuery("TRUNCATE TABLE trash_items;").catch(e => console.warn("Neon truncate trash error:", e));
+      try {
+        await this.executeNeonQuery("DELETE FROM trash_items;");
+      } catch (e) {
+        await this.executeNeonQuery("TRUNCATE TABLE trash_items;").catch(err => console.warn("Neon truncate trash error:", err));
+      }
     }
     return true;
   }
@@ -1043,11 +1256,19 @@ class DatabaseService {
     }
   }
 
-  async deleteTrashItemFromNeonAsync(trashId) {
+  async deleteTrashItemFromNeonAsync(trashId, originalId = "") {
     const cfg = this.getConfig();
     if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
     try {
-      await this.executeNeonQuery("DELETE FROM trash_items WHERE id = $1;", [trashId]);
+      const cleanOrig = String(originalId || "").trim();
+      if (cleanOrig) {
+        await this.executeNeonQuery(
+          "DELETE FROM trash_items WHERE id = $1 OR (original_id IS NOT NULL AND original_id != '' AND original_id = $2);",
+          [String(trashId || ""), cleanOrig]
+        );
+      } else {
+        await this.executeNeonQuery("DELETE FROM trash_items WHERE id = $1;", [String(trashId || "")]);
+      }
     } catch (err) {
       console.warn("deleteTrashItemFromNeonAsync notice:", err.message);
     }
@@ -1074,13 +1295,26 @@ class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
       `).catch(() => null);
 
-      // Auto-sync any existing local trash items to Neon
-      const localTrash = this.getTrashItems();
-      if (Array.isArray(localTrash) && localTrash.length > 0) {
-        for (const item of localTrash) {
-          await this.pushTrashItemToNeonAsync(item);
-        }
+      await this.executeNeonQuery(`
+        CREATE TABLE IF NOT EXISTS deleted_tombstones (
+          tombstone_key VARCHAR(255) PRIMARY KEY,
+          entity_type VARCHAR(50) NOT NULL,
+          identifier VARCHAR(255) NOT NULL,
+          deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      // Purge any locally-known permanently destroyed trash IDs from Neon (never re-push stale local trash on startup)
+      const destroyedIds = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
+      const allPurgeIds = Array.from(new Set(["dist_period_1793775690007_7dn1b", ...(Array.isArray(destroyedIds) ? destroyedIds : [])])).filter(Boolean);
+      for (const pid of allPurgeIds) {
+        await this.deleteTrashItemFromNeonAsync(pid, pid).catch(() => null);
       }
+      await this.executeNeonQuery(
+        "DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;",
+        ["dist_period_1793775690007_7dn1b", "26-oct-2026 to 10-nov-2026"]
+      ).catch(() => null);
+
       return true;
     } catch (err) {
       console.warn("ensureNeonTrashTableReady error:", err);
@@ -2094,44 +2328,48 @@ class DatabaseService {
     this.pushFinalStylesToNeonAsync().catch(() => null);
   }
 
-  async pushFinalStylesToNeonAsync() {
+  pushFinalStylesToNeonAsync() {
     const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return Promise.resolve();
 
-    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
-    const fullStyles = this.getFinalStyles();
+    this._finalStylesSyncQueue = (this._finalStylesSyncQueue || Promise.resolve()).then(async () => {
+      const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+      const fullStyles = this.getFinalStyles();
 
-    try {
-      await this.initNeonTables();
-      await this.executeNeonQuery("DELETE FROM final_style_report WHERE report_date = $1::date;", [reportDate]);
-      for (let i = 0; i < fullStyles.length; i++) {
-        const s = fullStyles[i];
-        await this.executeNeonQuery(
-          `INSERT INTO final_style_report 
-           (report_date, serial_no, style_code, category, contractor_name, cut_qty, received_qty, balance_from_stock, balance_from_hemb, time_remarks)
-           VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
-          [
-            reportDate,
-            s.s_no || (i + 1),
-            (s.style_code || '').trim().toUpperCase(),
-            (s.category || 'Shirt').trim(),
-            (s.contractor_name || '').trim(),
-            Number(s.cut_qty) || 0,
-            Number(s.received_qty) || 0,
-            Number(s.balance_from_stock) || 0,
-            Number(s.balance_from_hemb) || 0,
-            (s.time_remarks || '').trim()
-          ]
-        );
+      try {
+        await this.initNeonTables();
+        await this.executeNeonQuery("DELETE FROM final_style_report WHERE report_date = $1::date;", [reportDate]);
+        for (let i = 0; i < fullStyles.length; i++) {
+          const s = fullStyles[i];
+          await this.executeNeonQuery(
+            `INSERT INTO final_style_report 
+             (report_date, serial_no, style_code, category, contractor_name, cut_qty, received_qty, balance_from_stock, balance_from_hemb, time_remarks)
+             VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+            [
+              reportDate,
+              s.s_no || (i + 1),
+              (s.style_code || '').trim().toUpperCase(),
+              (s.category || 'Shirt').trim(),
+              (s.contractor_name || '').trim(),
+              Number(s.cut_qty) || 0,
+              Number(s.received_qty) || 0,
+              Number(s.balance_from_stock) || 0,
+              Number(s.balance_from_hemb) || 0,
+              (s.time_remarks || '').trim()
+            ]
+          );
+        }
+        console.log(`✓ Neon Synced: final_style_report for ${reportDate} (${fullStyles.length} items)`);
+      } catch (err) {
+        console.warn("Neon final_style_report push notice:", err.message);
       }
-      console.log(`✓ Neon Synced: final_style_report for ${reportDate} (${fullStyles.length} items)`);
-    } catch (err) {
-      console.warn("Neon final_style_report push notice:", err.message);
-    }
+    }).catch(() => null);
+
+    return this._finalStylesSyncQueue;
   }
 
   async loadFinalStylesForDate(dateStr) {
-    const targetDate = dateStr || this.getReportDate();
+    const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
     const cfg = this.getConfig();
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
       try {
@@ -2140,30 +2378,31 @@ class DatabaseService {
           [targetDate]
         );
         const rows = res?.rows || (Array.isArray(res) ? res : []);
-        if (rows.length > 0) {
-          const seen = new Set();
-          const mapped = [];
-          for (let idx = 0; idx < rows.length; idx++) {
-            const r = rows[idx];
-            const code = (r.style_code || "").trim().toUpperCase();
-            const cat = (r.category || "Shirt").trim();
-            if (!code) continue;
-            const key = `${code}:::${cat.toUpperCase()}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-
-            mapped.push({
-              s_no: mapped.length + 1,
-              style_code: code,
-              category: cat,
-              dispatch_from_hemb: 0,
-              time_remarks: (r.time_remarks || "").trim()
-            });
+        const seen = new Set();
+        const mapped = [];
+        for (let idx = 0; idx < rows.length; idx++) {
+          const r = rows[idx];
+          const code = (r.style_code || "").trim().toUpperCase();
+          const cat = (r.category || "Shirt").trim();
+          if (!code) continue;
+          if (this.isRecordDeleted("final_style", `${targetDate}|${code.toLowerCase()}|${cat.toLowerCase()}`, `${code.toLowerCase()}|${cat.toLowerCase()}`)) {
+            continue;
           }
-          localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mapped));
-          this.clearCache(DB_KEYS.FINAL_STYLES);
-          return mapped;
+          const key = `${code}:::${cat.toUpperCase()}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+
+          mapped.push({
+            s_no: mapped.length + 1,
+            style_code: code,
+            category: cat,
+            dispatch_from_hemb: 0,
+            time_remarks: (r.time_remarks || "").trim()
+          });
         }
+        localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mapped));
+        this.clearCache(DB_KEYS.FINAL_STYLES);
+        return mapped;
       } catch (err) {
         console.warn("loadFinalStylesForDate error:", err);
       }
@@ -2175,6 +2414,10 @@ class DatabaseService {
     const cleanCode = (styleCode || "").trim().toUpperCase();
     const cleanCat = (category || "Shirt").trim();
     if (!cleanCode) return { success: false, isNew: false, list: this.getFinalStyles() };
+
+    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+    this.untrackDeletedRecord("final_style", `${reportDate}|${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
+    this.untrackDeletedRecord("final_style", `${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
 
     const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
     
@@ -2224,13 +2467,24 @@ class DatabaseService {
     const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
 
     if (item) {
-      this.moveToTrash("final_style", item);
+      this.moveToTrash("final_style", { ...item, report_date: reportDate });
       if (item.style_code && item.category) {
-        this.trackDeletedRecord("final_style", `${reportDate}|${item.style_code.trim().toLowerCase()}|${item.category.trim().toLowerCase()}`);
+        const codeLower = item.style_code.trim().toLowerCase();
+        const catLower = item.category.trim().toLowerCase();
+        this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
+        this.trackDeletedRecord("final_style", `${codeLower}|${catLower}`);
       }
     }
     const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
-    const updated = raw.filter(i => i.s_no !== sNo).map((i, idx) => ({ ...i, s_no: idx + 1 }));
+    const itemCodeUpper = item && item.style_code ? item.style_code.trim().toUpperCase() : "";
+    const itemCatUpper = item ? (item.category || "Shirt").trim().toUpperCase() : "";
+    const updated = raw.filter(i => {
+      if (i.s_no === sNo) return false;
+      if (itemCodeUpper && (i.style_code || "").trim().toUpperCase() === itemCodeUpper && (i.category || "Shirt").trim().toUpperCase() === itemCatUpper) {
+        return false;
+      }
+      return true;
+    }).map((i, idx) => ({ ...i, s_no: idx + 1 }));
     this.saveFinalStyles(updated);
 
     const cfg = this.getConfig();
@@ -2998,6 +3252,8 @@ class DatabaseService {
     const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
     const updatedDeleted = deletedPeriods.filter(d => d !== periodName.toLowerCase());
     localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(updatedDeleted));
+    this.untrackDeletedRecord("period", periodName.toLowerCase());
+    if (periodData.id) this.untrackDeletedRecord("period", periodData.id);
 
     const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
     let savedPeriod;
@@ -3075,10 +3331,22 @@ class DatabaseService {
       deletedPeriods.push(pNameLower);
       localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(deletedPeriods));
     }
+    this.trackDeletedRecord("period", toDelete.id);
+    this.trackDeletedRecord("period", pNameLower);
 
     // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
-    const sheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
-    const linkedSheets = this.getPaymentSheets().filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
+    const allPaySheets = this.getPaymentSheets();
+    const sheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
+    const linkedSheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
+    linkedSheets.forEach(p => {
+      this.trackDeletedRecord("payment", p.id);
+      if (p.period && p.contractor_name && p.style_code) {
+        this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.contractor_name || '').trim()}|${(p.style_code || '').trim()}`);
+      }
+      if (p.period && p.style_code) {
+        this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.style_code || '').trim()}|${(p.category || p.working || 'SHIRT').trim()}`);
+      }
+    });
     this._setCached(DB_KEYS.PAYMENT_SHEET, sheets);
 
     // Move to Trash (Soft Delete) with attached payment entries
