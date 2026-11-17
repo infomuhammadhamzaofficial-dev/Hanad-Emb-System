@@ -9,12 +9,17 @@ This application directly digitizes and automates the workflows from your Excel 
 
 ---
 
-## 🚀 Quick Start (Browser-Ready)
+## 🚀 Quick Start & 1-Click Desktop / Mobile Launch
 
-You do **NOT** need to install Node, Python, or npm! 
-1. Open your folder: `c:\Users\amir.ghouri\Desktop\Hand Emb System\`
-2. Double-click `index.html` (or right-click -> Open with Google Chrome / Microsoft Edge).
-3. The software will instantly load with pre-populated sample data matching your Excel sheets!
+### Option 1: 1-Click Desktop App (Recommended)
+1. Double-click [`Start-CraftFlow.bat`](file:///d:/Hamza/Hanad-Emb-System-main/Start-CraftFlow.bat) or [`CraftFlow.vbs`](file:///d:/Hamza/Hanad-Emb-System-main/CraftFlow.vbs).
+2. It automatically starts the high-speed background server (port 3000) and launches CraftFlow directly in a clean Google Chrome standalone App window!
+3. To put a shortcut on your Desktop: Right-click [`Create-Desktop-Shortcut.ps1`](file:///d:/Hamza/Hanad-Emb-System-main/Create-Desktop-Shortcut.ps1) -> **Run with PowerShell**.
+
+### Option 2: Mobile Chrome Access
+- **Local Wi-Fi Access**: Connect your mobile phone to the same Wi-Fi as your PC, then open `http://<YOUR-PC-IP>:3000` in Mobile Chrome and tap **"Add to Home Screen"** or **"Install App"**.
+- *(Note: Never type `127.0.0.1` on mobile, because `127.0.0.1` refers to the mobile phone itself, not your PC!)*
+- **Cloud / Vercel (24/7 Anywhere Access)**: Deploy to Vercel (free, `vercel.json` already configured). Once on HTTPS, Mobile Chrome will show a 1-tap "Install App" prompt that creates a real native-like Android WebAPK app with full offline cache and Neon Cloud database sync!
 
 ---
 

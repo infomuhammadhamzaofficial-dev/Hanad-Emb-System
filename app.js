@@ -1689,12 +1689,77 @@ window.openChallanHistoryModal = openChallanHistoryModal;
 window.copyChallanHistoryString = copyChallanHistoryString;
 
 // -------------------------------------------------------------
+// HELPER: Date Presets & Filter Matching for Log Views
+// -------------------------------------------------------------
+function getLogDatePresetRange(preset) {
+  const now = new Date();
+  const formatYMD = (d) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  };
+
+  if (preset === "today") {
+    const t = formatYMD(now);
+    return { from: t, to: t };
+  } else if (preset === "yesterday") {
+    const yest = new Date(now.getTime() - 86400000);
+    const y = formatYMD(yest);
+    return { from: y, to: y };
+  } else if (preset === "this_week") {
+    const dayOfWeek = now.getDay();
+    const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
+    const monday = new Date(now.getTime() - diffToMonday * 86400000);
+    return { from: formatYMD(monday), to: formatYMD(now) };
+  }
+  return { from: "", to: "" };
+}
+
+function matchesLogDateFilter(itemDateStr, fromDateStr, toDateStr) {
+  if (!fromDateStr && !toDateStr) return true;
+  if (!itemDateStr || itemDateStr === "-" || itemDateStr === "Today") {
+    if (itemDateStr === "Today") {
+      itemDateStr = new Date().toISOString().slice(0, 10);
+    } else {
+      return false;
+    }
+  }
+
+  const itemTs = (window.db && window.db.parseDateToTimestamp)
+    ? window.db.parseDateToTimestamp(itemDateStr)
+    : 0;
+  if (!itemTs) return false;
+
+  let fromTs = 0;
+  let toTs = Infinity;
+
+  if (fromDateStr) {
+    fromTs = window.db.parseDateToTimestamp(fromDateStr);
+  }
+
+  if (toDateStr) {
+    toTs = window.db.parseDateToTimestamp(toDateStr) + 86399999;
+  } else if (fromDateStr) {
+    // Single date match: match that whole 24-hr day
+    toTs = fromTs + 86399999;
+  }
+
+  return itemTs >= fromTs && itemTs <= toTs;
+}
+
+// -------------------------------------------------------------
 // TAB 2: INWARD RECEIVING LOG VIEW (Discrete Challan Lines)
 // -------------------------------------------------------------
 function initReceivingLogView() {
   const searchInput = document.getElementById("rec-search-input");
   const catFilter = document.getElementById("filter-rec-category");
   const contFilter = document.getElementById("filter-rec-contractor");
+  const datePreset = document.getElementById("filter-rec-date-preset");
+  const dateFrom = document.getElementById("filter-rec-date-from");
+  const dateTo = document.getElementById("filter-rec-date-to");
+  const dateClear = document.getElementById("btn-clear-rec-date");
+  const dateSep = document.getElementById("filter-rec-date-sep");
 
   const debouncedRenderRec = debounce(() => renderReceivingLog(), 120);
 
@@ -1707,6 +1772,55 @@ function initReceivingLogView() {
   [catFilter, contFilter].forEach(el => {
     if (el) el.addEventListener("change", () => renderReceivingLog());
   });
+
+  if (datePreset) {
+    datePreset.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (val === "all") {
+        if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+        if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+        if (dateSep) dateSep.style.display = "none";
+        if (dateClear) dateClear.style.display = "none";
+      } else if (val === "custom") {
+        if (dateFrom) dateFrom.style.display = "inline-block";
+        if (dateTo) dateTo.style.display = "inline-block";
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+      } else {
+        const range = getLogDatePresetRange(val);
+        if (dateFrom) { dateFrom.value = range.from; dateFrom.style.display = "inline-block"; }
+        if (dateTo) { dateTo.value = range.to; dateTo.style.display = "inline-block"; }
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+      }
+      renderReceivingLog();
+    });
+  }
+
+  [dateFrom, dateTo].forEach(el => {
+    if (el) {
+      el.addEventListener("change", () => {
+        if (datePreset && datePreset.value !== "custom" && datePreset.value !== "all") {
+          datePreset.value = "custom";
+        }
+        if (dateClear) {
+          dateClear.style.display = (dateFrom?.value || dateTo?.value) ? "inline-flex" : "none";
+        }
+        renderReceivingLog();
+      });
+    }
+  });
+
+  if (dateClear) {
+    dateClear.addEventListener("click", () => {
+      if (datePreset) datePreset.value = "all";
+      if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+      if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+      if (dateSep) dateSep.style.display = "none";
+      dateClear.style.display = "none";
+      renderReceivingLog();
+    });
+  }
 
   document.getElementById("btn-open-rec-modal")?.addEventListener("click", () => {
     openMasterEntryModal(null, "receiving");
@@ -1727,6 +1841,8 @@ function renderReceivingLog() {
   renderWorkDistributionSearchPreview(searchQuery, "rec-search-dist-preview");
   const selectedCat = document.getElementById("filter-rec-category")?.value || "";
   const selectedCont = document.getElementById("filter-rec-contractor")?.value || "";
+  const dateFromVal = document.getElementById("filter-rec-date-from")?.value || "";
+  const dateToVal = document.getElementById("filter-rec-date-to")?.value || "";
 
   let list = window.db.getReceivingLogs();
 
@@ -1737,27 +1853,29 @@ function renderReceivingLog() {
     const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
     const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
     const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-    const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+    const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+    const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
 
     const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat.toLowerCase();
     const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont.toLowerCase();
+    const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
 
-    return queryPassed && catPassed && contPassed;
+    return queryPassed && catPassed && contPassed && datePassed;
   });
 
   // Ensure latest / updated entries are first (descending by SR or ID)
   list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
 
   const totalFilteredCount = list.length;
-  const isSearchActive = Boolean(searchQuery);
+  const isFilterActive = Boolean(searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal);
   const displayLimit = 50;
   const displayList = list.slice(0, displayLimit);
 
   // Update records count badge in toolbar
   const recBadge = document.getElementById("rec-records-badge");
   if (recBadge) {
-    if (isSearchActive) {
-      recBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    if (isFilterActive) {
+      recBadge.textContent = `Filtered: ${displayList.length < totalFilteredCount ? `showing ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} records`;
     } else if (totalFilteredCount > displayLimit) {
       recBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
     } else {
@@ -1783,7 +1901,7 @@ function renderReceivingLog() {
     tbody.innerHTML = `
       <tr>
         <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
-          No receiving challan entries found. Click <strong>"📥 + New Receiving Entry"</strong> to record incoming goods from cutting.
+          No receiving challan entries found${isFilterActive ? " matching your filter criteria" : ""}. Click <strong>"📥 + New Receiving Entry"</strong> to record incoming goods from cutting.
         </td>
       </tr>
     `;
@@ -1791,13 +1909,11 @@ function renderReceivingLog() {
     return;
   }
 
-  let sumCut = 0;
-  let sumRec = 0;
+  // Calculate sum across all filtered items
+  const sumCut = list.reduce((acc, item) => acc + (parseInt(item.cut_qty, 10) || 0), 0);
+  const sumRec = list.reduce((acc, item) => acc + (parseInt(item.received_qty, 10) || 0), 0);
 
   tbody.innerHTML = displayList.map((item) => {
-    sumCut += (item.cut_qty || 0);
-    sumRec += (item.received_qty || 0);
-
     const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (distInfo && distInfo.contractor_name)
       ? distInfo.contractor_name
@@ -1873,6 +1989,11 @@ function initDispatchLogView() {
   const searchInput = document.getElementById("dis-search-input");
   const catFilter = document.getElementById("filter-dis-category");
   const contFilter = document.getElementById("filter-dis-contractor");
+  const datePreset = document.getElementById("filter-dis-date-preset");
+  const dateFrom = document.getElementById("filter-dis-date-from");
+  const dateTo = document.getElementById("filter-dis-date-to");
+  const dateClear = document.getElementById("btn-clear-dis-date");
+  const dateSep = document.getElementById("filter-dis-date-sep");
 
   const debouncedRenderDis = debounce(() => renderDispatchLog(), 120);
 
@@ -1885,6 +2006,55 @@ function initDispatchLogView() {
   [catFilter, contFilter].forEach(el => {
     if (el) el.addEventListener("change", () => renderDispatchLog());
   });
+
+  if (datePreset) {
+    datePreset.addEventListener("change", (e) => {
+      const val = e.target.value;
+      if (val === "all") {
+        if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+        if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+        if (dateSep) dateSep.style.display = "none";
+        if (dateClear) dateClear.style.display = "none";
+      } else if (val === "custom") {
+        if (dateFrom) dateFrom.style.display = "inline-block";
+        if (dateTo) dateTo.style.display = "inline-block";
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+      } else {
+        const range = getLogDatePresetRange(val);
+        if (dateFrom) { dateFrom.value = range.from; dateFrom.style.display = "inline-block"; }
+        if (dateTo) { dateTo.value = range.to; dateTo.style.display = "inline-block"; }
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+      }
+      renderDispatchLog();
+    });
+  }
+
+  [dateFrom, dateTo].forEach(el => {
+    if (el) {
+      el.addEventListener("change", () => {
+        if (datePreset && datePreset.value !== "custom" && datePreset.value !== "all") {
+          datePreset.value = "custom";
+        }
+        if (dateClear) {
+          dateClear.style.display = (dateFrom?.value || dateTo?.value) ? "inline-flex" : "none";
+        }
+        renderDispatchLog();
+      });
+    }
+  });
+
+  if (dateClear) {
+    dateClear.addEventListener("click", () => {
+      if (datePreset) datePreset.value = "all";
+      if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+      if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+      if (dateSep) dateSep.style.display = "none";
+      dateClear.style.display = "none";
+      renderDispatchLog();
+    });
+  }
 
   document.getElementById("btn-open-dis-modal")?.addEventListener("click", () => {
     openMasterEntryModal(null, "dispatch");
@@ -1905,6 +2075,8 @@ function renderDispatchLog() {
   renderWorkDistributionSearchPreview(searchQuery, "dis-search-dist-preview");
   const selectedCat = document.getElementById("filter-dis-category")?.value || "";
   const selectedCont = document.getElementById("filter-dis-contractor")?.value || "";
+  const dateFromVal = document.getElementById("filter-dis-date-from")?.value || "";
+  const dateToVal = document.getElementById("filter-dis-date-to")?.value || "";
 
   let list = window.db.getDispatchLogs();
 
@@ -1915,27 +2087,29 @@ function renderDispatchLog() {
     const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
     const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
     const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-    const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+    const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+    const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
 
     const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat.toLowerCase();
     const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont.toLowerCase();
+    const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
 
-    return queryPassed && catPassed && contPassed;
+    return queryPassed && catPassed && contPassed && datePassed;
   });
 
   // Ensure latest / updated entries are first (descending by SR or ID)
   list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
 
   const totalFilteredCount = list.length;
-  const isSearchActive = Boolean(searchQuery);
+  const isFilterActive = Boolean(searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal);
   const displayLimit = 50;
   const displayList = list.slice(0, displayLimit);
 
   // Update records count badge in toolbar
   const disBadge = document.getElementById("dis-records-badge");
   if (disBadge) {
-    if (isSearchActive) {
-      disBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
+    if (isFilterActive) {
+      disBadge.textContent = `Filtered: ${displayList.length < totalFilteredCount ? `showing ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} records`;
     } else if (totalFilteredCount > displayLimit) {
       disBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
     } else {
@@ -1961,7 +2135,7 @@ function renderDispatchLog() {
     tbody.innerHTML = `
       <tr>
         <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
-          No dispatch challan entries found. Click <strong>"📤 + New Dispatch Entry"</strong> to record finished embroidery dispatches.
+          No dispatch challan entries found${isFilterActive ? " matching your filter criteria" : ""}. Click <strong>"📤 + New Dispatch Entry"</strong> to record finished embroidery dispatches.
         </td>
       </tr>
     `;
@@ -1969,19 +2143,23 @@ function renderDispatchLog() {
     return;
   }
 
-  let sumCut = 0;
-  let sumDis = 0;
   const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-
-  tbody.innerHTML = displayList.map((item) => {
-    sumDis += (item.dispatch_qty || 0);
-
+  const sumCut = list.reduce((acc, item) => {
     const mMatch = masterList.find(m =>
       (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
       (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
     );
     const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
-    sumCut += cutQty;
+    return acc + cutQty;
+  }, 0);
+  const sumDis = list.reduce((acc, item) => acc + (parseInt(item.dispatch_qty, 10) || 0), 0);
+
+  tbody.innerHTML = displayList.map((item) => {
+    const mMatch = masterList.find(m =>
+      (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+      (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+    );
+    const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
 
     let remarkBadge = "";
     const rLower = (item.remarks || "").toLowerCase();
@@ -5386,11 +5564,39 @@ function exportMasterInventoryToCSV() {
 }
 
 function exportReceivingLogToCSV() {
-  const list = window.db.getReceivingLogs();
+  let list = window.db.getReceivingLogs();
   if (list.length === 0) {
     showToast("No receiving entries to export", "info");
     return;
   }
+
+  const searchQuery = (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim();
+  const selectedCat = document.getElementById("filter-rec-category")?.value || "";
+  const selectedCont = document.getElementById("filter-rec-contractor")?.value || "";
+  const dateFromVal = document.getElementById("filter-rec-date-from")?.value || "";
+  const dateToVal = document.getElementById("filter-rec-date-to")?.value || "";
+  const isFilterActive = Boolean(searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal);
+
+  if (isFilterActive) {
+    list = list.filter(item => {
+      const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+      const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+      const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+      const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+      const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+      const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+      const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+      const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat.toLowerCase();
+      const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont.toLowerCase();
+      const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
+
+      return queryPassed && catPassed && contPassed && datePassed;
+    });
+  }
+
+  // Ensure latest / updated entries are first
+  list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
 
   const headers = [
     "SR", "DATE RECEIVE", "CHALLAN REC", "STYLE CODE", "CATEGORY", "CONTRACTOR", "CUT QTY", "RECEIVED QTY", "REMARKS"
@@ -5408,15 +5614,45 @@ function exportReceivingLogToCSV() {
     `"${item.remarks || ''}"`
   ]);
 
-  downloadCSV("Inward_Receiving_Challans.csv", [headers, ...rows]);
+  const fileName = isFilterActive ? "Inward_Receiving_Challans_Filtered.csv" : "Inward_Receiving_Challans.csv";
+  downloadCSV(fileName, [headers, ...rows]);
+  showToast(`Exported ${rows.length} receiving challans to CSV`, "success");
 }
 
 function exportDispatchLogToCSV() {
-  const list = window.db.getDispatchLogs();
+  let list = window.db.getDispatchLogs();
   if (list.length === 0) {
     showToast("No dispatch entries to export", "info");
     return;
   }
+
+  const searchQuery = (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim();
+  const selectedCat = document.getElementById("filter-dis-category")?.value || "";
+  const selectedCont = document.getElementById("filter-dis-contractor")?.value || "";
+  const dateFromVal = document.getElementById("filter-dis-date-from")?.value || "";
+  const dateToVal = document.getElementById("filter-dis-date-to")?.value || "";
+  const isFilterActive = Boolean(searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal);
+
+  if (isFilterActive) {
+    list = list.filter(item => {
+      const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+      const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+      const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+      const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+      const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+      const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+      const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+      const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat.toLowerCase();
+      const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont.toLowerCase();
+      const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
+
+      return queryPassed && catPassed && contPassed && datePassed;
+    });
+  }
+
+  // Ensure latest / updated entries are first
+  list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
 
   const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
 
@@ -5444,7 +5680,9 @@ function exportDispatchLogToCSV() {
     ];
   });
 
-  downloadCSV("Outward_Dispatch_Challans.csv", [headers, ...rows]);
+  const fileName = isFilterActive ? "Outward_Dispatch_Challans_Filtered.csv" : "Outward_Dispatch_Challans.csv";
+  downloadCSV(fileName, [headers, ...rows]);
+  showToast(`Exported ${rows.length} dispatch challans to CSV`, "success");
 }
 
 function exportFinalStylesToCSV() {
@@ -12056,25 +12294,32 @@ const WHATSAPP_SHEET_DEFS = {
       const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
       const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
       const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
+      const dateFromVal = syncWithPage ? (document.getElementById("filter-rec-date-from")?.value || "") : "";
+      const dateToVal = syncWithPage ? (document.getElementById("filter-rec-date-to")?.value || "") : "";
 
       const filterParts = [];
       if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
       if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
       if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+      if (dateFromVal) {
+        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+      }
 
-      if (syncWithPage && (searchQuery || selectedCat || selectedCont)) {
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
         list = list.filter(item => {
           const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
           const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
           const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
           const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
           const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+          const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
 
           const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
           const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+          const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
 
-          return queryPassed && catPassed && contPassed;
+          return queryPassed && catPassed && contPassed && datePassed;
         });
       }
 
@@ -12150,25 +12395,32 @@ const WHATSAPP_SHEET_DEFS = {
       const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
       const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
       const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
+      const dateFromVal = syncWithPage ? (document.getElementById("filter-dis-date-from")?.value || "") : "";
+      const dateToVal = syncWithPage ? (document.getElementById("filter-dis-date-to")?.value || "") : "";
 
       const filterParts = [];
       if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
       if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
       if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+      if (dateFromVal) {
+        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+      }
 
-      if (syncWithPage && (searchQuery || selectedCat || selectedCont)) {
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
         list = list.filter(item => {
           const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
           const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
           const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
           const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
           const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch;
+          const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
 
           const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
           const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+          const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
 
-          return queryPassed && catPassed && contPassed;
+          return queryPassed && catPassed && contPassed && datePassed;
         });
       }
 

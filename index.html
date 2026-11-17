@@ -32,10 +32,10 @@
   </script>
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="icon-192.svg?v=20">
-  <link rel="stylesheet" href="style.css?v=33">
-  <link rel="icon" type="image/svg+xml" href="icon-192.svg?v=21">
-  <link rel="shortcut icon" href="icon-192.svg?v=21">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="shortcut icon" href="icon-192.png">
 </head>
 
 <body>
@@ -1056,6 +1056,29 @@
             <option value="">All Contractors</option>
           </select>
 
+          <!-- Date Filter Controls -->
+          <div class="log-date-filter-group" id="rec-date-filter-wrap"
+            style="display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 2px 6px;">
+            <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem;">
+              📅
+            </span>
+            <select class="app-select" id="filter-rec-date-preset"
+              style="padding: 0.35rem 0.5rem; font-size: 0.8rem; height: 32px; border: none; background: transparent; font-weight: 600; cursor: pointer;">
+              <option value="all">All Dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This Week</option>
+              <option value="custom">Custom Date / Range...</option>
+            </select>
+            <input type="date" class="app-input" id="filter-rec-date-from" title="Filter From Date (or single date)"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; width: 125px; display: none;">
+            <span id="filter-rec-date-sep" style="font-size: 0.75rem; color: var(--text-muted); display: none;">to</span>
+            <input type="date" class="app-input" id="filter-rec-date-to" title="Filter To Date"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; width: 125px; display: none;">
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-clear-rec-date" title="Clear Date Filter"
+              style="padding: 2px 6px; font-size: 0.75rem; display: none; margin-left: 2px;">✕</button>
+          </div>
+
           <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
           <div id="rec-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
 
@@ -1191,6 +1214,29 @@
           <select class="app-select" id="filter-dis-contractor">
             <option value="">All Contractors</option>
           </select>
+
+          <!-- Date Filter Controls -->
+          <div class="log-date-filter-group" id="dis-date-filter-wrap"
+            style="display: inline-flex; align-items: center; gap: 0.35rem; background: var(--bg-card); border: 1.5px solid var(--border-color); border-radius: var(--radius-md); padding: 2px 6px;">
+            <span style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem;">
+              📅
+            </span>
+            <select class="app-select" id="filter-dis-date-preset"
+              style="padding: 0.35rem 0.5rem; font-size: 0.8rem; height: 32px; border: none; background: transparent; font-weight: 600; cursor: pointer;">
+              <option value="all">All Dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This Week</option>
+              <option value="custom">Custom Date / Range...</option>
+            </select>
+            <input type="date" class="app-input" id="filter-dis-date-from" title="Filter From Date (or single date)"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; width: 125px; display: none;">
+            <span id="filter-dis-date-sep" style="font-size: 0.75rem; color: var(--text-muted); display: none;">to</span>
+            <input type="date" class="app-input" id="filter-dis-date-to" title="Filter To Date"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; width: 125px; display: none;">
+            <button type="button" class="btn btn-secondary btn-xs" id="btn-clear-dis-date" title="Clear Date Filter"
+              style="padding: 2px 6px; font-size: 0.75rem; display: none; margin-left: 2px;">✕</button>
+          </div>
 
           <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
           <div id="dis-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
@@ -4763,13 +4809,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=33"></script>
-  <script src="db.js?v=33"></script>
-  <script src="app.js?v=33"></script>
+  <script src="data.js?v=35"></script>
+  <script src="db.js?v=35"></script>
+  <script src="app.js?v=35"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=33').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=35').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

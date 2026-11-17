@@ -1,8 +1,8 @@
 // ====================================================================
-// CraftFlow - Service Worker for PWA (Lightweight & Deduplicated Cache)
+// CraftFlow - Service Worker for PWA (Offline-First & Resilient)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v34';
+const CACHE_NAME = 'craftflow-cache-v35';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -11,6 +11,8 @@ const STATIC_ASSETS = [
   './db.js',
   './data.js',
   './manifest.json',
+  './icon-192.png',
+  './icon-512.png',
   './icon-192.svg',
   './icon-512.svg'
 ];
@@ -53,14 +55,41 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
+  // 1. Navigation requests (Opening the app, desktop shortcut, mobile shortcut)
+  if (event.request.mode === 'navigate' || event.request.destination === 'document') {
+    event.respondWith(
+      caches.match('./index.html', { ignoreSearch: true }).then((cachedIndex) => {
+        // Try network fetch to keep fresh if server is up
+        const networkFetch = fetch(event.request).then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put('./index.html', networkResponse.clone());
+              cache.put('./', networkResponse);
+            });
+          }
+          return networkResponse;
+        }).catch(() => null);
+
+        // If we have cached copy, return it immediately so app opens fast and never errors
+        if (cachedIndex) {
+          return cachedIndex;
+        }
+
+        // If not cached, wait for network or fallback
+        return networkFetch.then(res => res || caches.match('./index.html'));
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // 2. Static Assets
   event.respondWith(
     caches.match(event.request, { ignoreSearch: true }).then((cachedResponse) => {
       if (cachedResponse) {
-        // Fetch fresh copy in background without duplicating cache entries (Stale-While-Revalidate)
+        // Fetch fresh copy in background (Stale-While-Revalidate)
         fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => {
-              // Store under clean pathname to prevent duplicate entries for ?v=21, ?v=22
               const cleanRequest = new Request(url.origin + url.pathname, { method: 'GET' });
               cache.put(cleanRequest, networkResponse);
             });
@@ -72,9 +101,10 @@ self.addEventListener('fetch', (event) => {
       // If not in cache, fetch from network
       return fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
-          // Only cache core local static files (html, css, js, json, svg)
           const path = url.pathname.toLowerCase();
-          if (path.endsWith('.html') || path.endsWith('.css') || path.endsWith('.js') || path.endsWith('.json') || path.endsWith('.svg') || path === '/' || path.endsWith('/')) {
+          if (path.endsWith('.html') || path.endsWith('.css') || path.endsWith('.js') || 
+              path.endsWith('.json') || path.endsWith('.svg') || path.endsWith('.png') || 
+              path === '/' || path.endsWith('/')) {
             const resClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               const cleanRequest = new Request(url.origin + url.pathname, { method: 'GET' });
@@ -83,8 +113,9 @@ self.addEventListener('fetch', (event) => {
           }
         }
         return networkResponse;
+      }).catch(() => {
+        return caches.match('./index.html');
       });
     })
   );
 });
-
