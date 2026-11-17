@@ -918,6 +918,15 @@
             <span class="btn-dock-icon">🚚</span>
             <span>View Dispatch Log</span>
           </button>
+          <button class="btn btn-action-dock" id="btn-print-master-inventory"
+            title="Print clean official Master Inventory report">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 6 2 18 2 18 9"></polyline>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <rect x="6" y="14" width="12" height="8"></rect>
+            </svg>
+            <span>Print Sheet</span>
+          </button>
           <button class="btn btn-action-dock" id="btn-export-master-csv" title="Export current table to CSV file">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -1260,6 +1269,7 @@
                 <th>STYLE CODE</th>
                 <th>CATEGORY</th>
                 <th>CONTRACTOR</th>
+                <th style="text-align: right; background: rgba(16, 185, 129, 0.08);">CUT QTY</th>
                 <th style="text-align: right; background: rgba(99, 102, 241, 0.1);">DISPATCH QTY</th>
                 <th>STATUS / REMARKS</th>
                 <th style="width: 70px; text-align: center;">ACTION</th>
@@ -1598,19 +1608,6 @@
           <span class="kpi-sub">Weighted average rate</span>
         </div>
       </section>
-
-      <!-- 6 Contractors Distribution Breakdown Bar -->
-      <div class="contractor-share-panel"
-        style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1.15rem; margin-bottom: 1.25rem;">
-        <div
-          style="font-size: 0.825rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.65rem; display: flex; align-items: center; justify-content: space-between;">
-          <span>👥 6 Contractors Distribution Breakdown (Pcs Share)</span>
-          <span style="font-size: 0.75rem; color: var(--text-muted);">Click contractor chip to quick filter</span>
-        </div>
-        <div id="dist-contractor-chips-container" style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-          <!-- Populated dynamically with chips: Imtiaz, Asim, Asif, Naveed, Touseef, Shoaib, Joint -->
-        </div>
-      </div>
 
       <!-- Filter and Search Toolbar Panel -->
       <div class="master-toolbar-panel" style="margin-bottom: 1.25rem;">
@@ -4004,6 +4001,7 @@
           <div class="print-control-box">
             <label class="print-control-label">1. Sheet to Print:</label>
             <select id="print-sheet-selector" class="app-select" style="width: 100%; font-weight: 700;">
+              <option value="master">📦 Master Inventory Status Sheet</option>
               <option value="daily">📋 Daily Running Style Status Sheet</option>
               <option value="distribution">📦 Work Distribution & Allocation Sheet</option>
               <option value="payment">💰 Rate Approval & Payment Summary Sheet</option>

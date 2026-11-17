@@ -1361,6 +1361,9 @@ function initMasterInventoryView() {
   });
 
   document.getElementById("btn-export-master-csv")?.addEventListener("click", exportMasterInventoryToCSV);
+  document.getElementById("btn-print-master-inventory")?.addEventListener("click", () => {
+    openPrintStudio("master");
+  });
 
   // Navigation buttons inside toolbar
   document.getElementById("btn-goto-receiving")?.addEventListener("click", () => switchTab("receiving-log"));
@@ -1957,7 +1960,7 @@ function renderDispatchLog() {
   if (list.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="9" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+        <td colspan="10" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
           No dispatch challan entries found. Click <strong>"📤 + New Dispatch Entry"</strong> to record finished embroidery dispatches.
         </td>
       </tr>
@@ -1966,10 +1969,19 @@ function renderDispatchLog() {
     return;
   }
 
+  let sumCut = 0;
   let sumDis = 0;
+  const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
 
   tbody.innerHTML = displayList.map((item) => {
     sumDis += (item.dispatch_qty || 0);
+
+    const mMatch = masterList.find(m =>
+      (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+      (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+    );
+    const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
+    sumCut += cutQty;
 
     let remarkBadge = "";
     const rLower = (item.remarks || "").toLowerCase();
@@ -1997,6 +2009,7 @@ function renderDispatchLog() {
             ${escapeHtml(displayCont)}
           </span>
         </td>
+        <td style="text-align: right; font-family: var(--font-mono); font-weight: 600;">${cutQty > 0 ? cutQty.toLocaleString() : '-'}</td>
         <td class="cell-dis-qty">${(item.dispatch_qty || 0).toLocaleString()}</td>
         <td style="font-size: 0.8rem;">${remarkBadge}${escapeHtml(item.remarks || '-')}</td>
         <td style="text-align: center; white-space: nowrap;">
@@ -2012,6 +2025,7 @@ function renderDispatchLog() {
     tfoot.innerHTML = `
       <tr>
         <td colspan="6" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">Filtered Totals (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Challans):</td>
+        <td style="text-align: right; font-family: var(--font-mono); font-weight: 800; font-size: 0.9rem;">${sumCut.toLocaleString()}</td>
         <td class="cell-dis-qty">${sumDis.toLocaleString()}</td>
         <td colspan="2"></td>
       </tr>
@@ -5404,20 +5418,31 @@ function exportDispatchLogToCSV() {
     return;
   }
 
+  const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+
   const headers = [
-    "SR", "DATE DISPATCH", "CHALLAN DIS", "STYLE CODE", "CATEGORY", "CONTRACTOR", "DISPATCH QTY", "STATUS / REMARKS"
+    "SR", "DATE DISPATCH", "CHALLAN DIS", "STYLE CODE", "CATEGORY", "CONTRACTOR", "CUT QTY", "DISPATCH QTY", "STATUS / REMARKS"
   ];
 
-  const rows = list.map(item => [
-    item.sr_no || item.id,
-    `"${item.date_dispatch || ''}"`,
-    `"${item.challan_dis || ''}"`,
-    `"${item.style_code}"`,
-    `"${item.category}"`,
-    `"${item.contractor_name}"`,
-    item.dispatch_qty,
-    `"${item.remarks || ''}"`
-  ]);
+  const rows = list.map(item => {
+    const mMatch = masterList.find(m =>
+      (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+      (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+    );
+    const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
+
+    return [
+      item.sr_no || item.id,
+      `"${item.date_dispatch || ''}"`,
+      `"${item.challan_dis || ''}"`,
+      `"${item.style_code}"`,
+      `"${item.category}"`,
+      `"${item.contractor_name}"`,
+      cutQty,
+      item.dispatch_qty,
+      `"${item.remarks || ''}"`
+    ];
+  });
 
   downloadCSV("Outward_Dispatch_Challans.csv", [headers, ...rows]);
 }
@@ -7719,6 +7744,9 @@ function renderPaymentSheet() {
     return qMatch && cMatch && sMatch && contMatch;
   });
 
+  // Sort ascending by sr_no (1, 2, 3 ...) so row 1 always shows first
+  filtered.sort((a, b) => (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0) - (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0));
+
   // -------------------------------------------------------------
   // RENDER 1: EXCEL RATE APPROVAL TABLE
   // -------------------------------------------------------------
@@ -7790,12 +7818,12 @@ function renderPaymentSheet() {
           ? window.db.getContractorForStyle(styleCode, working)
           : null;
         const contName = item.contractor_name || (distAssigned ? distAssigned.contractor_name : "");
-        const rate = item.rate_per_pc || (distAssigned && distAssigned.rate ? distAssigned.rate : "");
+        const rate = (item.rate_per_pc && Number(item.rate_per_pc) > 0) ? item.rate_per_pc : "";
         const cutQty = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
         const prodQty = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
-        const carigarRate = item.carigar_rate != null ? item.carigar_rate : 0;
-        const commission = item.commission != null ? item.commission : 0;
-        const rateTotal = item.rate_total != null ? item.rate_total : (item.rate_per_pc || 0);
+        const carigarRate = (item.carigar_rate != null && Number(item.carigar_rate) > 0) ? Number(item.carigar_rate) : 0;
+        const commission = (item.commission != null && Number(item.commission) > 0) ? Number(item.commission) : 0;
+        const rateTotal = (item.rate_total != null && Number(item.rate_total) > 0) ? Number(item.rate_total) : 0;
         const prevPaid = parseInt(item.previous_paid_pcs, 10) || 0;
         const remarks1 = item.remarks_1 || item.remarks || "";
 
@@ -7827,12 +7855,12 @@ function renderPaymentSheet() {
             </td>
             <td style="text-align: center; vertical-align: middle; font-size: 0.775rem;">${escapeHtml(working)}</td>
             <td style="text-align: center; vertical-align: middle; font-weight: 600;">${escapeHtml(contName)}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${rate || '-'}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${rate ? rate : ''}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700;">${cutQty.toLocaleString()}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; color: #10b981; font-size: 0.875rem;">${prodQty.toLocaleString()}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${carigarRate > 0 ? carigarRate.toLocaleString() : '-'}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${commission > 0 ? commission.toLocaleString() : '-'}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700; color: #10b981;">${rateTotal > 0 ? rateTotal.toLocaleString() : (carigarRate + commission > 0 ? (carigarRate + commission).toLocaleString() : '-')}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${carigarRate > 0 ? carigarRate.toLocaleString() : ''}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${commission > 0 ? commission.toLocaleString() : ''}</td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700; color: #10b981;">${rateTotal > 0 ? rateTotal.toLocaleString() : (carigarRate + commission > 0 ? (carigarRate + commission).toLocaleString() : '')}</td>
             <td class="cell-rate-remarks" style="text-align: center; vertical-align: middle; font-size: 0.72rem; line-height: 1.05; padding: 2px 4px !important;">
               <div class="remarks-text" style="line-height: 1.05; word-break: break-word;">
                 ${escapeHtml(remarks1)}
@@ -7880,9 +7908,9 @@ function renderPaymentSheet() {
             <td class="total-qty-cell" style="padding: 4px 6px; font-size: 0.925rem; font-weight: 900; color: #10b981; border: 2px solid #000; text-align: center; vertical-align: middle;">
               ${fCumulative.toLocaleString()}
             </td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
-            <td style="text-align: center; vertical-align: middle; color: var(--text-muted); font-size: 0.75rem; padding: 3px 4px;">-</td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
+            <td style="text-align: center; vertical-align: middle; padding: 3px 4px;"></td>
             <td style="font-size: 0.72rem; font-weight: 600; color: var(--text-muted); vertical-align: middle; text-align: center; padding: 3px 4px;">
               (Prod: ${fProd.toLocaleString()} pcs)
             </td>
@@ -9399,8 +9427,8 @@ function renderDistributionContractorChips(entries) {
 
   let html = `
     <button type="button" class="contractor-chip ${!active ? 'active' : ''}" onclick="filterDistByContractorChip('')">
-      <span>ALL CONTRACTORS</span>
-      <span class="chip-count">${allPcs.toLocaleString()} pcs</span>
+      <span class="chip-name">ALL CONTRACTORS</span>
+      <span class="chip-val chip-count">${allPcs.toLocaleString()} pcs</span>
     </button>
   `;
 
@@ -9409,8 +9437,8 @@ function renderDistributionContractorChips(entries) {
     const isAct = active === c;
     html += `
       <button type="button" class="contractor-chip ${isAct ? 'active' : ''}" onclick="filterDistByContractorChip('${c}')">
-        <span>${c}</span>
-        <span class="chip-count">${pcs.toLocaleString()} pcs</span>
+        <span class="chip-name">${c}</span>
+        <span class="chip-val chip-count">${pcs.toLocaleString()} pcs</span>
       </button>
     `;
   });
@@ -9419,8 +9447,8 @@ function renderDistributionContractorChips(entries) {
     const isAct = active === "JOINT";
     html += `
       <button type="button" class="contractor-chip ${isAct ? 'active' : ''}" onclick="filterDistByContractorChip('JOINT')">
-        <span>JOINT / COMBINED</span>
-        <span class="chip-count">${jointPcs.toLocaleString()} pcs</span>
+        <span class="chip-name">JOINT / COMBINED</span>
+        <span class="chip-val chip-count">${jointPcs.toLocaleString()} pcs</span>
       </button>
     `;
   }
@@ -9898,6 +9926,73 @@ function printDistributionSheet() {
 // ====================================================================
 
 const PRINT_STUDIO_DEFAULTS = {
+  master: {
+    title: "Master Inventory & Production Balances",
+    subtitle: "Complete Hand Embroidery Style Production Balances",
+    defaultOrientation: "landscape",
+    defaultFontSize: "compact",
+    columns: [
+      { id: "sr_no", label: "SR", defaultWidth: 4, currentWidth: 4, enabled: true, align: "center" },
+      { id: "style_code", label: "STYLE CODE", defaultWidth: 14, currentWidth: 14, enabled: true, align: "left" },
+      { id: "category", label: "CATEGORY", defaultWidth: 8, currentWidth: 8, enabled: true, align: "center" },
+      { id: "cut_qty", label: "CUT QTY", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "received_qty", label: "REC QTY", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "balance_from_stock", label: "BAL STOCK", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "date_receive", label: "REC DATE", defaultWidth: 8, currentWidth: 8, enabled: true, align: "center" },
+      { id: "challan_rec", label: "CHALLAN REC", defaultWidth: 8, currentWidth: 8, enabled: true, align: "center" },
+      { id: "dispatch_from_hemb", label: "DISP H-EMB", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "balance_from_hemb", label: "BAL H-EMB", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "total_balance", label: "TOT BAL", defaultWidth: 7, currentWidth: 7, enabled: true, align: "right" },
+      { id: "date_dispatch", label: "DISP DATE", defaultWidth: 8, currentWidth: 8, enabled: true, align: "center" },
+      { id: "challan_dis", label: "CHALLAN DIS", defaultWidth: 8, currentWidth: 8, enabled: true, align: "center" }
+    ],
+    presets: [
+      {
+        id: "default",
+        name: "Standard Full Master Inventory",
+        orientation: "landscape",
+        fontSize: "compact",
+        autoFit: true,
+        columns: [
+          { id: "sr_no", enabled: true, width: 4 },
+          { id: "style_code", enabled: true, width: 14 },
+          { id: "category", enabled: true, width: 8 },
+          { id: "cut_qty", enabled: true, width: 7 },
+          { id: "received_qty", enabled: true, width: 7 },
+          { id: "balance_from_stock", enabled: true, width: 7 },
+          { id: "date_receive", enabled: true, width: 8 },
+          { id: "challan_rec", enabled: true, width: 8 },
+          { id: "dispatch_from_hemb", enabled: true, width: 7 },
+          { id: "balance_from_hemb", enabled: true, width: 7 },
+          { id: "total_balance", enabled: true, width: 7 },
+          { id: "date_dispatch", enabled: true, width: 8 },
+          { id: "challan_dis", enabled: true, width: 8 }
+        ]
+      },
+      {
+        id: "balances_only",
+        name: "Production Balances Summary",
+        orientation: "portrait",
+        fontSize: "normal",
+        autoFit: true,
+        columns: [
+          { id: "sr_no", enabled: true, width: 6 },
+          { id: "style_code", enabled: true, width: 22 },
+          { id: "category", enabled: true, width: 14 },
+          { id: "cut_qty", enabled: true, width: 14 },
+          { id: "received_qty", enabled: true, width: 14 },
+          { id: "balance_from_stock", enabled: true, width: 15 },
+          { id: "balance_from_hemb", enabled: true, width: 15 },
+          { id: "date_receive", enabled: false, width: 8 },
+          { id: "challan_rec", enabled: false, width: 8 },
+          { id: "dispatch_from_hemb", enabled: false, width: 7 },
+          { id: "total_balance", enabled: false, width: 7 },
+          { id: "date_dispatch", enabled: false, width: 8 },
+          { id: "challan_dis", enabled: false, width: 8 }
+        ]
+      }
+    ]
+  },
   daily: {
     title: "Daily Running Style Status Sheet",
     subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
@@ -10762,7 +10857,84 @@ function renderLiveA4Preview() {
   let rows = [];
   let totals = {};
 
-  if (printStudioActiveSheet === "daily") {
+  if (printStudioActiveSheet === "master") {
+    let masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+    const searchQuery = (document.getElementById("master-search-input")?.value || "").toLowerCase().trim();
+    const selectedCont = (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim();
+    const selectedCat = (document.getElementById("filter-category")?.value || "").toLowerCase().trim();
+    const selectedBal = document.getElementById("filter-balance-status")?.value || "";
+
+    if (searchQuery || selectedCont || selectedCat || selectedBal) {
+      masterList = masterList.filter(item => {
+        const computed = window.db.computeRecordBalances(item);
+        const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+        const recMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+        const disMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+        const queryPassed = !searchQuery || codeMatch || recMatch || disMatch;
+
+        const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+        const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+
+        let balPassed = true;
+        if (selectedBal === "pending_hemb") balPassed = (computed.balance_from_hemb > 0);
+        else if (selectedBal === "pending_stock") balPassed = (computed.balance_from_stock > 0);
+        else if (selectedBal === "completed") balPassed = (computed.total_balance === 0 && (item.cut_qty || 0) > 0);
+
+        return queryPassed && contPassed && catPassed && balPassed;
+      });
+    }
+
+    let sumCut = 0;
+    let sumRec = 0;
+    let sumStock = 0;
+    let sumDisHemb = 0;
+    let sumHemb = 0;
+    let sumTotBal = 0;
+
+    rows = masterList.map((item, idx) => {
+      const computed = window.db.computeRecordBalances(item);
+      const cut = item.cut_qty || 0;
+      const rec = item.received_qty || 0;
+      const stock = computed.balance_from_stock || 0;
+      const disHemb = item.dispatch_from_hemb || 0;
+      const hemb = computed.balance_from_hemb || 0;
+      const totBal = computed.total_balance || 0;
+
+      sumCut += cut;
+      sumRec += rec;
+      sumStock += stock;
+      sumDisHemb += disHemb;
+      sumHemb += hemb;
+      sumTotBal += totBal;
+
+      return {
+        sr_no: item.sr_no || (idx + 1),
+        style_code: item.style_code || "",
+        category: item.category || "SHIRT",
+        cut_qty: cut,
+        received_qty: rec,
+        balance_from_stock: stock,
+        date_receive: item.date_receive || "-",
+        challan_rec: item.challan_rec || "-",
+        dispatch_from_hemb: disHemb,
+        balance_from_hemb: hemb,
+        total_balance: totBal,
+        date_dispatch: item.date_dispatch || "-",
+        challan_dis: item.challan_dis || "-"
+      };
+    });
+
+    totals = {
+      cut_qty: sumCut,
+      received_qty: sumRec,
+      balance_from_stock: sumStock,
+      dispatch_from_hemb: sumDisHemb,
+      balance_from_hemb: sumHemb,
+      total_balance: sumTotBal,
+      count: rows.length
+    };
+
+  } else if (printStudioActiveSheet === "daily") {
     const finalStyles = window.db.getFinalStyles();
     const master = window.db.getMasterInventory();
 
@@ -12000,10 +12172,18 @@ const WHATSAPP_SHEET_DEFS = {
         });
       }
 
+      const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+
       const rows = list.map((item, idx) => {
         const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
           ? item.contractor_name.trim()
           : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+        const mMatch = masterList.find(m =>
+          (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+          (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+        );
+        const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
 
         return {
           sr_no: item.sr_no || item.id || (idx + 1),
@@ -12012,6 +12192,7 @@ const WHATSAPP_SHEET_DEFS = {
           style_code: item.style_code || "",
           category: item.category || "SHIRT",
           contractor_name: cont,
+          cut_qty: cutQty,
           dispatch_qty: Number(item.dispatch_qty) || 0,
           remarks: item.remarks || "-"
         };
@@ -12024,6 +12205,7 @@ const WHATSAPP_SHEET_DEFS = {
       }
 
       const totals = {
+        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
         dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
       };
 
@@ -12036,6 +12218,7 @@ const WHATSAPP_SHEET_DEFS = {
       { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
       { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
       { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
       { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
       { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
     ]
