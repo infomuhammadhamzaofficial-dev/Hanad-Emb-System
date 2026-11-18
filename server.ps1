@@ -4,10 +4,13 @@ param(
 
 $rootDir = $PSScriptRoot
 
-# Detect Local LAN IPv4 for Mobile Testing
-$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" -and $_.IPAddress -like "192.168.*" } | Select-Object -First 1).IPAddress
+# Detect Local LAN IPv4 for Mobile Testing (prioritize Wi-Fi)
+$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like "*Wi-Fi*" -or $_.InterfaceAlias -like "*Wireless*" } | Select-Object -First 1).IPAddress
 if (-not $ip) {
-    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" } | Select-Object -First 1).IPAddress
+    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" -and $_.IPAddress -notlike "192.168.56.*" -and $_.IPAddress -like "192.168.*" } | Select-Object -First 1).IPAddress
+}
+if (-not $ip) {
+    $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notlike "*Loopback*" -and $_.InterfaceAlias -notlike "*vEthernet*" } | Select-Object -First 1).IPAddress
 }
 if (-not $ip) {
     $ip = "localhost"

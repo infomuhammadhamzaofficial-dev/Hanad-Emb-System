@@ -247,7 +247,7 @@ class DatabaseService {
       localStorage.setItem(DB_KEYS.CONFIG, JSON.stringify(DEFAULT_NEON_CONFIG));
     }
 
-    // Purge known phantom distribution period entry & enforce local trash tombstone filtering on startup
+    // Purge known phantom tombstone and sanitize deleted dist periods list on startup
     try {
       const destroyedTrash = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
       let destroyedChanged = false;
@@ -259,18 +259,25 @@ class DatabaseService {
         localStorage.setItem("hand_emb_permanently_destroyed_trash_v1", JSON.stringify(destroyedTrash));
       }
 
+      // Ensure valid bi-monthly production cycles are never accidentally blocked by legacy tombstones
       const deletedDistPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-      if (!deletedDistPeriods.includes("26-oct-2026 to 10-nov-2026")) {
-        deletedDistPeriods.push("26-oct-2026 to 10-nov-2026");
-        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDistPeriods));
+      const cleanedDistPeriods = deletedDistPeriods.filter(d => {
+        const lower = String(d || '').toLowerCase();
+        return !lower.includes("26-oct-2026") && !lower.includes("26-sep-2026");
+      });
+      if (cleanedDistPeriods.length !== deletedDistPeriods.length) {
+        localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(cleanedDistPeriods));
       }
+
+      // Untrack production periods from deleted records
+      this.untrackDeletedRecord("distribution_period", "26-oct-2026 to 10-nov-2026");
+      this.untrackDeletedRecord("distribution_period", "26-sep-2026 to 10-oct-2026");
 
       const isPhantomTombstoned = localStorage.getItem("hand_emb_phantom_tombstone_v36") === "true";
       if (!isPhantomTombstoned) {
         localStorage.setItem("hand_emb_phantom_tombstone_v36", "true");
         setTimeout(() => {
           this.trackDeletedRecord("distribution_period", "dist_period_1793775690007_7dn1b");
-          this.trackDeletedRecord("distribution_period", "26-oct-2026 to 10-nov-2026");
           this.trackDeletedRecord("trash_destroyed", "dist_period_1793775690007_7dn1b");
         }, 1500);
       }
@@ -1311,8 +1318,8 @@ class DatabaseService {
         await this.deleteTrashItemFromNeonAsync(pid, pid).catch(() => null);
       }
       await this.executeNeonQuery(
-        "DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;",
-        ["dist_period_1793775690007_7dn1b", "26-oct-2026 to 10-nov-2026"]
+        "DELETE FROM distribution_periods WHERE id = $1;",
+        ["dist_period_1793775690007_7dn1b"]
       ).catch(() => null);
 
       return true;
@@ -3773,7 +3780,7 @@ class DatabaseService {
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed.filter(p => p && (p.period_name || "").trim() && (p.period_name || "").trim().toLowerCase() !== "26-sep-2026 to 10-oct-2026");
+            list = parsed.filter(p => p && (p.period_name || "").trim());
           }
         } catch (e) {
           list = [];
@@ -3789,7 +3796,10 @@ class DatabaseService {
   }
 
   saveDistributionPeriods(list) {
-    const valid = (list || []).filter(p => p && (p.period_name || "").trim());
+    const valid = (list || []).filter(p => p && (p.period_name || "").trim()).map(p => {
+      if (!p.id) p.id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      return p;
+    });
     this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
     if (Array.isArray(valid)) {
@@ -3806,10 +3816,17 @@ class DatabaseService {
     const updatedDeleted = deletedPeriods.filter(d => d !== periodName.toLowerCase());
     localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(updatedDeleted));
 
+    // Untrack from tombstoned deleted records
+    this.untrackDeletedRecord("distribution_period", periodName.toLowerCase());
+    this.untrackDeletedRecord("distribution_period", periodName);
+
     const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
     let savedPeriod;
     if (existingIndex >= 0) {
       list[existingIndex] = { ...list[existingIndex], ...periodData, period_name: periodName };
+      if (!list[existingIndex].id) {
+        list[existingIndex].id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      }
       savedPeriod = list[existingIndex];
     } else {
       savedPeriod = {
@@ -3824,6 +3841,12 @@ class DatabaseService {
       };
       list.push(savedPeriod);
     }
+    this.untrackDeletedRecord("distribution_period", savedPeriod.id);
+
+    // Remove from Trash if it was previously soft-deleted
+    const trash = this.getTrashItems().filter(t => !(t.entity_type === "distribution_period" && ((t.item_data && (t.item_data.period_name || "").trim().toLowerCase() === periodName.toLowerCase()) || String(t.original_id || "") === String(savedPeriod.id))));
+    this.saveTrashItems(trash);
+
     this.saveDistributionPeriods(list);
     await this.pushDistributionPeriodToNeonAsync(savedPeriod);
     return savedPeriod;
@@ -5890,12 +5913,12 @@ class DatabaseService {
       }
 
       // Background cleanup: Prune tombstoned distribution_periods rows from Neon
-      if (Array.isArray(rawDistPeriods) && rawDistPeriods.length > 0) {
-        const zombiePeriods = rawDistPeriods.filter(p =>
-          this.isRecordDeleted("distribution_period", p.id, (p.name || '').trim())
+      if (Array.isArray(rawDistPeriodRows) && rawDistPeriodRows.length > 0) {
+        const zombiePeriods = rawDistPeriodRows.filter(p =>
+          this.isRecordDeleted("distribution_period", p.id, (p.period_name || p.name || '').trim())
         );
         if (zombiePeriods.length > 0) {
-          const ids = zombiePeriods.map(p => Number(p.id)).filter(Boolean);
+          const ids = zombiePeriods.map(p => `'${p.id}'`).filter(Boolean);
           if (ids.length > 0) {
             this.executeNeonQuery(`DELETE FROM distribution_periods WHERE id IN (${ids.join(",")});`).catch(() => null);
           }

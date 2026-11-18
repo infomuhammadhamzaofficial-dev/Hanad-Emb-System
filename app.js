@@ -222,14 +222,18 @@ function updateThemeControlsUI(mode, palette, themeKey) {
   }
 
   const activeBadge = document.getElementById("theme-active-label");
+  const titles = {
+    "blue-light": "Royal Blue Light",
+    "blue-dark": "Royal Blue Dark",
+    "emerald-light": "Emerald Light",
+    "emerald-dark": "Emerald Dark",
+  };
   if (activeBadge) {
-    const titles = {
-      "blue-light": "Royal Blue Light",
-      "blue-dark": "Royal Blue Dark",
-      "emerald-light": "Emerald Light",
-      "emerald-dark": "Emerald Dark",
-    };
     activeBadge.textContent = titles[themeKey] || themeKey;
+  }
+  const mobileActiveBadge = document.getElementById("mobile-theme-active-label");
+  if (mobileActiveBadge) {
+    mobileActiveBadge.textContent = titles[themeKey] || themeKey;
   }
 
   // Update active state on menu theme cards
@@ -322,6 +326,27 @@ function initTheme() {
   const btnQuickMode = document.getElementById("btn-quick-toggle-mode");
   if (btnQuickMode) {
     btnQuickMode.addEventListener("click", () => {
+      const active = getStoredThemeSettings();
+      const nextMode = active.mode === "dark" ? "light" : "dark";
+      const nextKey = `${active.palette}-${nextMode}`;
+      applyThemeSettings(nextKey, true);
+    });
+  }
+
+  // Mobile Drawer Theme Controls
+  const mobileBtnPalette = document.getElementById("mobile-btn-toggle-palette");
+  if (mobileBtnPalette) {
+    mobileBtnPalette.addEventListener("click", () => {
+      const active = getStoredThemeSettings();
+      const nextPalette = active.palette === "blue" ? "emerald" : "blue";
+      const nextKey = `${nextPalette}-${active.mode}`;
+      applyThemeSettings(nextKey, true);
+    });
+  }
+
+  const mobileBtnMode = document.getElementById("mobile-btn-toggle-mode");
+  if (mobileBtnMode) {
+    mobileBtnMode.addEventListener("click", () => {
       const active = getStoredThemeSettings();
       const nextMode = active.mode === "dark" ? "light" : "dark";
       const nextKey = `${active.palette}-${nextMode}`;
@@ -1277,7 +1302,7 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
           <span>Dist: <em>Not Found in Distribution${catNotice}</em></span>
         </div>
       `;
-      container.style.display = "inline-flex";
+      container.style.display = "flex";
     } else {
       container.style.display = "none";
       container.innerHTML = "";
@@ -1304,7 +1329,7 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     else if (category.includes("GALA")) icon = "✨";
 
     return `
-      <div class="dist-live-card" title="Style: ${escapeHtml(style)} | Category: ${escapeHtml(category)} | Contractor: ${escapeHtml(contractor)} | ${pcs.toLocaleString()} Pcs @ Rs ${rate.toLocaleString()}">
+      <div class="dist-live-card" title="Style: ${escapeHtml(style)} | Category: ${escapeHtml(category)} | Contractor: ${escapeHtml(contractor)} | ${pcs.toLocaleString()} Pcs">
         <span class="dist-live-label">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
             <polyline points="20 6 9 17 4 12"></polyline>
@@ -1321,10 +1346,6 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
           <span class="chip-lbl">Pcs:</span>
           <strong>${pcs.toLocaleString()}</strong>
         </span>
-        <span class="dist-live-chip rate" title="Rate per Piece">
-          <span class="chip-lbl">Rate:</span>
-          <strong>₨ ${rate.toLocaleString()}</strong>
-        </span>
       </div>
     `;
   }).join("");
@@ -1334,7 +1355,7 @@ function renderWorkDistributionSearchPreview(query, containerId = "master-search
     : "";
 
   container.innerHTML = cardsHtml + moreBadge;
-  container.style.display = "inline-flex";
+  container.style.display = "flex";
 }
 
 // -------------------------------------------------------------
@@ -1776,22 +1797,26 @@ function initReceivingLogView() {
   if (datePreset) {
     datePreset.addEventListener("change", (e) => {
       const val = e.target.value;
+      const wrap = document.getElementById("rec-date-filter-wrap");
       if (val === "all") {
         if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
         if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
         if (dateSep) dateSep.style.display = "none";
         if (dateClear) dateClear.style.display = "none";
+        if (wrap) wrap.classList.remove("has-active-range");
       } else if (val === "custom") {
         if (dateFrom) dateFrom.style.display = "inline-block";
         if (dateTo) dateTo.style.display = "inline-block";
         if (dateSep) dateSep.style.display = "inline";
         if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
       } else {
         const range = getLogDatePresetRange(val);
         if (dateFrom) { dateFrom.value = range.from; dateFrom.style.display = "inline-block"; }
         if (dateTo) { dateTo.value = range.to; dateTo.style.display = "inline-block"; }
         if (dateSep) dateSep.style.display = "inline";
         if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
       }
       renderReceivingLog();
     });
@@ -1803,8 +1828,14 @@ function initReceivingLogView() {
         if (datePreset && datePreset.value !== "custom" && datePreset.value !== "all") {
           datePreset.value = "custom";
         }
+        const hasDates = Boolean(dateFrom?.value || dateTo?.value);
         if (dateClear) {
-          dateClear.style.display = (dateFrom?.value || dateTo?.value) ? "inline-flex" : "none";
+          dateClear.style.display = hasDates ? "inline-flex" : "none";
+        }
+        const wrap = document.getElementById("rec-date-filter-wrap");
+        if (wrap) {
+          if (hasDates || (datePreset && datePreset.value !== "all")) wrap.classList.add("has-active-range");
+          else wrap.classList.remove("has-active-range");
         }
         renderReceivingLog();
       });
@@ -1818,6 +1849,7 @@ function initReceivingLogView() {
       if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
       if (dateSep) dateSep.style.display = "none";
       dateClear.style.display = "none";
+      document.getElementById("rec-date-filter-wrap")?.classList.remove("has-active-range");
       renderReceivingLog();
     });
   }
@@ -2010,22 +2042,26 @@ function initDispatchLogView() {
   if (datePreset) {
     datePreset.addEventListener("change", (e) => {
       const val = e.target.value;
+      const wrap = document.getElementById("dis-date-filter-wrap");
       if (val === "all") {
         if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
         if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
         if (dateSep) dateSep.style.display = "none";
         if (dateClear) dateClear.style.display = "none";
+        if (wrap) wrap.classList.remove("has-active-range");
       } else if (val === "custom") {
         if (dateFrom) dateFrom.style.display = "inline-block";
         if (dateTo) dateTo.style.display = "inline-block";
         if (dateSep) dateSep.style.display = "inline";
         if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
       } else {
         const range = getLogDatePresetRange(val);
         if (dateFrom) { dateFrom.value = range.from; dateFrom.style.display = "inline-block"; }
         if (dateTo) { dateTo.value = range.to; dateTo.style.display = "inline-block"; }
         if (dateSep) dateSep.style.display = "inline";
         if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
       }
       renderDispatchLog();
     });
@@ -2037,8 +2073,14 @@ function initDispatchLogView() {
         if (datePreset && datePreset.value !== "custom" && datePreset.value !== "all") {
           datePreset.value = "custom";
         }
+        const hasDates = Boolean(dateFrom?.value || dateTo?.value);
         if (dateClear) {
-          dateClear.style.display = (dateFrom?.value || dateTo?.value) ? "inline-flex" : "none";
+          dateClear.style.display = hasDates ? "inline-flex" : "none";
+        }
+        const wrap = document.getElementById("dis-date-filter-wrap");
+        if (wrap) {
+          if (hasDates || (datePreset && datePreset.value !== "all")) wrap.classList.add("has-active-range");
+          else wrap.classList.remove("has-active-range");
         }
         renderDispatchLog();
       });
@@ -2052,6 +2094,7 @@ function initDispatchLogView() {
       if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
       if (dateSep) dateSep.style.display = "none";
       dateClear.style.display = "none";
+      document.getElementById("dis-date-filter-wrap")?.classList.remove("has-active-range");
       renderDispatchLog();
     });
   }
@@ -5941,6 +5984,22 @@ function initAuthSystem() {
     }, 60);
   }
 
+  // Handle Enter key on Login Inputs directly to submit
+  const handleAuthEnter = (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const submitBtn = document.getElementById("btn-submit-login");
+      if (submitBtn) {
+        submitBtn.click();
+      } else if (loginForm) {
+        loginForm.dispatchEvent(new Event("submit", { cancelable: true, bubbles: true }));
+      }
+    }
+  };
+  const uInpEl = document.getElementById("login-username");
+  if (uInpEl) uInpEl.addEventListener("keydown", handleAuthEnter);
+  if (passInput) passInput.addEventListener("keydown", handleAuthEnter);
+
   // Handle Login Submission
   if (loginForm) {
     loginForm.addEventListener("submit", async (e) => {
@@ -9115,6 +9174,9 @@ function initWorkDistributionView() {
   const periodSelect = document.getElementById("select-distribution-period");
   if (periodSelect) {
     periodSelect.addEventListener("change", () => {
+      if (periodSelect.value) {
+        localStorage.setItem("craftflow_active_dist_period", periodSelect.value);
+      }
       renderWorkDistribution();
     });
   }
@@ -9318,6 +9380,8 @@ function getActiveDistributionPeriod() {
   }
   const select = document.getElementById("select-distribution-period");
   if (select && select.value) return select.value.trim();
+  const savedActive = localStorage.getItem("craftflow_active_dist_period");
+  if (savedActive && savedActive.trim()) return savedActive.trim();
   const periods = (window.db && typeof window.db.getDistributionPeriods === "function")
     ? window.db.getDistributionPeriods()
     : [];
@@ -9334,7 +9398,8 @@ function populateDistributionPeriods() {
     ? window.db.getDistributionPeriods()
     : [];
 
-  const currentVal = select.value;
+  const savedActive = localStorage.getItem("craftflow_active_dist_period") || "";
+  const currentVal = select.value || savedActive;
 
   select.innerHTML = periods.map(p => {
     return `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}</option>`;
@@ -9350,9 +9415,10 @@ function populateDistributionPeriods() {
     }).join("");
   }
 
-  if (currentVal && periods.some(p => p.period_name === currentVal)) {
-    select.value = currentVal;
-    if (entryPeriodSelect) entryPeriodSelect.value = currentVal;
+  if (currentVal && periods.some(p => p.period_name.toLowerCase() === currentVal.toLowerCase())) {
+    const matched = periods.find(p => p.period_name.toLowerCase() === currentVal.toLowerCase());
+    select.value = matched.period_name;
+    if (entryPeriodSelect) entryPeriodSelect.value = matched.period_name;
   } else if (periods.length > 0) {
     select.value = periods[0].period_name;
     if (entryPeriodSelect) entryPeriodSelect.value = periods[0].period_name;
@@ -9579,6 +9645,9 @@ function renderWorkDistribution() {
         <td style="text-align: left; vertical-align: middle; cursor: pointer;" onclick="runSmartStyleAudit('${escapeHtml(styleCode)}', '${escapeHtml(itemType)}', true)" title="Click to view style audit across system">
           <span class="style-code-badge" style="font-weight: 800; font-size: 0.875rem;">${escapeHtml(styleCode)}</span>
         </td>
+        <td style="text-align: center; vertical-align: middle;">
+          <span class="badge-tag inline" style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(itemType)}</span>
+        </td>
         <td style="text-align: left; vertical-align: middle;">
           <span class="contractor-tag" style="font-weight: 700; font-size: 0.85rem;">
             <span class="avatar-dot"></span>
@@ -9587,9 +9656,6 @@ function renderWorkDistribution() {
         </td>
         <td style="text-align: right; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; font-size: 0.9rem; color: var(--text-main);">${qty.toLocaleString()}</td>
         <td style="text-align: right; vertical-align: middle; font-family: var(--font-mono); font-weight: 600; font-size: 0.85rem; color: var(--text-muted);">${rate > 0 ? rate.toLocaleString() : '-'}</td>
-        <td style="text-align: center; vertical-align: middle;">
-          <span class="badge-tag inline" style="font-weight: 600; font-size: 0.75rem;">${escapeHtml(itemType)}</span>
-        </td>
         <td style="text-align: center; vertical-align: middle; font-weight: 700; font-family: var(--font-mono); color: #38bdf8;">${escapeHtml(floor || '-')}</td>
         <td class="col-total" style="text-align: right; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; font-size: 0.875rem; color: #10b981; width: 110px; max-width: 125px; white-space: nowrap;">${total > 0 ? Math.round(total).toLocaleString() : '-'}</td>
         <td style="text-align: center; vertical-align: middle; white-space: nowrap;">
@@ -9611,12 +9677,12 @@ function renderWorkDistribution() {
   if (tfoot) {
     tfoot.innerHTML = `
       <tr style="background: rgba(16, 185, 129, 0.08); font-weight: 800; border-top: 2px solid rgba(16, 185, 129, 0.4);">
-        <td colspan="3" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; padding: 0.85rem 1rem;">
+        <td colspan="4" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; padding: 0.85rem 1rem;">
           Total Distributed (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Styles):
         </td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.95rem; font-weight: 900; color: #10b981;">${tablePcs.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">Avg ${tableAvgRate > 0 ? tableAvgRate.toLocaleString() : '-'}</td>
-        <td colspan="2"></td>
+        <td></td>
         <td class="col-total" style="text-align: right; font-family: var(--font-mono); font-size: 0.95rem; font-weight: 900; color: #10b981; width: 110px; max-width: 125px; white-space: nowrap;">Rs. ${Math.round(tableAmount).toLocaleString()}</td>
         <td style="text-align: center; vertical-align: middle; font-size: 0.75rem; font-weight: 700; color: #10b981;">
           ${query ? '🌐 All Periods' : escapeHtml(activePeriod)}
@@ -10019,6 +10085,7 @@ function selectDistPeriodFromSetup(periodName) {
   if (select) {
     select.value = periodName;
   }
+  localStorage.setItem("craftflow_active_dist_period", periodName);
   closeModal("modal-dist-period-setup");
   renderWorkDistribution();
   showToast(`Switched to distribution period "${periodName}"`, "info");
@@ -10051,11 +10118,13 @@ async function saveDistPeriodAction(e) {
 
   try {
     await window.db.saveDistributionPeriod(periodObj);
+    localStorage.setItem("craftflow_active_dist_period", period_name);
     populateDistributionPeriods();
 
     const select = document.getElementById("select-distribution-period");
     if (select) select.value = period_name;
 
+    renderDistPeriodSetupList();
     closeModal("modal-dist-period-setup");
     renderWorkDistribution();
     showToast(`✓ Distribution period "${period_name}" created & synced to Neon!`);

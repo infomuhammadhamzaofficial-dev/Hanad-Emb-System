@@ -1713,12 +1713,14 @@ body {
 }
 
 .dist-live-chip.rate {
+  display: none !important;
   background: rgba(245, 158, 11, 0.15);
   border: 1px solid rgba(245, 158, 11, 0.35);
   color: #fbbf24;
 }
 
 [data-theme="light"] .dist-live-chip.rate {
+  display: none !important;
   background: #fef3c7;
   border-color: #fcd34d;
   color: #b45309;
@@ -3674,13 +3676,115 @@ body.auth-locked .mobile-bottom-nav {
   flex: 1;
 }
 
-.mobile-nav-item .mobile-badge {
-  font-size: 0.7rem;
-  padding: 1px 7px;
-  font-weight: 700;
-  background: var(--primary);
-  color: #fff;
-  border-radius: var(--radius-full);
+.mobile-nav-item .mobile-badge,
+.mobile-nav-item .badge-pill,
+.mobile-nav-item .trash-nav-badge {
+  display: none !important;
+}
+
+/* Mobile Drawer Theme & Palette Section */
+.mobile-drawer-theme-box {
+  padding: 0.35rem 0.75rem 0.85rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.mobile-theme-active-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.15rem 0.25rem 0.35rem 0.25rem;
+}
+
+.mobile-theme-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.mobile-theme-card {
+  padding: 0.5rem 0.55rem !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  text-align: left !important;
+  background: var(--bg-card) !important;
+  border: 1.5px solid var(--border-color) !important;
+  border-radius: var(--radius-sm) !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition: all 0.2s ease !important;
+  width: 100% !important;
+}
+
+.mobile-theme-card:hover {
+  border-color: var(--primary) !important;
+  background: var(--bg-card-hover) !important;
+}
+
+.mobile-theme-card.active {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 1.5px var(--primary) !important;
+  background: rgba(16, 185, 129, 0.08) !important;
+}
+
+[data-palette="blue"] .mobile-theme-card.active {
+  background: rgba(37, 99, 235, 0.08) !important;
+}
+
+.mobile-theme-card .swatch-preview {
+  width: 100% !important;
+  height: 24px !important;
+  margin-bottom: 0.35rem !important;
+  border-radius: 4px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 0 6px !important;
+}
+
+.mobile-theme-card .theme-card-title {
+  font-size: 0.75rem !important;
+  line-height: 1.2 !important;
+  color: var(--text-main) !important;
+  font-weight: 700 !important;
+}
+
+.mobile-theme-card .theme-card-sub {
+  font-size: 0.65rem !important;
+  color: var(--text-muted) !important;
+  margin-top: 2px !important;
+  line-height: 1.1 !important;
+}
+
+.mobile-theme-quick-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.mobile-theme-quick-btn {
+  padding: 0.45rem 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--bg-body);
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mobile-theme-quick-btn:hover {
+  border-color: var(--primary);
+  background: var(--bg-card-hover);
+  color: var(--primary);
 }
 
 .mobile-drawer-footer {
@@ -3719,6 +3823,10 @@ body.auth-locked .mobile-bottom-nav {
 
 /* 3. Tablets (768px - 1023px) */
 @media (max-width: 1023px) {
+  #btn-palette-picker {
+    display: none !important;
+  }
+
   .header-top-bar {
     padding: 0.55rem 0.85rem 0.35rem 0.85rem;
   }
@@ -3790,7 +3898,10 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   .dash-hero-right {
-    min-width: 100% !important;
+    min-width: auto !important;
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
   }
 
   .dash-meta-chip {
@@ -3836,6 +3947,7 @@ body.auth-locked .mobile-bottom-nav {
   .dash-kpi-pill {
     font-size: 0.6rem !important;
     padding: 1px 5px !important;
+    border-radius: 4px !important;
   }
 
   .dash-kpi-hint {
@@ -3945,13 +4057,16 @@ body.auth-locked .mobile-bottom-nav {
 
   /* Header Top Bar on Mobile - SINGLE LINE ALIGNMENT */
   .header-top-bar {
-    padding: 0.45rem 0.65rem !important;
+    padding: 0.4rem 0.5rem !important;
     display: flex !important;
     align-items: center !important;
     justify-content: space-between !important;
     flex-wrap: nowrap !important;
-    gap: 0.4rem !important;
-    min-height: 48px !important;
+    gap: 0.35rem !important;
+    min-height: 46px !important;
+    max-width: 100vw !important;
+    box-sizing: border-box !important;
+    overflow-x: hidden !important;
   }
 
   /* Brand / Logo Group on Left with Hamburger */
@@ -3963,8 +4078,8 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   .brand-icon {
-    width: 28px !important;
-    height: 28px !important;
+    width: 26px !important;
+    height: 26px !important;
   }
 
   .brand-text h1 {
@@ -3984,12 +4099,14 @@ body.auth-locked .mobile-bottom-nav {
     align-items: center !important;
     justify-content: flex-end !important;
     flex-wrap: nowrap !important;
-    gap: 0.3rem !important;
+    gap: 0.25rem !important;
     margin-left: auto !important;
+    flex-shrink: 0 !important;
   }
 
-  /* Hide Desktop New Style Entry in Header Top Bar */
-  .header-actions #btn-open-new-entry {
+  /* Hide Desktop New Style Entry and Palette Trigger from Header on Mobile (moved under tabs in menu) */
+  .header-actions #btn-open-new-entry,
+  #btn-palette-picker {
     display: none !important;
   }
 
@@ -4012,8 +4129,8 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   #btn-theme-toggle {
-    width: 32px !important;
-    height: 32px !important;
+    width: 30px !important;
+    height: 30px !important;
     padding: 0 !important;
     display: inline-flex !important;
     align-items: center !important;
@@ -4025,7 +4142,8 @@ body.auth-locked .mobile-bottom-nav {
   .user-header-profile {
     display: flex !important;
     align-items: center !important;
-    gap: 0.25rem !important;
+    gap: 0.2rem !important;
+    flex-shrink: 0 !important;
   }
 
   .user-meta-text,
@@ -4041,12 +4159,14 @@ body.auth-locked .mobile-bottom-nav {
 
   .btn-users-mgmt,
   .btn-logout {
-    padding: 0.25rem 0.45rem !important;
-    height: 32px !important;
-    font-size: 0.75rem !important;
+    padding: 0.2rem 0.35rem !important;
+    min-width: 30px !important;
+    height: 30px !important;
+    font-size: 0.8rem !important;
     display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
+    flex-shrink: 0 !important;
   }
 
   /* Mobile Sub-Bar: Clean Active Tab Chip + Compact New Style Button */
@@ -4190,9 +4310,91 @@ body.auth-locked .mobile-bottom-nav {
 
   .view-toolbar>div:last-child {
     display: grid !important;
-    grid-template-columns: repeat(2, 1fr) !important;
-    gap: 0.4rem !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 0.45rem !important;
     width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .view-toolbar>div:last-child > * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .view-toolbar>div:last-child .search-box {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .view-toolbar>div:last-child .search-box input {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .view-toolbar>div:last-child select.app-select {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Date Filter Controls in View Toolbar */
+  .log-date-filter-group {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .log-date-filter-group select {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .log-date-filter-group.has-active-range,
+  .log-date-filter-group:has(input[type="date"]:not([style*="display: none"])) {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+    padding: 5px 8px !important;
+  }
+
+  .log-date-filter-group .log-date-input,
+  .log-date-filter-group input[type="date"].app-input {
+    flex: 1 1 110px !important;
+    width: auto !important;
+    min-width: 95px !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* Live Work Distribution Preview Container - MUST span full width */
+  .search-dist-preview-wrap {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  .dist-live-card {
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    flex-wrap: wrap !important;
+    white-space: normal !important;
   }
 
   .view-toolbar>div:last-child .btn-primary {
@@ -4200,10 +4402,12 @@ body.auth-locked .mobile-bottom-nav {
   }
 
   .view-toolbar>div:last-child .btn {
+    grid-column: span 2 !important;
     width: 100% !important;
     justify-content: center !important;
-    font-size: 0.74rem !important;
-    padding: 0.45rem 0.5rem !important;
+    font-size: 0.76rem !important;
+    padding: 0.5rem 0.6rem !important;
+    box-sizing: border-box !important;
   }
 
   .master-toolbar-panel {
@@ -4642,7 +4846,26 @@ body.auth-locked .mobile-bottom-nav {
 /* 5. Ultra Compact Mobile (<= 380px - Moto G7 Play 360px viewport) */
 @media (max-width: 380px) {
   .header-top-bar {
-    padding: 0.35rem 0.5rem !important;
+    padding: 0.35rem 0.4rem !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+    gap: 0.25rem !important;
+  }
+
+  .header-actions {
+    gap: 0.2rem !important;
+  }
+
+  .user-header-profile {
+    gap: 0.15rem !important;
+  }
+
+  .btn-users-mgmt,
+  .btn-logout {
+    min-width: 28px !important;
+    height: 28px !important;
+    padding: 0.15rem 0.25rem !important;
+    font-size: 0.75rem !important;
   }
 
   .header-nav-row {
@@ -6164,17 +6387,32 @@ body.auth-locked .mobile-bottom-nav {
   background: linear-gradient(135deg, rgba(17, 24, 39, 0.96) 0%, rgba(20, 29, 47, 0.94) 100%);
   border: 1.5px solid var(--border-color);
   border-radius: var(--radius-lg);
-  padding: 1.35rem 1.6rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 1.5rem;
+  padding: 1.25rem 1.6rem;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.65rem;
   margin-bottom: 1.35rem;
   box-shadow: var(--shadow-md);
   position: relative;
   overflow: hidden;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
+}
+
+.dash-hero-top-bar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  position: relative;
+  z-index: 2;
+  margin-bottom: 0.15rem;
+}
+
+.dash-hero-main-body {
+  position: relative;
+  z-index: 1;
 }
 
 .dash-hero-card::before {
@@ -6214,7 +6452,7 @@ body.auth-locked .mobile-bottom-nav {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0 !important;
 }
 
 .dash-pulse-dot {
@@ -6266,9 +6504,9 @@ body.auth-locked .mobile-bottom-nav {
   position: relative;
   z-index: 1;
   display: flex;
-  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
   gap: 0.55rem;
-  min-width: 290px;
   flex-shrink: 0;
 }
 
@@ -6554,8 +6792,8 @@ body.auth-locked .mobile-bottom-nav {
 .dash-kpi-pill {
   font-size: 0.675rem;
   font-weight: 800;
-  padding: 1px 7px;
-  border-radius: var(--radius-full);
+  padding: 2px 7px;
+  border-radius: 4px !important;
 }
 
 .dash-kpi-pill.indigo {
@@ -8561,4 +8799,563 @@ td .badge-tag {
 
 .log-date-filter-group input[type="date"].app-input:focus {
   border-color: var(--primary);
+}
+
+/* ====================================================================
+   ARRIVALS TRACKER MODAL RESPONSIVE CONTROL BAR
+   ==================================================================== */
+.arrivals-modal-control-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  background: var(--bg-card);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  margin-bottom: 1rem;
+}
+
+.arrivals-date-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.arrivals-date-input-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.arrivals-modal-date-picker {
+  font-weight: 700;
+  font-family: var(--font-mono);
+  width: auto;
+  min-width: 165px;
+  padding: 4px 10px;
+}
+
+.arrivals-quick-chips {
+  display: inline-flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.arrivals-search-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1;
+  max-width: 520px;
+  justify-content: flex-end;
+}
+
+.arrivals-search-input {
+  flex: 1;
+  min-width: 190px;
+  font-size: 0.82rem;
+  padding: 6px 12px;
+  background: var(--bg-input);
+  border: 1.5px solid var(--border-color);
+  border-radius: var(--radius-md);
+  color: var(--text-main);
+}
+
+.arrivals-bulk-add-btn {
+  font-weight: 800;
+  color: #000;
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  border: none;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .arrivals-modal-control-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    padding: 0.75rem !important;
+    gap: 0.65rem !important;
+  }
+
+  .arrivals-date-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .arrivals-date-input-row {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .arrivals-modal-date-picker {
+    flex: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .arrivals-quick-chips {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    width: 100% !important;
+    gap: 0.35rem !important;
+  }
+
+  .arrivals-quick-chips .btn {
+    width: 100% !important;
+    justify-content: center !important;
+    text-align: center !important;
+    padding: 0.45rem 0.25rem !important;
+  }
+
+  .arrivals-search-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 0.5rem !important;
+  }
+
+  .arrivals-search-input {
+    width: 100% !important;
+    font-size: 0.85rem !important;
+    padding: 0.55rem 0.75rem !important;
+    box-sizing: border-box !important;
+  }
+
+  .arrivals-bulk-add-btn {
+    width: 100% !important;
+    justify-content: center !important;
+    font-size: 0.85rem !important;
+    padding: 0.6rem 0.85rem !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* ====================================================================
+   DESKTOP ONLY FREEZE PANES (min-width: 992px)
+   - Payment Sheet: Freeze up to Contractor Name (Cols 1-4)
+   - Work Distribution: Freeze Style Code & Item (Cols 1-3)
+   ==================================================================== */
+@media (min-width: 992px) {
+  /* ------------------------------------------------------------------
+     1. PAYMENT SHEET (#table-rate-approval) FREEZE PANES (COLS 1-4)
+     Col 1: S.NO (48px)
+     Col 2: Style Name (140px)
+     Col 3: Working (85px)
+     Col 4: Cont Name (130px) -> Total frozen width = 403px
+     ------------------------------------------------------------------ */
+  #table-rate-approval {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+  }
+
+  /* Sticky Headers (Cols 1-4) */
+  #table-rate-approval thead th:nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  #table-rate-approval thead th:nth-child(2) {
+    position: sticky !important;
+    left: 48px !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  #table-rate-approval thead th:nth-child(3) {
+    position: sticky !important;
+    left: 188px !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  #table-rate-approval thead th:nth-child(4) {
+    position: sticky !important;
+    left: 273px !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 130px !important;
+    min-width: 130px !important;
+    max-width: 130px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+    border-right: 2px solid #64748b !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Sticky Body Cells (Cols 1-4) */
+  #table-rate-approval tbody td:not([colspan]):nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-rate-approval tbody td:not([colspan]):nth-child(2) {
+    position: sticky !important;
+    left: 48px !important;
+    z-index: 10 !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-rate-approval tbody td:not([colspan]):nth-child(3) {
+    position: sticky !important;
+    left: 188px !important;
+    z-index: 10 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-rate-approval tbody td:not([colspan]):nth-child(4) {
+    position: sticky !important;
+    left: 273px !important;
+    z-index: 10 !important;
+    width: 130px !important;
+    min-width: 130px !important;
+    max-width: 130px !important;
+    background-color: var(--bg-card, #111827) !important;
+    border-right: 2px solid #64748b !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Hover rows for Payment Sheet */
+  #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(1),
+  #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(2),
+  #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(3),
+  #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(4) {
+    background-color: var(--bg-surface-hover, #1e293b) !important;
+  }
+
+  /* Closed rows (Green) for Payment Sheet */
+  #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(1),
+  #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(2),
+  #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(3),
+  #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(4) {
+    background-color: #1a382b !important;
+    color: #86efac !important;
+  }
+
+  /* Flagged style code cell */
+  #table-rate-approval tbody td.cell-style-flagged:not([colspan]):nth-child(2) {
+    background-color: #4a1923 !important;
+    color: #ffffff !important;
+  }
+
+  /* Light Theme overrides for Payment Sheet */
+  [data-theme="light"] #table-rate-approval tbody td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-rate-approval tbody td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-rate-approval tbody td:not([colspan]):nth-child(3),
+  [data-theme="light"] #table-rate-approval tbody td:not([colspan]):nth-child(4) {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+  [data-theme="light"] #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(3),
+  [data-theme="light"] #table-rate-approval tbody tr:hover td:not([colspan]):nth-child(4) {
+    background-color: #f1f5f9 !important;
+  }
+  [data-theme="light"] #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(3),
+  [data-theme="light"] #table-rate-approval tbody tr.row-closed td:not([colspan]):nth-child(4) {
+    background-color: #e2efda !important;
+    color: #1e4620 !important;
+  }
+  [data-theme="light"] #table-rate-approval tbody td.cell-style-flagged:not([colspan]):nth-child(2) {
+    background-color: #f8d7da !important;
+    color: #721c24 !important;
+  }
+  [data-theme="light"] #table-rate-approval thead th:nth-child(4),
+  [data-theme="light"] #table-rate-approval tbody td:not([colspan]):nth-child(4) {
+    border-right: 2px solid #94a3b8 !important;
+  }
+
+  /* ------------------------------------------------------------------
+     2. WORK DISTRIBUTION (#table-work-distribution) FREEZE PANES (COLS 1-3)
+     Col 1: SR NO (48px)
+     Col 2: STYLE CODE (140px)
+     Col 3: ITEM (85px) -> Total frozen width = 273px
+     ------------------------------------------------------------------ */
+  #table-work-distribution {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+  }
+
+  /* Sticky Headers (Cols 1-3) */
+  #table-work-distribution thead th:nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  #table-work-distribution thead th:nth-child(2) {
+    position: sticky !important;
+    left: 48px !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  #table-work-distribution thead th:nth-child(3) {
+    position: sticky !important;
+    left: 188px !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+    border-right: 2px solid #64748b !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Sticky Body Cells (Cols 1-3) */
+  #table-work-distribution tbody td:not([colspan]):nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-work-distribution tbody td:not([colspan]):nth-child(2) {
+    position: sticky !important;
+    left: 48px !important;
+    z-index: 10 !important;
+    width: 140px !important;
+    min-width: 140px !important;
+    max-width: 140px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-work-distribution tbody td:not([colspan]):nth-child(3) {
+    position: sticky !important;
+    left: 188px !important;
+    z-index: 10 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--bg-card, #111827) !important;
+    border-right: 2px solid #64748b !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Hover rows for Work Distribution */
+  #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(1),
+  #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(2),
+  #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(3) {
+    background-color: var(--bg-surface-hover, #1e293b) !important;
+  }
+
+  /* Light Theme overrides for Work Distribution */
+  [data-theme="light"] #table-work-distribution thead th:nth-child(1),
+  [data-theme="light"] #table-work-distribution thead th:nth-child(2),
+  [data-theme="light"] #table-work-distribution thead th:nth-child(3) {
+    background-color: #f8cbad !important;
+    color: #1f2937 !important;
+  }
+  [data-theme="light"] #table-work-distribution tbody td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-work-distribution tbody td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-work-distribution tbody td:not([colspan]):nth-child(3) {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+  [data-theme="light"] #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-work-distribution tbody tr:hover td:not([colspan]):nth-child(3) {
+    background-color: #f1f5f9 !important;
+  }
+  [data-theme="light"] #table-work-distribution thead th:nth-child(3),
+  [data-theme="light"] #table-work-distribution tbody td:not([colspan]):nth-child(3) {
+    border-right: 2px solid #94a3b8 !important;
+  }
+
+  /* ------------------------------------------------------------------
+     3. MASTER INVENTORY (#table-master-inventory) FREEZE PANES (COLS 1-4)
+     Col 1: SR (45px)
+     Col 2: STYLE CODE (135px)
+     Col 3: CATEGORY (85px)
+     Col 4: CUT QTY (85px) -> Total frozen width = 350px
+     Header colors stay strictly as default:
+     - Group Header: var(--table-group-bg) / var(--table-group-text)
+     - Column Headers: var(--table-col-header-bg) / var(--table-col-header-text)
+     ------------------------------------------------------------------ */
+  #table-master-inventory {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    min-width: 1350px;
+  }
+
+  /* Group Header (Row 1): STYLE INFORMATION (colspan="4") */
+  #table-master-inventory thead tr.group-header th:nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    top: 0 !important;
+    z-index: 35 !important;
+    width: 350px !important;
+    min-width: 350px !important;
+    max-width: 350px !important;
+    background-color: var(--table-group-bg) !important;
+    color: var(--table-group-text) !important;
+    border-right: 2px solid var(--table-border) !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Column Headers (Row 2): SR, STYLE CODE, CATEGORY, CUT QTY */
+  #table-master-inventory thead tr.column-header th:nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    top: 27px !important;
+    z-index: 34 !important;
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    background-color: var(--table-col-header-bg) !important;
+    color: var(--table-col-header-text) !important;
+  }
+  #table-master-inventory thead tr.column-header th:nth-child(2) {
+    position: sticky !important;
+    left: 45px !important;
+    top: 27px !important;
+    z-index: 34 !important;
+    width: 135px !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+    background-color: var(--table-col-header-bg) !important;
+    color: var(--table-col-header-text) !important;
+  }
+  #table-master-inventory thead tr.column-header th:nth-child(3) {
+    position: sticky !important;
+    left: 180px !important;
+    top: 27px !important;
+    z-index: 34 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--table-col-header-bg) !important;
+    color: var(--table-col-header-text) !important;
+  }
+  #table-master-inventory thead tr.column-header th:nth-child(4) {
+    position: sticky !important;
+    left: 265px !important;
+    top: 27px !important;
+    z-index: 34 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--table-col-header-bg) !important;
+    color: var(--table-col-header-text) !important;
+    border-right: 2px solid var(--table-border) !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Sticky Body Cells (Cols 1-4) */
+  #table-master-inventory tbody td:not([colspan]):nth-child(1) {
+    position: sticky !important;
+    left: 0 !important;
+    z-index: 10 !important;
+    width: 45px !important;
+    min-width: 45px !important;
+    max-width: 45px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-master-inventory tbody td:not([colspan]):nth-child(2) {
+    position: sticky !important;
+    left: 45px !important;
+    z-index: 10 !important;
+    width: 135px !important;
+    min-width: 135px !important;
+    max-width: 135px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-master-inventory tbody td:not([colspan]):nth-child(3) {
+    position: sticky !important;
+    left: 180px !important;
+    z-index: 10 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--bg-card, #111827) !important;
+  }
+  #table-master-inventory tbody td:not([colspan]):nth-child(4) {
+    position: sticky !important;
+    left: 265px !important;
+    z-index: 10 !important;
+    width: 85px !important;
+    min-width: 85px !important;
+    max-width: 85px !important;
+    background-color: var(--bg-card, #111827) !important;
+    border-right: 2px solid var(--table-border) !important;
+    box-shadow: 4px 0 8px -2px rgba(0, 0, 0, 0.25) !important;
+  }
+
+  /* Hover rows for Master Inventory */
+  #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(1),
+  #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(2),
+  #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(3),
+  #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(4) {
+    background-color: var(--bg-card-hover, var(--bg-surface-hover, #1e293b)) !important;
+  }
+
+  /* Light Theme overrides for Master Inventory */
+  [data-theme="light"] #table-master-inventory thead tr.group-header th:nth-child(1) {
+    border-right: 2px solid #cbd5e1 !important;
+  }
+  [data-theme="light"] #table-master-inventory thead tr.column-header th:nth-child(4) {
+    border-right: 2px solid #cbd5e1 !important;
+  }
+  [data-theme="light"] #table-master-inventory tbody td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-master-inventory tbody td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-master-inventory tbody td:not([colspan]):nth-child(3),
+  [data-theme="light"] #table-master-inventory tbody td:not([colspan]):nth-child(4) {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+  [data-theme="light"] #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(1),
+  [data-theme="light"] #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(2),
+  [data-theme="light"] #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(3),
+  [data-theme="light"] #table-master-inventory tbody tr:hover td:not([colspan]):nth-child(4) {
+    background-color: #f1f5f9 !important;
+  }
+  [data-theme="light"] #table-master-inventory tbody td:not([colspan]):nth-child(4) {
+    border-right: 2px solid #cbd5e1 !important;
+  }
 }
