@@ -4404,7 +4404,13 @@ class DatabaseService {
   }
 
   async saveUserAccount(userData) {
+    const currentSession = this.getCurrentUser();
     const list = this.getUsers();
+
+    if (list.length > 0 && !this.canUserManageUsers(currentSession)) {
+      throw new Error("Access Denied: Only Administrator / Software Owner can create or edit user accounts.");
+    }
+
     const cleanUsername = (userData.username || "").toLowerCase().trim();
 
     if (!cleanUsername) throw new Error("Username is required.");
@@ -4471,7 +4477,6 @@ class DatabaseService {
     this.saveUsers(list);
 
     // If current logged-in user edited their own details, update current session
-    const currentSession = this.getCurrentUser();
     if (currentSession && currentSession.id === userItem.id) {
       this.setCurrentUser(userItem);
     }
@@ -4503,6 +4508,11 @@ class DatabaseService {
   }
 
   async deleteUserAccount(id) {
+    const currentSession = this.getCurrentUser();
+    if (!this.canUserManageUsers(currentSession)) {
+      throw new Error("Access Denied: Only Administrator / Software Owner can delete user accounts.");
+    }
+
     if (id === 1) {
       throw new Error("Primary Master Admin account cannot be deleted.");
     }
@@ -4698,6 +4708,16 @@ class DatabaseService {
     }
     if (!cur.permissions || !cur.permissions.actions) return false;
     return !!cur.permissions.actions[actionKey];
+  }
+
+  canUserManageUsers(user = null) {
+    const cur = user || this.getCurrentUser();
+    if (!cur) return false;
+    const role = (cur.role || "").toLowerCase().trim();
+    if (role === "admin") return true;
+    if (cur.id === 1) return true;
+    if (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_manage_users) return true;
+    return false;
   }
 
   // -------------------------------------------------------------

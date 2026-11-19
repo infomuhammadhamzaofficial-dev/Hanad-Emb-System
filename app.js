@@ -6121,6 +6121,16 @@ function initAuthSystem() {
   }
 }
 
+function canCurrentManageUsers(user = null) {
+  if (window.db && typeof window.db.canUserManageUsers === "function") {
+    return window.db.canUserManageUsers(user);
+  }
+  const cur = user || (window.db && typeof window.db.getCurrentUser === "function" ? window.db.getCurrentUser() : null);
+  if (!cur) return false;
+  const role = (cur.role || "").toLowerCase().trim();
+  return role === "admin" || cur.id === 1 || !!(cur.permissions && cur.permissions.actions && cur.permissions.actions.can_manage_users);
+}
+
 function updateHeaderUserProfile(user) {
   if (!user) return;
   const avatarEl = document.getElementById("header-user-avatar");
@@ -6151,13 +6161,21 @@ function updateHeaderUserProfile(user) {
   }
 
   if (mgmtBtn) {
-    // Only Admin can open User Management & Permissions
-    mgmtBtn.style.display = (user.role === "admin") ? "inline-flex" : "none";
+    // Only Admin or explicitly permitted users can open User Management & Permissions
+    const canManage = canCurrentManageUsers(user);
+    if (canManage) {
+      mgmtBtn.classList.remove("is-hidden");
+      mgmtBtn.style.setProperty("display", "inline-flex", "important");
+    } else {
+      mgmtBtn.classList.add("is-hidden");
+      mgmtBtn.style.setProperty("display", "none", "important");
+    }
   }
 }
 
 function applyUserPermissions(user) {
   if (!user) return;
+  updateHeaderUserProfile(user);
 
   const tabButtons = document.querySelectorAll(".nav-tab-btn");
   const mobileNavItems = document.querySelectorAll(".mobile-nav-item");
@@ -6234,6 +6252,10 @@ function initUserManagementHandlers() {
 
   if (openMgmtBtn) {
     openMgmtBtn.addEventListener("click", () => {
+      if (!canCurrentManageUsers()) {
+        showToast("Access Denied: Only Administrator / Software Owner can manage accounts.", "error");
+        return;
+      }
       renderUsersTable();
       openModal("modal-user-management");
     });
@@ -6241,6 +6263,10 @@ function initUserManagementHandlers() {
 
   if (createNewUserBtn) {
     createNewUserBtn.addEventListener("click", () => {
+      if (!canCurrentManageUsers()) {
+        showToast("Access Denied: Only Administrator / Software Owner can create users.", "error");
+        return;
+      }
       openUserFormModal(null);
     });
   }
@@ -6274,6 +6300,21 @@ function initUserManagementHandlers() {
 function renderUsersTable() {
   const tbody = document.getElementById("tbody-users-list");
   if (!tbody) return;
+
+  const canManage = canCurrentManageUsers();
+  const createNewUserBtn = document.getElementById("btn-create-new-user");
+  if (createNewUserBtn) {
+    if (canManage) {
+      createNewUserBtn.style.setProperty("display", "inline-flex", "important");
+    } else {
+      createNewUserBtn.style.setProperty("display", "none", "important");
+    }
+  }
+
+  if (!canManage) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align: center; padding: 2rem; color: var(--accent-rose); font-weight: 600;">Access Denied: Only Administrator / Software Owner can view or manage staff accounts.</td></tr>`;
+    return;
+  }
 
   const users = window.db.getUsers();
   const currentSession = window.db.getCurrentUser();
@@ -6309,12 +6350,13 @@ function renderUsersTable() {
     const actions = u.permissions?.actions || {};
     let actionsHtml = "";
     if (u.role === "admin") {
-      actionsHtml = `<span class="badge-tag inline" style="color: #38bdf8;">Full Access (C, E, D)</span>`;
+      actionsHtml = `<span class="badge-tag inline" style="color: #38bdf8;">Full Access (All Rights)</span>`;
     } else {
       const rights = [];
       if (actions.can_create) rights.push(`<span class="badge-tag inline" style="padding: 1px 5px; font-size: 0.675rem;">➕ Create</span>`);
       if (actions.can_edit) rights.push(`<span class="badge-tag alter" style="padding: 1px 5px; font-size: 0.675rem;">✏️ Edit</span>`);
       if (actions.can_delete) rights.push(`<span class="badge-tag issue" style="padding: 1px 5px; font-size: 0.675rem;">✕ Delete</span>`);
+      if (actions.can_manage_users) rights.push(`<span class="badge-tag inline" style="color: #c084fc; padding: 1px 5px; font-size: 0.675rem;">👥 Users</span>`);
       if (rights.length === 0) rights.push(`<span class="badge-tag" style="background: rgba(148,163,184,0.1); color: #94a3b8; font-size: 0.675rem; padding: 1px 6px;">👁️ View Only</span>`);
       actionsHtml = `<div style="display: flex; flex-wrap: wrap; gap: 3px;">${rights.join("")}</div>`;
     }
@@ -6360,6 +6402,11 @@ function renderUsersTable() {
 }
 
 function openUserFormModal(userId = null) {
+  if (!canCurrentManageUsers()) {
+    showToast("Access Denied: Only Administrator / Software Owner can create or modify accounts.", "error");
+    return;
+  }
+
   const form = document.getElementById("form-user-account");
   if (form) form.reset();
 
@@ -6422,6 +6469,7 @@ function openUserFormModal(userId = null) {
     checkEl("perm-action-create", actions.can_create);
     checkEl("perm-action-edit", actions.can_edit);
     checkEl("perm-action-delete", actions.can_delete);
+    checkEl("perm-action-manage-users", actions.can_manage_users || user.role === "admin");
 
   } else {
     if (titleEl) titleEl.textContent = "Add New User Account";
@@ -6464,6 +6512,7 @@ function applyRolePreset(role) {
     checkEl("perm-action-create", true);
     checkEl("perm-action-edit", true);
     checkEl("perm-action-delete", true);
+    checkEl("perm-action-manage-users", true);
   } else if (role === "manager") {
     checkEl("perm-tab-dashboard", true);
     checkEl("perm-tab-master", true);
@@ -6477,6 +6526,7 @@ function applyRolePreset(role) {
     checkEl("perm-action-create", true);
     checkEl("perm-action-edit", true);
     checkEl("perm-action-delete", false);
+    checkEl("perm-action-manage-users", false);
   } else if (role === "operator") {
     checkEl("perm-tab-dashboard", true);
     checkEl("perm-tab-master", true);
@@ -6490,6 +6540,7 @@ function applyRolePreset(role) {
     checkEl("perm-action-create", true);
     checkEl("perm-action-edit", false);
     checkEl("perm-action-delete", false);
+    checkEl("perm-action-manage-users", false);
   } else if (role === "viewer") {
     checkEl("perm-tab-dashboard", true);
     checkEl("perm-tab-master", true);
@@ -6503,6 +6554,7 @@ function applyRolePreset(role) {
     checkEl("perm-action-create", false);
     checkEl("perm-action-edit", false);
     checkEl("perm-action-delete", false);
+    checkEl("perm-action-manage-users", false);
   }
 }
 
@@ -6531,6 +6583,11 @@ function showUserFormAlert(msg, type = "error") {
 }
 
 async function saveUserAccountFromForm() {
+  if (!canCurrentManageUsers()) {
+    showUserFormAlert("Access Denied: Only Administrator / Software Owner can save user accounts.", "error");
+    return;
+  }
+
   const alertBox = document.getElementById("modal-user-alert");
   if (alertBox) alertBox.style.display = "none";
 
@@ -6571,7 +6628,8 @@ async function saveUserAccountFromForm() {
     actions: {
       can_create: isChecked("perm-action-create"),
       can_edit: isChecked("perm-action-edit"),
-      can_delete: isChecked("perm-action-delete")
+      can_delete: isChecked("perm-action-delete"),
+      can_manage_users: isChecked("perm-action-manage-users")
     }
   };
 
@@ -6621,6 +6679,11 @@ async function saveUserAccountFromForm() {
 }
 
 async function deleteUserAccountAction(id) {
+  if (!canCurrentManageUsers()) {
+    showToast("Access Denied: Only Administrator / Software Owner can delete user accounts.", "error");
+    return;
+  }
+
   const user = window.db.getUserById(id);
   if (!user) return;
 

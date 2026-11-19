@@ -1320,6 +1320,12 @@ body {
   color: var(--text-main);
 }
 
+.btn-users-mgmt.is-hidden,
+.btn-users-mgmt[style*="display: none"],
+.btn-users-mgmt[hidden] {
+  display: none !important;
+}
+
 .btn-logout {
   color: var(--accent-rose);
   padding: 3px 7px;
@@ -4157,7 +4163,6 @@ body.auth-locked .mobile-bottom-nav {
     font-size: 0.65rem !important;
   }
 
-  .btn-users-mgmt,
   .btn-logout {
     padding: 0.2rem 0.35rem !important;
     min-width: 30px !important;
@@ -4167,6 +4172,22 @@ body.auth-locked .mobile-bottom-nav {
     align-items: center !important;
     justify-content: center !important;
     flex-shrink: 0 !important;
+  }
+
+  .btn-users-mgmt {
+    padding: 0.2rem 0.35rem !important;
+    min-width: 30px !important;
+    height: 30px !important;
+    font-size: 0.8rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    flex-shrink: 0 !important;
+  }
+
+  .btn-users-mgmt.is-hidden,
+  .btn-users-mgmt[style*="display: none"],
+  .btn-users-mgmt[hidden] {
+    display: none !important;
   }
 
   /* Mobile Sub-Bar: Clean Active Tab Chip + Compact New Style Button */
@@ -4866,6 +4887,12 @@ body.auth-locked .mobile-bottom-nav {
     height: 28px !important;
     padding: 0.15rem 0.25rem !important;
     font-size: 0.75rem !important;
+  }
+
+  .btn-users-mgmt.is-hidden,
+  .btn-users-mgmt[style*="display: none"],
+  .btn-users-mgmt[hidden] {
+    display: none !important;
   }
 
   .header-nav-row {

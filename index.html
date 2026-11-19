@@ -300,8 +300,8 @@
             <span class="user-role-tag" id="header-user-role">Admin</span>
           </div>
           <!-- Admin-Only Users Management Button -->
-          <button class="btn btn-secondary btn-sm btn-users-mgmt" id="btn-open-user-mgmt"
-            title="Manage User Accounts & Permissions">
+          <button class="btn btn-secondary btn-sm btn-users-mgmt is-hidden" id="btn-open-user-mgmt"
+            title="Manage User Accounts & Permissions" style="display: none !important;">
             <span>👥</span>
             <span class="btn-users-label">Users</span>
           </button>
@@ -981,10 +981,10 @@
           <span
             style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
             <span style="color: var(--primary); font-size: 1rem;">↔️</span>
-            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view
-              columns</span>
-          </span>
-          <span id="master-records-badge" class="table-records-badge">Updated 50 records</span>
+            <span>Use horizontal scrollbar below or side buttons to view
+              columns</sp+an>
+            </span>
+            <span id="master-records-badge" class="table-records-badge">Updated 50 records</span>
         </div>
         <div style="display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap;">
           <button type="button" class="btn btn-secondary btn-xs" id="btn-print-master-inventory"
@@ -3078,7 +3078,7 @@
             visibility, and edit/delete permissions</p>
         </div>
         <div style="display: flex; gap: 0.5rem; align-items: center;">
-          <button class="btn btn-primary btn-sm" id="btn-create-new-user">
+          <button class="btn btn-primary btn-sm" id="btn-create-new-user" style="display: none;">
             + Add New User
           </button>
           <button class="btn btn-secondary btn-icon" onclick="closeModal('modal-user-management')">✕</button>
@@ -3239,7 +3239,7 @@
               ⚡ Action Rights (Create, Edit, Delete Permissions)
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.65rem;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.65rem;">
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-action-create" checked>
                 <span>➕ Allow Add / Create</span>
@@ -3251,6 +3251,10 @@
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-action-delete">
                 <span>✕ Allow Delete</span>
+              </label>
+              <label class="perm-checkbox-card" style="border-color: rgba(99, 102, 241, 0.35);">
+                <input type="checkbox" id="perm-action-manage-users">
+                <span>👥 Allow Manage Users</span>
               </label>
             </div>
           </div>
