@@ -17,7 +17,8 @@ const DB_KEYS = {
   RATE_APPROVAL_PERIODS: "hand_emb_rate_approval_periods_v1",
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
   DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1",
-  TRASH: "hand_emb_trash_v1"
+  TRASH: "hand_emb_trash_v1",
+  WORKSPACES: "hand_emb_user_workspaces_v2"
 };
 
 // ====================================================================
@@ -4476,6 +4477,13 @@ class DatabaseService {
 
     this.saveUsers(list);
 
+    // Auto-create/ensure dedicated Excel Workspace for this user
+    try {
+      this.getWorkspaceForUser(userItem.id, userItem.username, userItem.full_name);
+    } catch (wsErr) {
+      console.warn("Auto-create user workspace error:", wsErr);
+    }
+
     // If current logged-in user edited their own details, update current session
     if (currentSession && currentSession.id === userItem.id) {
       this.setCurrentUser(userItem);
@@ -4685,6 +4693,12 @@ class DatabaseService {
     if (!cur) return false;
     if (cur.role === "admin") return true;
     if (tabKey === "dashboard") return true;
+    if (tabKey === "workspaces") {
+      if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs.workspaces !== undefined) {
+        return !!cur.permissions.tabs.workspaces;
+      }
+      return true; // Default accessible so each staff member can use their private workspace
+    }
     if (tabKey === "trash") {
       if (cur.role === "admin" || cur.role === "manager") return true;
       if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs.trash !== undefined) {
@@ -4718,6 +4732,113 @@ class DatabaseService {
     if (cur.id === 1) return true;
     if (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_manage_users) return true;
     return false;
+  }
+
+  // -------------------------------------------------------------
+  // USER EXCEL WORKSPACES & SPREADSHEETS (MULTI-SHEET RBAC)
+  // -------------------------------------------------------------
+  getUserWorkspaces() {
+    try {
+      return JSON.parse(localStorage.getItem(DB_KEYS.WORKSPACES) || "[]");
+    } catch (e) {
+      return [];
+    }
+  }
+
+  saveUserWorkspaces(list) {
+    try {
+      localStorage.setItem(DB_KEYS.WORKSPACES, JSON.stringify(list || []));
+    } catch (e) {
+      console.warn("saveUserWorkspaces error:", e);
+    }
+    this.triggerAutoSyncIfEnabled();
+  }
+
+  getWorkspaceForUser(userId, fallbackUsername = "", fallbackFullName = "") {
+    if (!userId) return null;
+    let list = this.getUserWorkspaces();
+    let ws = list.find(w => Number(w.userId) === Number(userId));
+
+    if (!ws) {
+      const userObj = this.getUserById(Number(userId));
+      const uName = userObj ? userObj.username : (fallbackUsername || `user_${userId}`);
+      const fName = userObj ? (userObj.full_name || userObj.username) : (fallbackFullName || uName);
+
+      ws = {
+        userId: Number(userId),
+        username: uName,
+        title: `${fName}'s Workspace`,
+        cols: {},
+        rows: {},
+        cells: {
+          "A1": { raw: "Style / Item Code", val: "Style / Item Code", bold: true, fontSize: 13, align: "left", bg: "#f1f5f9" },
+          "B1": { raw: "Cut Qty", val: "Cut Qty", bold: true, fontSize: 13, align: "right", bg: "#f1f5f9" },
+          "C1": { raw: "Rate / Pc", val: "Rate / Pc", bold: true, fontSize: 13, align: "right", bg: "#f1f5f9" },
+          "D1": { raw: "Total Amount", val: "Total Amount", bold: true, fontSize: 13, align: "right", bg: "#f1f5f9" },
+          "E1": { raw: "Remarks / Status", val: "Remarks / Status", bold: true, fontSize: 13, align: "left", bg: "#f1f5f9" }
+        },
+        updated_at: new Date().toISOString()
+      };
+
+      list.push(ws);
+      this.saveUserWorkspaces(list);
+
+      // Async sync to Neon if configured
+      this.syncSingleWorkspaceToNeon(ws).catch(() => null);
+    }
+    return ws;
+  }
+
+  async saveSingleWorkspace(wsData) {
+    if (!wsData || !wsData.userId) return;
+    let list = this.getUserWorkspaces();
+    const idx = list.findIndex(w => Number(w.userId) === Number(wsData.userId));
+
+    wsData.updated_at = new Date().toISOString();
+    if (idx >= 0) {
+      list[idx] = wsData;
+    } else {
+      list.push(wsData);
+    }
+
+    this.saveUserWorkspaces(list);
+    await this.syncSingleWorkspaceToNeon(wsData).catch(() => null);
+    return wsData;
+  }
+
+  async deleteUserWorkspace(userId) {
+    const cur = this.getCurrentUser();
+    if (cur.role !== "admin" && cur.id !== 1) {
+      throw new Error("Access Denied: Only Admin can delete or reset a user workspace.");
+    }
+    let list = this.getUserWorkspaces();
+    list = list.filter(w => Number(w.userId) !== Number(userId));
+    this.saveUserWorkspaces(list);
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery("DELETE FROM user_workspaces WHERE user_id = $1;", [Number(userId)]).catch(() => null);
+    }
+    return true;
+  }
+
+  async syncSingleWorkspaceToNeon(ws) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+
+    try {
+      await this.executeNeonQuery(
+        `INSERT INTO user_workspaces (user_id, username, sheet_data, updated_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE SET
+           username = EXCLUDED.username,
+           sheet_data = EXCLUDED.sheet_data,
+           updated_at = CURRENT_TIMESTAMP;`,
+        [Number(ws.userId), ws.username || "user", JSON.stringify(ws)]
+      );
+    } catch (err) {
+      console.warn("Neon sync workspace error:", err);
+    }
   }
 
   // -------------------------------------------------------------
@@ -5126,6 +5247,13 @@ class DatabaseService {
         meta JSONB,
         deleted_by VARCHAR(100),
         deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );`,
+
+      `CREATE TABLE IF NOT EXISTS user_workspaces (
+        user_id INT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL,
+        sheet_data JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
       `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`

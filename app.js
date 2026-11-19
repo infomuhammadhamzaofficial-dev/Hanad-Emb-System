@@ -32,6 +32,7 @@ function initApp() {
   try { initFormKeyboardNavigation(); } catch (e) { console.error("Keyboard nav init error:", e); }
   try { initDailyArrivalsTracker(); } catch (e) { console.error("Arrivals Tracker init error:", e); }
   try { initTrashView(); } catch (e) { console.error("Trash View init error:", e); }
+  try { initWorkspaceModule(); } catch (e) { console.error("Workspace init error:", e); }
 
   // 3. If a valid session exists, apply permissions and render
   try {
@@ -478,7 +479,7 @@ function markViewsDirty(tabId = null) {
   if (tabId) {
     dirtyViews.add(tabId);
   } else {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => dirtyViews.add(t));
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash", "workspaces"].forEach(t => dirtyViews.add(t));
   }
 }
 
@@ -508,6 +509,9 @@ function renderTargetView(tabId) {
     }
     else if (tabId === "trash") {
       renderTrashView();
+    }
+    else if (tabId === "workspaces") {
+      renderWorkspaceView();
     }
     dirtyViews.delete(tabId);
   } catch (err) {
@@ -543,6 +547,7 @@ function switchTab(tabId) {
     "work-distribution": "📑 Work Distribution",
     "payment-sheet": "💰 Payment Sheet",
     "contractors": "👥 Contractors Hub",
+    "workspaces": "📊 Excel Workspaces",
     "neon-sync": "☁️ Neon Cloud",
     "trash": "🗑️ Trash Bin"
   };
@@ -573,7 +578,7 @@ function switchTab(tabId) {
   try { document.body.scrollTop = 0; } catch (e) { }
 
   // 2. Render target view immediately
-  if (dirtyViews.has(tabId)) {
+  if (tabId === "workspaces" || dirtyViews.has(tabId)) {
     try {
       renderTargetView(tabId);
     } catch (err) {
@@ -603,7 +608,7 @@ function renderAll(forceAll = false) {
   const currentTab = getActiveTabId();
 
   if (forceAll) {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => {
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash", "workspaces"].forEach(t => {
       renderTargetView(t);
     });
   } else {
@@ -6338,10 +6343,11 @@ function renderUsersTable() {
     if (tabs.contractors) allowedTabNames.push("Contractors");
     if (tabs.work_distribution || (u.role === "admin")) allowedTabNames.push("Distribution");
     if (tabs.payment_sheet || (u.role === "admin")) allowedTabNames.push("Payment");
+    if (tabs.workspaces || (u.role === "admin")) allowedTabNames.push("Sheets");
     if (tabs.neon_sync) allowedTabNames.push("Neon");
 
     const tabsHtml = u.role === "admin"
-      ? `<span class="badge-tag inline" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">All Tabs (8/8)</span>`
+      ? `<span class="badge-tag inline" style="background: rgba(99, 102, 241, 0.15); color: #818cf8;">All Tabs (9/9)</span>`
       : allowedTabNames.length > 0
         ? `<div style="display: flex; flex-wrap: wrap; gap: 3px;">${allowedTabNames.map(t => `<span class="badge-tag" style="font-size: 0.675rem; padding: 1px 6px;">${t}</span>`).join("")}</div>`
         : `<span style="color: var(--text-faint); font-size: 0.75rem;">None</span>`;
@@ -6463,6 +6469,7 @@ function openUserFormModal(userId = null) {
     checkEl("perm-tab-cont", tabs.contractors);
     checkEl("perm-tab-dist", tabs.work_distribution !== undefined ? tabs.work_distribution : true);
     checkEl("perm-tab-payment", tabs.payment_sheet !== undefined ? tabs.payment_sheet : true);
+    checkEl("perm-tab-workspaces", tabs.workspaces !== undefined ? tabs.workspaces : true);
     checkEl("perm-tab-neon", tabs.neon_sync);
 
     const actions = user.permissions?.actions || {};
@@ -6522,6 +6529,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", true);
     checkEl("perm-tab-payment", true);
+    checkEl("perm-tab-workspaces", true);
     checkEl("perm-tab-neon", false);
     checkEl("perm-action-create", true);
     checkEl("perm-action-edit", true);
@@ -6536,6 +6544,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", false);
     checkEl("perm-tab-payment", true);
+    checkEl("perm-tab-workspaces", true);
     checkEl("perm-tab-neon", false);
     checkEl("perm-action-create", true);
     checkEl("perm-action-edit", false);
@@ -6550,6 +6559,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", true);
     checkEl("perm-tab-payment", true);
+    checkEl("perm-tab-workspaces", true);
     checkEl("perm-tab-neon", false);
     checkEl("perm-action-create", false);
     checkEl("perm-action-edit", false);
@@ -6559,7 +6569,7 @@ function applyRolePreset(role) {
 }
 
 function setAllTabCheckboxes(val) {
-  const ids = ["perm-tab-dashboard", "perm-tab-master", "perm-tab-rec", "perm-tab-dis", "perm-tab-final", "perm-tab-dist", "perm-tab-cont", "perm-tab-payment", "perm-tab-neon"];
+  const ids = ["perm-tab-dashboard", "perm-tab-master", "perm-tab-rec", "perm-tab-dis", "perm-tab-final", "perm-tab-dist", "perm-tab-cont", "perm-tab-payment", "perm-tab-workspaces", "perm-tab-neon"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.checked = val;
@@ -6623,6 +6633,7 @@ async function saveUserAccountFromForm() {
       work_distribution: isChecked("perm-tab-dist"),
       contractors: isChecked("perm-tab-cont"),
       payment_sheet: isChecked("perm-tab-payment"),
+      workspaces: isChecked("perm-tab-workspaces"),
       neon_sync: isChecked("perm-tab-neon")
     },
     actions: {
@@ -11986,7 +11997,7 @@ async function emptyTrashAction() {
     try {
       await window.db.emptyTrash();
       renderAll();
-      showToast(`Trash emptied: All ${allTrash.length} items permanently deleted.`, "info");
+      showToast("Trash has been permanently emptied.", "info");
     } catch (err) {
       showToast(`Error emptying trash: ${err.message}`, "error");
     }
@@ -11996,12 +12007,9 @@ async function emptyTrashAction() {
 function openTrashItemDetails(trashId) {
   const allTrash = window.db.getTrashItems();
   const item = allTrash.find(t => t.id === trashId);
-  if (!item) {
-    showToast("Item not found.", "error");
-    return;
-  }
+  if (!item) return;
 
-  const metaBox = document.getElementById("trash-detail-meta-box");
+  const metaBox = document.getElementById("trash-detail-meta");
   const grid = document.getElementById("trash-detail-grid");
   const btnRestore = document.getElementById("btn-trash-detail-restore");
   const btnDestroy = document.getElementById("btn-trash-detail-destroy");
@@ -13434,4 +13442,1383 @@ if (document.readyState === "loading") {
   initWhatsAppTableController();
 }
 
+// ====================================================================
+// EXCEL WORKSPACES & SPREADSHEET ENGINE (V3 - REAL-TIME EXCEL UX)
+// Multi-User RBAC, Instant Tab Render, Direct Keyboard Typing,
+// Shift + Arrow Multi-Cell Range Selection, Live Formula Engine & Mini Calculator
+// ====================================================================
 
+const wsState = {
+  currentUserId: null,
+  workspace: null,
+  activeCell: "A1",
+  anchorCell: "A1",
+  leadCell: "A1",
+  selectedRange: ["A1"],
+  isMouseDownSelecting: false,
+  isEditing: false,
+  cols: [],
+  maxRows: 60,
+  saveTimer: null,
+  calc: {
+    expr: "",
+    curr: "0",
+    op: null,
+    prev: null,
+    resetOnNext: false
+  }
+};
+
+// Initialize 26 default columns (A..Z)
+(function initDefaultCols() {
+  wsState.cols = [];
+  for (let i = 0; i < 26; i++) {
+    wsState.cols.push(String.fromCharCode(65 + i));
+  }
+})();
+
+// -------------------------------------------------------------
+// GRID COORDINATES & RANGE HELPERS
+// -------------------------------------------------------------
+
+function colLetterToIndex(colStr) {
+  let index = 0;
+  const str = (colStr || "A").toUpperCase();
+  for (let i = 0; i < str.length; i++) {
+    index = index * 26 + (str.charCodeAt(i) - 64);
+  }
+  return index - 1;
+}
+
+function indexToColLetter(index) {
+  let temp = index + 1;
+  let letter = "";
+  while (temp > 0) {
+    let mod = (temp - 1) % 26;
+    letter = String.fromCharCode(65 + mod) + letter;
+    temp = Math.floor((temp - mod) / 26);
+  }
+  return letter;
+}
+
+function expandCellRange(rangeStr) {
+  const parts = rangeStr.trim().toUpperCase().split(":");
+  if (parts.length !== 2) return [rangeStr.toUpperCase()];
+  const m1 = parts[0].match(/^([A-Z]+)(d+)$/);
+  const m2 = parts[1].match(/^([A-Z]+)(d+)$/);
+  if (!m1 || !m2) return [parts[0], parts[1]];
+
+  const c1 = colLetterToIndex(m1[1]);
+  const r1 = parseInt(m1[2], 10);
+  const c2 = colLetterToIndex(m2[1]);
+  const r2 = parseInt(m2[2], 10);
+
+  const minC = Math.min(c1, c2);
+  const maxC = Math.max(c1, c2);
+  const minR = Math.min(r1, r2);
+  const maxR = Math.max(r1, r2);
+
+  const result = [];
+  for (let c = minC; c <= maxC; c++) {
+    const colLetter = indexToColLetter(c);
+    for (let r = minR; r <= maxR; r++) {
+      result.push(`${colLetter}${r}`);
+    }
+  }
+  return result;
+}
+
+function getRangeBoundingBox(cell1, cell2) {
+  const m1 = (cell1 || "A1").toUpperCase().match(/^([A-Z]+)(d+)$/);
+  const m2 = (cell2 || "A1").toUpperCase().match(/^([A-Z]+)(d+)$/);
+  if (!m1 || !m2) {
+    return {
+      cells: [cell1 || "A1"],
+      minCol: 0, maxCol: 0,
+      minRow: 1, maxRow: 1,
+      rangeStr: cell1 || "A1"
+    };
+  }
+
+  const c1 = colLetterToIndex(m1[1]);
+  const r1 = parseInt(m1[2], 10);
+  const c2 = colLetterToIndex(m2[1]);
+  const r2 = parseInt(m2[2], 10);
+
+  const minCol = Math.min(c1, c2);
+  const maxCol = Math.max(c1, c2);
+  const minRow = Math.min(r1, r2);
+  const maxRow = Math.max(r1, r2);
+
+  const cells = [];
+  for (let c = minCol; c <= maxCol; c++) {
+    const colLetter = indexToColLetter(c);
+    for (let r = minRow; r <= maxRow; r++) {
+      cells.push(`${colLetter}${r}`);
+    }
+  }
+
+  const rangeStr = (cell1 === cell2) ? cell1 : `${indexToColLetter(minCol)}${minRow}:${indexToColLetter(maxCol)}${maxRow}`;
+  return { cells, minCol, maxCol, minRow, maxRow, rangeStr };
+}
+
+// -------------------------------------------------------------
+// FORMULA EVALUATOR ENGINE
+// -------------------------------------------------------------
+
+function safeMathCalculate(exprStr) {
+  if (!exprStr || typeof exprStr !== "string") return 0;
+  const clean = exprStr.replace(/[^0-9+\-*/().\s]/g, "");
+  if (!clean.trim()) return 0;
+  try {
+    const fn = new Function(`"use strict"; return (${clean});`);
+    const val = fn();
+    return (val !== undefined && !isNaN(val) && isFinite(val)) ? Math.round(val * 100) / 100 : 0;
+  } catch (e) {
+    return 0;
+  }
+}
+
+function getCellValueForFormula(cellId, visited) {
+  if (!wsState.workspace || !wsState.workspace.cells) return 0;
+  const c = wsState.workspace.cells[cellId];
+  if (!c || c.raw === undefined || c.raw === null || c.raw === "") return 0;
+  return evaluateWorkspaceFormula(c.raw, cellId, visited);
+}
+
+function evaluateWorkspaceFormula(rawVal, targetCellId = null, visited = new Set()) {
+  if (rawVal === undefined || rawVal === null) return "";
+  const str = String(rawVal).trim();
+  if (!str.startsWith("=")) {
+    return str; // Plain value
+  }
+
+  // Circular reference guard
+  const localVisited = new Set(visited);
+  if (targetCellId) {
+    if (localVisited.has(targetCellId)) return "#REF!";
+    localVisited.add(targetCellId);
+  }
+
+  let expr = str.substring(1).trim();
+
+  // 1. SUM function
+  expr = expr.replace(/SUM\(([^)]+)\)/gi, (match, inner) => {
+    const parts = inner.split(",");
+    let sum = 0;
+    for (const part of parts) {
+      const p = part.trim();
+      if (p.includes(":")) {
+        const cells = expandCellRange(p);
+        for (const c of cells) {
+          const val = getCellValueForFormula(c, localVisited);
+          sum += Number(val) || 0;
+        }
+      } else {
+        const val = getCellValueForFormula(p, localVisited);
+        sum += Number(val) || 0;
+      }
+    }
+    return sum;
+  });
+
+  // 2. AVERAGE function
+  expr = expr.replace(/AVERAGE\(([^)]+)\)/gi, (match, inner) => {
+    const parts = inner.split(",");
+    const vals = [];
+    for (const part of parts) {
+      const p = part.trim();
+      if (p.includes(":")) {
+        const cells = expandCellRange(p);
+        for (const c of cells) vals.push(Number(getCellValueForFormula(c, localVisited)) || 0);
+      } else {
+        vals.push(Number(getCellValueForFormula(p, localVisited)) || 0);
+      }
+    }
+    return vals.length ? (vals.reduce((a, b) => a + b, 0) / vals.length) : 0;
+  });
+
+  // 3. MIN & MAX functions
+  expr = expr.replace(/MIN\(([^)]+)\)/gi, (match, inner) => {
+    const cells = inner.includes(":") ? expandCellRange(inner) : inner.split(",").map(s => s.trim());
+    const nums = cells.map(c => Number(getCellValueForFormula(c, localVisited)) || 0);
+    return nums.length ? Math.min(...nums) : 0;
+  });
+
+  expr = expr.replace(/MAX\(([^)]+)\)/gi, (match, inner) => {
+    const cells = inner.includes(":") ? expandCellRange(inner) : inner.split(",").map(s => s.trim());
+    const nums = cells.map(c => Number(getCellValueForFormula(c, localVisited)) || 0);
+    return nums.length ? Math.max(...nums) : 0;
+  });
+
+  // 4. COUNT function
+  expr = expr.replace(/COUNT\(([^)]+)\)/gi, (match, inner) => {
+    const cells = inner.includes(":") ? expandCellRange(inner) : inner.split(",").map(s => s.trim());
+    const count = cells.filter(c => {
+      const v = getCellValueForFormula(c, localVisited);
+      return v !== "" && v !== null && !isNaN(Number(v));
+    }).length;
+    return count;
+  });
+
+  // 5. Replace single cell identifiers e.g. A1, B12 with values
+  expr = expr.replace(/\b([A-Z]+[0-9]+)\b/gi, (match) => {
+    const cellId = match.toUpperCase();
+    if (localVisited.has(cellId)) return "0";
+    const cellVal = getCellValueForFormula(cellId, localVisited);
+    const num = Number(cellVal);
+    return isNaN(num) ? 0 : num;
+  });
+
+  // 6. Evaluate remaining arithmetic expression (+, -, *, /, ())
+  return safeMathCalculate(expr);
+}
+
+// -------------------------------------------------------------
+// WORKSPACE CONTROLLER & UI HANDLERS
+// -------------------------------------------------------------
+
+function initWorkspaceModule() {
+  const btnToggleCalc = document.getElementById("btn-toggle-mini-calc");
+  const btnCloseCalc = document.getElementById("btn-close-calc");
+  const btnCalcPaste = document.getElementById("btn-calc-paste-to-cell");
+  const btnExportCsv = document.getElementById("btn-ws-export-csv");
+  const btnPrint = document.getElementById("btn-ws-print");
+  const btnReset = document.getElementById("btn-ws-reset");
+  const formulaInput = document.getElementById("ws-formula-input");
+  const btnApplyFormula = document.getElementById("btn-ws-apply-formula");
+  const userSelect = document.getElementById("ws-user-select");
+
+  // Calculator Toggle
+  if (btnToggleCalc) {
+    btnToggleCalc.addEventListener("click", () => {
+      toggleMiniCalculator();
+    });
+  }
+
+  if (btnCloseCalc) {
+    btnCloseCalc.addEventListener("click", () => {
+      const popup = document.getElementById("mini-calculator-popup");
+      if (popup) popup.style.display = "none";
+    });
+  }
+
+  // Calculator Keys
+  document.querySelectorAll(".calc-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      const key = e.currentTarget.getAttribute("data-calc");
+      handleCalculatorKey(key);
+    });
+  });
+
+  if (btnCalcPaste) {
+    btnCalcPaste.addEventListener("click", () => {
+      pasteCalculatorResultToActiveCell();
+    });
+  }
+
+  // Mobile Calculator Toggle
+  const mobCalcToggle = document.getElementById("ws-mob-calc-toggle");
+  if (mobCalcToggle) {
+    mobCalcToggle.addEventListener("click", () => {
+      toggleMiniCalculator();
+    });
+  }
+
+  // Mobile Quick Keys
+  document.querySelectorAll(".ws-mobile-chip[data-mob-key]").forEach(chip => {
+    chip.addEventListener("click", (e) => {
+      const key = e.currentTarget.getAttribute("data-mob-key");
+      handleMobileQuickKey(key);
+    });
+  });
+
+  // Formula Input
+  if (formulaInput) {
+    formulaInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        applyFormulaFromInput();
+      }
+    });
+  }
+
+  if (btnApplyFormula) {
+    btnApplyFormula.addEventListener("click", () => {
+      applyFormulaFromInput();
+    });
+  }
+
+  // Formatting Buttons
+  const btnBold = document.getElementById("ws-btn-bold");
+  const btnItalic = document.getElementById("ws-btn-italic");
+  const btnUnderline = document.getElementById("ws-btn-underline");
+  const btnFontInc = document.getElementById("ws-btn-font-inc");
+  const btnFontDec = document.getElementById("ws-btn-font-dec");
+  const btnAlignLeft = document.getElementById("ws-btn-align-left");
+  const btnAlignCenter = document.getElementById("ws-btn-align-center");
+  const btnAlignRight = document.getElementById("ws-btn-align-right");
+  const bgColorPicker = document.getElementById("ws-bg-color-picker");
+  const textColorPicker = document.getElementById("ws-text-color-picker");
+  const btnAddRow = document.getElementById("ws-btn-add-row");
+  const btnAddCol = document.getElementById("ws-btn-add-col");
+  const btnClearCell = document.getElementById("ws-btn-clear-cell");
+
+  if (btnBold) btnBold.addEventListener("click", () => toggleActiveCellFormat("bold"));
+  if (btnItalic) btnItalic.addEventListener("click", () => toggleActiveCellFormat("italic"));
+  if (btnUnderline) btnUnderline.addEventListener("click", () => toggleActiveCellFormat("underline"));
+
+  if (btnFontInc) btnFontInc.addEventListener("click", () => adjustActiveCellFontSize(1));
+  if (btnFontDec) btnFontDec.addEventListener("click", () => adjustActiveCellFontSize(-1));
+
+  if (btnAlignLeft) btnAlignLeft.addEventListener("click", () => setActiveCellAlign("left"));
+  if (btnAlignCenter) btnAlignCenter.addEventListener("click", () => setActiveCellAlign("center"));
+  if (btnAlignRight) btnAlignRight.addEventListener("click", () => setActiveCellAlign("right"));
+
+  if (bgColorPicker) {
+    bgColorPicker.addEventListener("change", (e) => {
+      setActiveCellColor("bg", e.target.value);
+    });
+  }
+
+  if (textColorPicker) {
+    textColorPicker.addEventListener("change", (e) => {
+      setActiveCellColor("color", e.target.value);
+    });
+  }
+
+  // Quick Formulas
+  const btnSum = document.getElementById("ws-btn-sum");
+  const btnSub = document.getElementById("ws-btn-sub");
+  const btnMul = document.getElementById("ws-btn-mul");
+  const btnDiv = document.getElementById("ws-btn-div");
+
+  if (btnSum) btnSum.addEventListener("click", () => insertQuickFormula("SUM"));
+  if (btnSub) btnSub.addEventListener("click", () => appendFormulaToken("-"));
+  if (btnMul) btnMul.addEventListener("click", () => appendFormulaToken("*"));
+  if (btnDiv) btnDiv.addEventListener("click", () => appendFormulaToken("/"));
+
+  if (btnAddRow) {
+    btnAddRow.addEventListener("click", () => {
+      wsState.maxRows += 10;
+      renderWorkspaceGrid();
+      showToast(`Added 10 rows (Total: ${wsState.maxRows})`, "info");
+    });
+  }
+
+  if (btnAddCol) {
+    btnAddCol.addEventListener("click", () => {
+      const nextCol = indexToColLetter(wsState.cols.length);
+      wsState.cols.push(nextCol);
+      renderWorkspaceGrid();
+      showToast(`Added Column ${nextCol}`, "info");
+    });
+  }
+
+  if (btnClearCell) {
+    btnClearCell.addEventListener("click", () => {
+      clearSelectedRangeOrActiveCell();
+    });
+  }
+
+  // Admin User Switcher
+  if (userSelect) {
+    userSelect.addEventListener("change", (e) => {
+      const newUserId = parseInt(e.target.value, 10);
+      if (newUserId) {
+        loadWorkspaceForUser(newUserId);
+      }
+    });
+  }
+
+  // Export CSV
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener("click", () => {
+      exportCurrentWorkspaceToCSV();
+    });
+  }
+
+  // Print
+  if (btnPrint) {
+    btnPrint.addEventListener("click", () => {
+      window.print();
+    });
+  }
+
+  // Reset/Clear Current Sheet (Admin Only)
+  if (btnReset) {
+    btnReset.addEventListener("click", async () => {
+      if (confirm(`Are you sure you want to reset and clear all data in "${wsState.workspace?.title || 'this sheet'}"?`)) {
+        if (wsState.workspace) {
+          wsState.workspace.cells = {};
+          renderWorkspaceGrid();
+          triggerWorkspaceAutoSave();
+          showToast("Sheet has been cleared.", "info");
+        }
+      }
+    });
+  }
+
+  // Draggable Calculator Popup on Desktop
+  initCalculatorDrag();
+
+  // Keyboard navigation on grid
+  document.removeEventListener("keydown", handleGridKeyboardNavigation);
+  document.addEventListener("keydown", handleGridKeyboardNavigation);
+
+  // Global mouseup to cancel range drag selection
+  document.removeEventListener("mouseup", onDocumentMouseUp);
+  document.addEventListener("mouseup", onDocumentMouseUp);
+}
+
+function onDocumentMouseUp() {
+  wsState.isMouseDownSelecting = false;
+}
+
+// -------------------------------------------------------------
+// WORKSPACE VIEW & GRID RENDERING
+// -------------------------------------------------------------
+
+function renderWorkspaceView() {
+  const curUser = (window.db && typeof window.db.getCurrentUser === "function") ? window.db.getCurrentUser() : null;
+  if (!curUser) return;
+
+  const isAdmin = (curUser.role && curUser.role.toLowerCase() === "admin") || curUser.id === 1;
+  const adminSelectorWrap = document.getElementById("ws-admin-selector-wrap");
+  const userBadgeWrap = document.getElementById("ws-user-badge-wrap");
+  const myUserLabel = document.getElementById("ws-my-user-label");
+  const btnReset = document.getElementById("btn-ws-reset");
+  const userSelect = document.getElementById("ws-user-select");
+
+  if (isAdmin) {
+    if (adminSelectorWrap) adminSelectorWrap.style.display = "flex";
+    if (userBadgeWrap) userBadgeWrap.style.display = "none";
+    if (btnReset) btnReset.style.display = "inline-flex";
+
+    // Populate user switcher
+    if (userSelect) {
+      const users = window.db.getUsers();
+      userSelect.innerHTML = users.map(u => {
+        return `<option value="${u.id}">${escapeHtml(u.full_name || u.username)} (@${escapeHtml(u.username)})</option>`;
+      }).join("");
+
+      if (!wsState.currentUserId || !users.some(u => u.id === wsState.currentUserId)) {
+        wsState.currentUserId = curUser.id;
+      }
+      userSelect.value = wsState.currentUserId;
+    }
+  } else {
+    // Normal user: Strictly locked to their own workspace!
+    if (adminSelectorWrap) adminSelectorWrap.style.display = "none";
+    if (userBadgeWrap) userBadgeWrap.style.display = "inline-flex";
+    if (myUserLabel) myUserLabel.textContent = `${curUser.full_name || curUser.username} (@${curUser.username})`;
+    if (btnReset) btnReset.style.display = "none";
+
+    wsState.currentUserId = curUser.id;
+  }
+
+  loadWorkspaceForUser(wsState.currentUserId);
+}
+
+function loadWorkspaceForUser(userId) {
+  if (!window.db || typeof window.db.getWorkspaceForUser !== "function") return;
+  const curUser = window.db.getCurrentUser();
+  const isAdmin = (curUser.role && curUser.role.toLowerCase() === "admin") || curUser.id === 1;
+
+  // Strict RBAC: Non-admin can NEVER load someone else's workspace
+  if (!isAdmin && curUser.id !== userId) {
+    userId = curUser.id;
+  }
+
+  wsState.currentUserId = userId;
+  wsState.workspace = window.db.getWorkspaceForUser(userId);
+
+  const titleEl = document.getElementById("ws-current-title");
+  const subtitleEl = document.getElementById("ws-current-subtitle");
+
+  if (titleEl) titleEl.textContent = wsState.workspace?.title || "My Workspace";
+  if (subtitleEl) subtitleEl.textContent = `User Sheet for @${wsState.workspace?.username || 'user'} • Live Formulas & Cell Formatting`;
+
+  renderWorkspaceGrid();
+}
+
+function renderWorkspaceGrid() {
+  const thead = document.getElementById("ws-thead");
+  const tbody = document.getElementById("ws-tbody");
+  if (!thead || !tbody || !wsState.workspace) return;
+
+  const cols = wsState.cols;
+  const maxRows = wsState.maxRows;
+  const customCols = wsState.workspace.cols || {};
+  const customRows = wsState.workspace.rows || {};
+  const cellsData = wsState.workspace.cells || {};
+
+  // 1. Build Header Row (Corner + Columns A..Z)
+  let headHtml = `<tr><th class="ws-corner-th" id="ws-corner-select" title="Select All Sheet">⬚</th>`;
+  cols.forEach(col => {
+    const widthStyle = customCols[col] ? `width: ${customCols[col]}px; min-width: ${customCols[col]}px; max-width: ${customCols[col]}px;` : `width: 100px; min-width: 70px;`;
+    headHtml += `
+      <th class="ws-col-th" data-col="${col}" style="${widthStyle}">
+        <span class="col-lbl">${col}</span>
+        <div class="col-resizer" data-col="${col}"></div>
+      </th>`;
+  });
+  headHtml += `</tr>`;
+  thead.innerHTML = headHtml;
+
+  // 2. Build Body Rows (1..maxRows)
+  let bodyHtml = "";
+  for (let r = 1; r <= maxRows; r++) {
+    const heightStyle = customRows[r] ? `height: ${customRows[r]}px; min-height: ${customRows[r]}px;` : `height: 28px;`;
+    bodyHtml += `<tr data-row="${r}" style="${heightStyle}">`;
+    bodyHtml += `
+      <th class="ws-row-th" data-row="${r}">
+        <span class="row-lbl">${r}</span>
+        <div class="row-resizer" data-row="${r}"></div>
+      </th>`;
+
+    cols.forEach(col => {
+      const cellId = `${col}${r}`;
+      const cell = cellsData[cellId] || {};
+      const evalVal = cell.raw ? evaluateWorkspaceFormula(cell.raw, cellId) : "";
+
+      let cellStyles = "";
+      if (customCols[col]) cellStyles += `width: ${customCols[col]}px; min-width: ${customCols[col]}px; max-width: ${customCols[col]}px; `;
+      if (cell.bold) cellStyles += "font-weight: 800; ";
+      if (cell.italic) cellStyles += "font-style: italic; ";
+      if (cell.underline) cellStyles += "text-decoration: underline; ";
+      if (cell.fontSize) cellStyles += `font-size: ${cell.fontSize}px; `;
+      if (cell.align) cellStyles += `text-align: ${cell.align}; `;
+      if (cell.bg) cellStyles += `background-color: ${cell.bg}; `;
+      if (cell.color) cellStyles += `color: ${cell.color}; `;
+
+      const isSelected = (wsState.activeCell === cellId);
+      const isRangeSelected = wsState.selectedRange && wsState.selectedRange.includes(cellId) && cellId !== wsState.activeCell;
+      let classes = "ws-cell";
+      if (isSelected) classes += " selected";
+      if (isRangeSelected) classes += " range-selected";
+
+      bodyHtml += `
+        <td class="${classes}" data-cell="${cellId}" data-col="${col}" data-row="${r}" style="${cellStyles}">
+          <span class="ws-cell-text">${escapeHtml(String(evalVal !== undefined && evalVal !== null ? evalVal : ''))}</span>
+        </td>`;
+    });
+    bodyHtml += `</tr>`;
+  }
+  tbody.innerHTML = bodyHtml;
+
+  // 3. Attach Cell Mouse & Touch Events for Drag Range Selection & Click
+  tbody.querySelectorAll(".ws-cell").forEach(td => {
+    td.addEventListener("mousedown", onCellMouseDown);
+    td.addEventListener("mouseenter", onCellMouseEnter);
+    td.addEventListener("dblclick", onCellDblClick);
+  });
+
+  // Corner Select All button
+  const cornerSelect = document.getElementById("ws-corner-select");
+  if (cornerSelect) {
+    cornerSelect.onclick = () => {
+      selectAllSheet();
+    };
+  }
+
+  // 4. Attach Drag Resizers
+  initResizeHandlers();
+
+  // Sync toolbar and highlights with currently active cell/range
+  highlightSelectionInDOM();
+  updateToolbarForCell(wsState.activeCell);
+}
+
+// -------------------------------------------------------------
+// CELL & RANGE SELECTION ENGINE (EXCEL BEHAVIOR)
+// -------------------------------------------------------------
+
+function selectAllSheet() {
+  if (!wsState.cols.length || !wsState.maxRows) return;
+  const topLeft = `${wsState.cols[0]}1`;
+  const bottomRight = `${wsState.cols[wsState.cols.length - 1]}${wsState.maxRows}`;
+  selectWorkspaceRange(topLeft, bottomRight);
+}
+
+function onCellMouseDown(e) {
+  // Only handle left click
+  if (e.button !== 0) return;
+  const cellId = e.currentTarget.getAttribute("data-cell");
+  if (!cellId) return;
+
+  if (e.shiftKey) {
+    // Shift + Click expands current range from anchorCell to clicked cell
+    e.preventDefault();
+    selectWorkspaceRange(wsState.anchorCell || wsState.activeCell, cellId);
+  } else {
+    wsState.isMouseDownSelecting = true;
+    selectWorkspaceCell(cellId);
+  }
+}
+
+function onCellMouseEnter(e) {
+  if (!wsState.isMouseDownSelecting) return;
+  const cellId = e.currentTarget.getAttribute("data-cell");
+  if (!cellId) return;
+  selectWorkspaceRange(wsState.anchorCell, cellId);
+}
+
+function onCellDblClick(e) {
+  const cellId = e.currentTarget.getAttribute("data-cell");
+  if (!cellId) return;
+  startEditingCell(cellId, false);
+}
+
+function selectWorkspaceCell(cellId) {
+  if (wsState.isEditing && wsState.activeCell !== cellId) {
+    commitCellEdit();
+  }
+  wsState.anchorCell = cellId;
+  wsState.leadCell = cellId;
+  wsState.activeCell = cellId;
+  selectWorkspaceRange(cellId, cellId);
+}
+
+function selectWorkspaceRange(anchor, lead) {
+  if (wsState.isEditing) {
+    commitCellEdit();
+  }
+
+  wsState.anchorCell = anchor;
+  wsState.leadCell = lead;
+  wsState.activeCell = anchor;
+
+  const box = getRangeBoundingBox(anchor, lead);
+  wsState.selectedRange = box.cells;
+
+  highlightSelectionInDOM();
+  updateToolbarForCell(wsState.anchorCell);
+}
+
+function highlightSelectionInDOM() {
+  const box = getRangeBoundingBox(wsState.anchorCell, wsState.leadCell);
+
+  // Clear previous cell classes
+  document.querySelectorAll(".ws-cell.selected").forEach(c => c.classList.remove("selected"));
+  document.querySelectorAll(".ws-cell.range-selected").forEach(c => c.classList.remove("range-selected"));
+  document.querySelectorAll(".ws-col-th.active-header, .ws-col-th.range-header").forEach(th => {
+    th.classList.remove("active-header", "range-header");
+  });
+  document.querySelectorAll(".ws-row-th.active-header, .ws-row-th.range-header").forEach(th => {
+    th.classList.remove("active-header", "range-header");
+  });
+
+  // Apply cell classes
+  wsState.selectedRange.forEach(cid => {
+    const td = document.querySelector(`.ws-cell[data-cell="${cid}"]`);
+    if (td) {
+      if (cid === wsState.anchorCell) {
+        td.classList.add("selected");
+      } else {
+        td.classList.add("range-selected");
+      }
+    }
+  });
+
+  // Highlight column headers
+  const isSingleCell = (box.minCol === box.maxCol && box.minRow === box.maxRow);
+  for (let c = box.minCol; c <= box.maxCol; c++) {
+    const colLetter = indexToColLetter(c);
+    const th = document.querySelector(`.ws-col-th[data-col="${colLetter}"]`);
+    if (th) {
+      th.classList.add(isSingleCell ? "active-header" : "range-header");
+    }
+  }
+
+  // Highlight row headers
+  for (let r = box.minRow; r <= box.maxRow; r++) {
+    const th = document.querySelector(`.ws-row-th[data-row="${r}"]`);
+    if (th) {
+      th.classList.add(isSingleCell ? "active-header" : "range-header");
+    }
+  }
+
+  // Update formula bar display label
+  const cellBox = document.getElementById("ws-active-cell-box");
+  const targetCellLabel = document.getElementById("calc-target-cell-label");
+  const mobCellTag = document.getElementById("ws-mob-cell-tag");
+
+  if (cellBox) cellBox.textContent = box.rangeStr;
+  if (targetCellLabel) targetCellLabel.textContent = wsState.anchorCell;
+  if (mobCellTag) mobCellTag.textContent = box.rangeStr;
+}
+
+function expandSelectionRange(dCol, dRow) {
+  const m = (wsState.leadCell || wsState.anchorCell).match(/^([A-Z]+)(d+)$/);
+  if (!m) return;
+  const curColIdx = colLetterToIndex(m[1]);
+  const curRow = parseInt(m[2], 10);
+
+  const newColIdx = Math.max(0, Math.min(wsState.cols.length - 1, curColIdx + dCol));
+  const newRow = Math.max(1, Math.min(wsState.maxRows, curRow + dRow));
+
+  const newLead = `${indexToColLetter(newColIdx)}${newRow}`;
+  selectWorkspaceRange(wsState.anchorCell, newLead);
+
+  const targetTd = document.querySelector(`.ws-cell[data-cell="${newLead}"]`);
+  if (targetTd && typeof targetTd.scrollIntoView === "function") {
+    targetTd.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function moveActiveCell(dCol, dRow) {
+  const m = wsState.activeCell.match(/^([A-Z]+)(d+)$/);
+  if (!m) return;
+  const curColIdx = colLetterToIndex(m[1]);
+  const curRow = parseInt(m[2], 10);
+
+  const newColIdx = Math.max(0, Math.min(wsState.cols.length - 1, curColIdx + dCol));
+  const newRow = Math.max(1, Math.min(wsState.maxRows, curRow + dRow));
+
+  const newCellId = `${indexToColLetter(newColIdx)}${newRow}`;
+  selectWorkspaceCell(newCellId);
+
+  const targetTd = document.querySelector(`.ws-cell[data-cell="${newCellId}"]`);
+  if (targetTd && typeof targetTd.scrollIntoView === "function") {
+    targetTd.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function updateToolbarForCell(cellId) {
+  const formulaInput = document.getElementById("ws-formula-input");
+  const fontSizeVal = document.getElementById("ws-font-size-val");
+  const btnBold = document.getElementById("ws-btn-bold");
+  const btnItalic = document.getElementById("ws-btn-italic");
+  const btnUnderline = document.getElementById("ws-btn-underline");
+
+  const cell = (wsState.workspace && wsState.workspace.cells) ? wsState.workspace.cells[cellId] || {} : {};
+
+  if (formulaInput && !wsState.isEditing) {
+    formulaInput.value = cell.raw !== undefined ? cell.raw : "";
+  }
+
+  if (btnBold) btnBold.classList.toggle("active", !!cell.bold);
+  if (btnItalic) btnItalic.classList.toggle("active", !!cell.italic);
+  if (btnUnderline) btnUnderline.classList.toggle("active", !!cell.underline);
+  if (fontSizeVal) fontSizeVal.textContent = `${cell.fontSize || 12}px`;
+}
+
+// -------------------------------------------------------------
+// INLINE CELL EDITING (EXCEL TYPING & BEHAVIOR)
+// -------------------------------------------------------------
+
+function startEditingCell(cellId, isReplace = false, initialChar = "") {
+  if (wsState.isEditing) commitCellEdit();
+
+  const td = document.querySelector(`.ws-cell[data-cell="${cellId}"]`);
+  if (!td || !wsState.workspace) return;
+
+  wsState.isEditing = true;
+  wsState.activeCell = cellId;
+  td.classList.add("editing");
+
+  const cell = (wsState.workspace.cells && wsState.workspace.cells[cellId]) ? wsState.workspace.cells[cellId] : {};
+  const currentRaw = cell.raw !== undefined ? cell.raw : "";
+  const initialValue = isReplace ? initialChar : currentRaw;
+
+  td.innerHTML = `<input type="text" class="ws-inline-editor" id="ws-active-inline-editor" value="${escapeHtml(String(initialValue))}">`;
+  const inp = document.getElementById("ws-active-inline-editor");
+  const formulaInput = document.getElementById("ws-formula-input");
+
+  if (formulaInput) {
+    formulaInput.value = initialValue;
+  }
+
+  if (inp) {
+    inp.focus();
+    if (isReplace) {
+      inp.setSelectionRange(initialValue.length, initialValue.length);
+    } else {
+      inp.select();
+    }
+
+    inp.addEventListener("input", () => {
+      if (formulaInput) formulaInput.value = inp.value;
+    });
+
+    inp.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commitCellEdit();
+        moveActiveCell(0, e.shiftKey ? -1 : 1);
+      } else if (e.key === "Tab") {
+        e.preventDefault();
+        commitCellEdit();
+        moveActiveCell(e.shiftKey ? -1 : 1, 0);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        cancelCellEdit();
+      }
+    });
+
+    inp.addEventListener("blur", () => {
+      if (wsState.isEditing) commitCellEdit();
+    });
+  }
+}
+
+function commitCellEdit() {
+  if (!wsState.isEditing) return;
+  const inp = document.getElementById("ws-active-inline-editor");
+  if (inp && wsState.workspace) {
+    const val = inp.value;
+    setWorkspaceCellValue(wsState.activeCell, val);
+  }
+  wsState.isEditing = false;
+  renderWorkspaceGrid();
+}
+
+function cancelCellEdit() {
+  wsState.isEditing = false;
+  renderWorkspaceGrid();
+}
+
+function setWorkspaceCellValue(cellId, rawValue) {
+  if (!wsState.workspace) return;
+  if (!wsState.workspace.cells) wsState.workspace.cells = {};
+
+  if (!wsState.workspace.cells[cellId]) {
+    wsState.workspace.cells[cellId] = {};
+  }
+
+  wsState.workspace.cells[cellId].raw = rawValue;
+  wsState.workspace.cells[cellId].val = rawValue;
+
+  triggerWorkspaceAutoSave();
+}
+
+function applyFormulaFromInput() {
+  const formulaInput = document.getElementById("ws-formula-input");
+  if (!formulaInput) return;
+  const val = formulaInput.value;
+  setWorkspaceCellValue(wsState.activeCell, val);
+  renderWorkspaceGrid();
+}
+
+// -------------------------------------------------------------
+// KEYBOARD NAVIGATION & EXCEL DIRECT TYPING
+// -------------------------------------------------------------
+
+function handleGridKeyboardNavigation(e) {
+  const activeTab = document.querySelector(".tab-view.active");
+  if (!activeTab || activeTab.id !== "workspaces-view") return;
+
+  // Don't hijack if user is typing in formula bar, calculator, modal, or inputs
+  if (document.activeElement && (
+    document.activeElement.id === "ws-formula-input" ||
+    document.activeElement.classList.contains("calc-btn") ||
+    document.activeElement.tagName === "INPUT" ||
+    document.activeElement.tagName === "TEXTAREA" ||
+    document.activeElement.tagName === "SELECT"
+  )) {
+    return;
+  }
+
+  if (wsState.isEditing) return;
+
+  // Shortcuts: Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+C
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    const k = e.key.toLowerCase();
+    if (k === "b") { e.preventDefault(); toggleActiveCellFormat("bold"); return; }
+    if (k === "i") { e.preventDefault(); toggleActiveCellFormat("italic"); return; }
+    if (k === "u") { e.preventDefault(); toggleActiveCellFormat("underline"); return; }
+    if (k === "c") { copySelectionToClipboard(); return; }
+    if (k === "v") { return; }
+  }
+
+  // Shift + Arrow Keys -> Expand selection range
+  if (e.shiftKey && (e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+    e.preventDefault();
+    if (e.key === "ArrowUp") expandSelectionRange(0, -1);
+    else if (e.key === "ArrowDown") expandSelectionRange(0, 1);
+    else if (e.key === "ArrowLeft") expandSelectionRange(-1, 0);
+    else if (e.key === "ArrowRight") expandSelectionRange(1, 0);
+    return;
+  }
+
+  // Normal Arrow Keys -> Move single cell
+  if (e.key === "ArrowUp") { e.preventDefault(); moveActiveCell(0, -1); }
+  else if (e.key === "ArrowDown") { e.preventDefault(); moveActiveCell(0, 1); }
+  else if (e.key === "ArrowLeft") { e.preventDefault(); moveActiveCell(-1, 0); }
+  else if (e.key === "ArrowRight") { e.preventDefault(); moveActiveCell(1, 0); }
+  else if (e.key === "Tab") {
+    e.preventDefault();
+    moveActiveCell(e.shiftKey ? -1 : 1, 0);
+  }
+  else if (e.key === "Enter" || e.key === "F2") {
+    e.preventDefault();
+    startEditingCell(wsState.activeCell, false);
+  }
+  else if (e.key === "Delete" || e.key === "Backspace") {
+    e.preventDefault();
+    clearSelectedRangeOrActiveCell();
+  }
+  else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    // Printable character pressed on cell -> Excel Behavior: Begin editing immediately with that character!
+    e.preventDefault();
+    startEditingCell(wsState.activeCell, true, e.key);
+  }
+}
+
+// -------------------------------------------------------------
+// MULTI-CELL FORMATTING & ACTIONS
+// -------------------------------------------------------------
+
+function getSelectedCellsList() {
+  if (wsState.selectedRange && wsState.selectedRange.length > 0) {
+    return wsState.selectedRange;
+  }
+  return [wsState.activeCell || "A1"];
+}
+
+function getOrCreateCell(cellId) {
+  if (!wsState.workspace) return {};
+  if (!wsState.workspace.cells) wsState.workspace.cells = {};
+  if (!wsState.workspace.cells[cellId]) {
+    wsState.workspace.cells[cellId] = { raw: "" };
+  }
+  return wsState.workspace.cells[cellId];
+}
+
+function toggleActiveCellFormat(formatKey) {
+  if (!wsState.workspace) return;
+  const cells = getSelectedCellsList();
+  const first = getOrCreateCell(cells[0]);
+  const newVal = !first[formatKey];
+
+  cells.forEach(cid => {
+    const c = getOrCreateCell(cid);
+    c[formatKey] = newVal;
+  });
+
+  renderWorkspaceGrid();
+  triggerWorkspaceAutoSave();
+}
+
+function adjustActiveCellFontSize(delta) {
+  if (!wsState.workspace) return;
+  const cells = getSelectedCellsList();
+  const first = getOrCreateCell(cells[0]);
+  const currentSize = first.fontSize || 12;
+  const newSize = Math.max(10, Math.min(26, currentSize + delta));
+
+  cells.forEach(cid => {
+    const c = getOrCreateCell(cid);
+    c.fontSize = newSize;
+  });
+
+  renderWorkspaceGrid();
+  triggerWorkspaceAutoSave();
+}
+
+function setActiveCellAlign(alignVal) {
+  if (!wsState.workspace) return;
+  const cells = getSelectedCellsList();
+  cells.forEach(cid => {
+    const c = getOrCreateCell(cid);
+    c.align = alignVal;
+  });
+
+  renderWorkspaceGrid();
+  triggerWorkspaceAutoSave();
+}
+
+function setActiveCellColor(type, colorVal) {
+  if (!wsState.workspace) return;
+  const cells = getSelectedCellsList();
+  cells.forEach(cid => {
+    const c = getOrCreateCell(cid);
+    c[type] = colorVal;
+  });
+
+  renderWorkspaceGrid();
+  triggerWorkspaceAutoSave();
+}
+
+function clearSelectedRangeOrActiveCell() {
+  if (!wsState.workspace || !wsState.workspace.cells) return;
+  const cells = getSelectedCellsList();
+  cells.forEach(cid => {
+    delete wsState.workspace.cells[cid];
+  });
+  renderWorkspaceGrid();
+  triggerWorkspaceAutoSave();
+  showToast(`Cleared ${cells.length} cell(s)`, "info");
+}
+
+function insertQuickFormula(fnName) {
+  const formulaInput = document.getElementById("ws-formula-input");
+  let formulaText = "";
+
+  if (wsState.selectedRange && wsState.selectedRange.length > 1) {
+    const box = getRangeBoundingBox(wsState.anchorCell, wsState.leadCell);
+    formulaText = `=${fnName}(${box.rangeStr})`;
+  } else {
+    // Single cell: Detect column numbers above
+    const m = wsState.activeCell.match(/^([A-Z]+)(d+)$/);
+    if (m) {
+      const col = m[1];
+      const row = parseInt(m[2], 10);
+      const startRow = Math.max(1, row - 5);
+      formulaText = `=${fnName}(${col}${startRow}:${col}${Math.max(1, row - 1)})`;
+    } else {
+      formulaText = `=${fnName}(A1:A5)`;
+    }
+  }
+
+  if (formulaInput) formulaInput.value = formulaText;
+  setWorkspaceCellValue(wsState.activeCell, formulaText);
+  renderWorkspaceGrid();
+}
+
+function appendFormulaToken(token) {
+  const formulaInput = document.getElementById("ws-formula-input");
+  if (!formulaInput) return;
+  let cur = formulaInput.value.trim();
+  if (!cur) cur = "=";
+  if (!cur.startsWith("=")) cur = "=" + cur;
+  formulaInput.value = cur + token;
+  formulaInput.focus();
+}
+
+function copySelectionToClipboard() {
+  const cells = getSelectedCellsList();
+  if (cells.length === 1) {
+    const c = wsState.workspace?.cells?.[cells[0]];
+    const val = c?.raw !== undefined ? c.raw : "";
+    if (navigator.clipboard) navigator.clipboard.writeText(String(val));
+  } else {
+    const box = getRangeBoundingBox(wsState.anchorCell, wsState.leadCell);
+    let tsv = "";
+    for (let r = box.minRow; r <= box.maxRow; r++) {
+      const rowVals = [];
+      for (let c = box.minCol; c <= box.maxCol; c++) {
+        const colLetter = indexToColLetter(c);
+        const cell = wsState.workspace?.cells?.[colLetter + r];
+        rowVals.push(cell?.raw !== undefined ? cell.raw : "");
+      }
+      tsv += rowVals.join("\t") + "\n";
+    }
+    if (navigator.clipboard) navigator.clipboard.writeText(tsv);
+  }
+}
+
+// -------------------------------------------------------------
+// RESIZING HANDLERS (DESKTOP & TOUCH MOBILE)
+// -------------------------------------------------------------
+
+function initResizeHandlers() {
+  // Column Width Resizing
+  document.querySelectorAll(".col-resizer").forEach(handle => {
+    let startX = 0;
+    let startWidth = 0;
+    let targetCol = null;
+
+    const onPointerMove = (e) => {
+      const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+      if (!clientX) return;
+      const delta = clientX - startX;
+      const newWidth = Math.max(50, Math.min(600, startWidth + delta));
+      if (!wsState.workspace.cols) wsState.workspace.cols = {};
+      wsState.workspace.cols[targetCol] = newWidth;
+
+      // Apply live width to header and all cells in column
+      const th = document.querySelector(`.ws-col-th[data-col="${targetCol}"]`);
+      if (th) {
+        th.style.width = `${newWidth}px`;
+        th.style.minWidth = `${newWidth}px`;
+        th.style.maxWidth = `${newWidth}px`;
+      }
+      document.querySelectorAll(`.ws-cell[data-col="${targetCol}"]`).forEach(td => {
+        td.style.width = `${newWidth}px`;
+        td.style.minWidth = `${newWidth}px`;
+        td.style.maxWidth = `${newWidth}px`;
+      });
+    };
+
+    const onPointerUp = () => {
+      document.removeEventListener("mousemove", onPointerMove);
+      document.removeEventListener("mouseup", onPointerUp);
+      document.removeEventListener("touchmove", onPointerMove);
+      document.removeEventListener("touchend", onPointerUp);
+      triggerWorkspaceAutoSave();
+    };
+
+    const onPointerDown = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      targetCol = handle.getAttribute("data-col");
+      startX = e.clientX || (e.touches && e.touches[0].clientX);
+      const th = document.querySelector(`.ws-col-th[data-col="${targetCol}"]`);
+      startWidth = th ? th.offsetWidth : 100;
+
+      document.addEventListener("mousemove", onPointerMove);
+      document.addEventListener("mouseup", onPointerUp);
+      document.addEventListener("touchmove", onPointerMove, { passive: false });
+      document.addEventListener("touchend", onPointerUp);
+    };
+
+    handle.addEventListener("mousedown", onPointerDown);
+    handle.addEventListener("touchstart", onPointerDown, { passive: false });
+  });
+
+  // Row Height Resizing
+  document.querySelectorAll(".row-resizer").forEach(handle => {
+    let startY = 0;
+    let startHeight = 0;
+    let targetRow = null;
+
+    const onPointerMove = (e) => {
+      const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+      if (!clientY) return;
+      const delta = clientY - startY;
+      const newHeight = Math.max(22, Math.min(200, startHeight + delta));
+      if (!wsState.workspace.rows) wsState.workspace.rows = {};
+      wsState.workspace.rows[targetRow] = newHeight;
+
+      const tr = document.querySelector(`tr[data-row="${targetRow}"]`);
+      if (tr) {
+        tr.style.height = `${newHeight}px`;
+        tr.style.minHeight = `${newHeight}px`;
+      }
+    };
+
+    const onPointerUp = () => {
+      document.removeEventListener("mousemove", onPointerMove);
+      document.removeEventListener("mouseup", onPointerUp);
+      document.removeEventListener("touchmove", onPointerMove);
+      document.removeEventListener("touchend", onPointerUp);
+      triggerWorkspaceAutoSave();
+    };
+
+    const onPointerDown = (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      targetRow = parseInt(handle.getAttribute("data-row"), 10);
+      startY = e.clientY || (e.touches && e.touches[0].clientY);
+      const tr = document.querySelector(`tr[data-row="${targetRow}"]`);
+      startHeight = tr ? tr.offsetHeight : 28;
+
+      document.addEventListener("mousemove", onPointerMove);
+      document.addEventListener("mouseup", onPointerUp);
+      document.addEventListener("touchmove", onPointerMove, { passive: false });
+      document.addEventListener("touchend", onPointerUp);
+    };
+
+    handle.addEventListener("mousedown", onPointerDown);
+    handle.addEventListener("touchstart", onPointerDown, { passive: false });
+  });
+}
+
+// -------------------------------------------------------------
+// BUILT-IN MINI CALCULATOR & DOCK
+// -------------------------------------------------------------
+
+function toggleMiniCalculator() {
+  const popup = document.getElementById("mini-calculator-popup");
+  if (!popup) return;
+  const isHidden = (popup.style.display === "none" || !popup.style.display);
+  popup.style.display = isHidden ? "block" : "none";
+  if (isHidden) {
+    updateCalculatorDisplay();
+  }
+}
+
+function handleCalculatorKey(key) {
+  const calc = wsState.calc;
+
+  if (key === "C") {
+    calc.expr = "";
+    calc.curr = "0";
+    calc.op = null;
+    calc.prev = null;
+    calc.resetOnNext = false;
+  } else if (key === "CE") {
+    calc.curr = "0";
+  } else if (key === "BACK") {
+    if (calc.curr.length > 1) {
+      calc.curr = calc.curr.slice(0, -1);
+    } else {
+      calc.curr = "0";
+    }
+  } else if (key === "+/-") {
+    if (calc.curr !== "0") {
+      calc.curr = calc.curr.startsWith("-") ? calc.curr.substring(1) : "-" + calc.curr;
+    }
+  } else if (key === "%") {
+    calc.curr = String(Number(calc.curr) / 100);
+  } else if (key === ".") {
+    if (!calc.curr.includes(".")) {
+      calc.curr += ".";
+    }
+  } else if (["+", "-", "*", "/"].includes(key)) {
+    if (calc.op && !calc.resetOnNext) {
+      calc.prev = safeEvaluateCalculatorExpr(calc.prev, calc.op, calc.curr);
+      calc.curr = String(calc.prev);
+    } else {
+      calc.prev = Number(calc.curr);
+    }
+    calc.op = key;
+    calc.expr = `${calc.prev} ${key}`;
+    calc.resetOnNext = true;
+  } else if (key === "=") {
+    if (calc.op && calc.prev !== null) {
+      calc.expr = `${calc.prev} ${calc.op} ${calc.curr} =`;
+      calc.curr = String(safeEvaluateCalculatorExpr(calc.prev, calc.op, calc.curr));
+      calc.op = null;
+      calc.prev = null;
+      calc.resetOnNext = true;
+    }
+  } else {
+    // Number digits 0..9
+    if (calc.resetOnNext || calc.curr === "0") {
+      calc.curr = key;
+      calc.resetOnNext = false;
+    } else {
+      calc.curr += key;
+    }
+  }
+
+  updateCalculatorDisplay();
+}
+
+function safeEvaluateCalculatorExpr(a, op, b) {
+  const n1 = Number(a) || 0;
+  const n2 = Number(b) || 0;
+  let res = 0;
+  if (op === "+") res = n1 + n2;
+  else if (op === "-") res = n1 - n2;
+  else if (op === "*") res = n1 * n2;
+  else if (op === "/") res = n2 !== 0 ? n1 / n2 : 0;
+  return Math.round(res * 10000) / 10000;
+}
+
+function updateCalculatorDisplay() {
+  const exprEl = document.getElementById("calc-display-expression");
+  const valEl = document.getElementById("calc-display-value");
+  if (exprEl) exprEl.textContent = wsState.calc.expr;
+  if (valEl) valEl.textContent = wsState.calc.curr;
+}
+
+function pasteCalculatorResultToActiveCell() {
+  const result = wsState.calc.curr;
+  setWorkspaceCellValue(wsState.activeCell, result);
+  renderWorkspaceGrid();
+  showToast(`Pasted "${result}" into ${wsState.activeCell}`, "success");
+}
+
+function handleMobileQuickKey(key) {
+  if (key === "SUM") {
+    insertQuickFormula("SUM");
+  } else if (key === "CLR") {
+    clearSelectedRangeOrActiveCell();
+  } else {
+    appendFormulaToken(key);
+  }
+}
+
+function initCalculatorDrag() {
+  const popup = document.getElementById("mini-calculator-popup");
+  const header = document.querySelector(".calc-header");
+  if (!popup || !header) return;
+
+  let isDragging = false;
+  let offsetX = 0;
+  let offsetY = 0;
+
+  header.addEventListener("mousedown", (e) => {
+    isDragging = true;
+    offsetX = e.clientX - popup.offsetLeft;
+    offsetY = e.clientY - popup.offsetTop;
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+  });
+
+  function onMouseMove(e) {
+    if (!isDragging) return;
+    popup.style.left = (e.clientX - offsetX) + "px";
+    popup.style.top = (e.clientY - offsetY) + "px";
+    popup.style.right = "auto";
+  }
+
+  function onMouseUp() {
+    isDragging = false;
+    document.removeEventListener("mousemove", onMouseMove);
+    document.removeEventListener("mouseup", onMouseUp);
+  }
+}
+
+// -------------------------------------------------------------
+// AUTO-SAVE & CSV EXPORT ENGINE
+// -------------------------------------------------------------
+
+function triggerWorkspaceAutoSave() {
+  const statusEl = document.getElementById("ws-save-status");
+  if (statusEl) {
+    statusEl.innerHTML = `<span style="color: var(--warning);">⏳ Saving...</span>`;
+  }
+
+  if (wsState.saveTimer) clearTimeout(wsState.saveTimer);
+  wsState.saveTimer = setTimeout(async () => {
+    await saveWorkspaceImmediately();
+  }, 1000);
+}
+
+async function saveWorkspaceImmediately() {
+  if (!wsState.workspace || !wsState.currentUserId || !window.db) return;
+  const statusEl = document.getElementById("ws-save-status");
+
+  try {
+    await window.db.saveSingleWorkspace(wsState.currentUserId, wsState.workspace);
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color: var(--primary);">✓ Auto-saved</span>`;
+    }
+  } catch (err) {
+    console.error("Workspace save error:", err);
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color: var(--accent-rose);">⚠️ Save Failed</span>`;
+    }
+  }
+}
+
+function exportCurrentWorkspaceToCSV() {
+  if (!wsState.workspace) return;
+  const cells = wsState.workspace.cells || {};
+  const cols = wsState.cols;
+  const rows = wsState.maxRows;
+
+  let csvContent = "";
+
+  // Header line
+  csvContent += cols.join(",") + "\r\n";
+
+  for (let r = 1; r <= rows; r++) {
+    const rowVals = cols.map(col => {
+      const cell = cells[`${col}${r}`];
+      if (!cell || cell.raw === undefined) return '""';
+      const evaluated = evaluateWorkspaceFormula(cell.raw, `${col}${r}`);
+      const str = String(evaluated).replace(/"/g, '""');
+      return `"${str}"`;
+    });
+    // Check if entire row is empty
+    if (rowVals.some(v => v !== '""')) {
+      csvContent += rowVals.join(",") + "\r\n";
+    }
+  }
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `${(wsState.workspace.username || 'staff')}_workspace.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("✓ CSV Export complete!", "success");
+}

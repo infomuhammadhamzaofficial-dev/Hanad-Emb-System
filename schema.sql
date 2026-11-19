@@ -161,3 +161,12 @@ CREATE TABLE IF NOT EXISTS trash_items (
 );
 CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
 
+-- 10. User Excel Workspaces & Spreadsheets (Multi-Sheet RBAC)
+CREATE TABLE IF NOT EXISTS user_workspaces (
+    user_id INT PRIMARY KEY,
+    username VARCHAR(50) NOT NULL,
+    sheet_data JSONB NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_workspaces_user ON user_workspaces(user_id);
+

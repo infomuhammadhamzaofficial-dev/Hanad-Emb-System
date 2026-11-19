@@ -33,7 +33,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=37">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="shortcut icon" href="icon-192.png">
 </head>
@@ -398,6 +398,17 @@
             <span class="tab-label">Contractors</span>
           </button>
 
+          <button class="nav-tab-btn" data-tab="workspaces" id="nav-btn-workspaces" title="Excel Workspaces & Staff Sheets">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="3" y1="9" x2="21" y2="9"></line>
+              <line x1="3" y1="15" x2="21" y2="15"></line>
+              <line x1="9" y1="3" x2="9" y2="21"></line>
+              <line x1="15" y1="3" x2="15" y2="21"></line>
+            </svg>
+            <span class="tab-label">Workspaces</span>
+          </button>
+
           <button class="nav-tab-btn" data-tab="neon-sync">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
@@ -523,6 +534,11 @@
       <button type="button" class="mobile-nav-item" data-tab="contractors">
         <span class="nav-item-icon">👥</span>
         <span class="nav-item-text">Contractors Hub</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="workspaces" id="mobile-nav-btn-workspaces">
+        <span class="nav-item-icon">📊</span>
+        <span class="nav-item-text">Excel Workspaces</span>
       </button>
 
       <button type="button" class="mobile-nav-item" data-tab="neon-sync">
@@ -1055,6 +1071,230 @@
         </div>
       </div>
     </section>
+    <!-- ============================================================== -->
+    <!-- TAB 10: USER EXCEL WORKSPACES & SPREADSHEETS                   -->
+    <!-- Dedicated Multi-Sheet Workspace per User with Mini Calculator  -->
+    <!-- ============================================================== -->
+    <section id="workspaces-view" class="tab-view" role="region" aria-label="Excel Workspaces" aria-hidden="true" style="display: none;">
+      
+      <!-- Top Control Bar: Workspace Switcher, Title, Auto-save Badge & Actions -->
+      <div class="workspace-header-bar">
+        <div class="ws-header-left">
+          <div class="ws-title-box">
+            <span class="ws-sheet-icon">📊</span>
+            <div>
+              <h2 class="ws-title" id="ws-current-title">My Workspace</h2>
+              <div class="ws-subtitle" id="ws-current-subtitle">Live User Spreadsheet with Formula Engine</div>
+            </div>
+          </div>
+
+          <!-- Admin-Only Workspace Selector (Hidden for standard staff) -->
+          <div class="ws-user-select-wrap" id="ws-admin-selector-wrap" style="display: none;">
+            <label for="ws-user-select" class="ws-label-chip">Switch Staff Sheet:</label>
+            <select id="ws-user-select" class="form-select ws-user-select">
+              <!-- Dynamically populated with all users -->
+            </select>
+          </div>
+
+          <!-- Non-Admin User Chip -->
+          <div class="ws-user-badge-wrap" id="ws-user-badge-wrap" style="display: none;">
+            <span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; padding: 4px 10px; font-size: 0.775rem;">
+              👤 <span id="ws-my-user-label">My Private Sheet</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ws-header-right">
+          <span class="ws-save-status" id="ws-save-status">
+            <span class="status-dot-green"></span>
+            <span id="ws-save-text">✓ Auto-saved</span>
+          </span>
+
+          <!-- Calculator Toggle Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-calc" id="btn-toggle-mini-calc" title="Open Built-in Calculator">
+            <span>🧮</span>
+            <span class="hide-mobile">Calculator</span>
+          </button>
+
+          <!-- Export CSV -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-export-csv" title="Export Current Sheet to CSV">
+            <span>📥</span>
+            <span class="hide-mobile">CSV</span>
+          </button>
+
+          <!-- Print Sheet -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-print" title="Print Sheet">
+            <span>🖨️</span>
+            <span class="hide-mobile">Print</span>
+          </button>
+
+          <!-- Admin-Only Delete/Reset Workspace Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-danger" id="btn-ws-reset" title="Clear/Reset Current Sheet" style="display: none; color: var(--accent-rose);">
+            <span>🗑️</span>
+            <span class="hide-mobile">Clear Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel Toolbar Container -->
+      <div class="workspace-toolbar-container">
+        
+        <!-- Row 1: Formula Bar -->
+        <div class="ws-formula-bar">
+          <div class="ws-cell-name-box" id="ws-active-cell-box" title="Selected Cell">A1</div>
+          <div class="ws-fx-icon" title="Formula"><em>f<sub>x</sub></em></div>
+          <input type="text" id="ws-formula-input" class="ws-formula-input" placeholder="Type text, number or formula e.g. =SUM(A1:A10), =B1*C1, =100-20..." autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-formula-enter" id="btn-ws-apply-formula" title="Apply Formula (Enter)">✓</button>
+        </div>
+
+        <!-- Row 2: Formatting & Quick Math Bar -->
+        <div class="ws-formatting-bar">
+          <!-- Text Styling -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-italic" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Font Size -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-dec" title="Decrease Font Size">A-</button>
+            <span class="ws-font-size-display" id="ws-font-size-val">12px</span>
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-inc" title="Increase Font Size">A+</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Alignment -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-left" title="Align Left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="15" y2="12"></line><line x1="3" y1="18" x2="18" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-center" title="Align Center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="6" y1="12" x2="18" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-right" title="Align Right">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="6" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Colors -->
+          <div class="ws-tool-group">
+            <label class="ws-color-label" title="Cell Background Color">
+              <span class="ws-color-icon">🎨</span>
+              <input type="color" id="ws-bg-color-picker" value="#ffffff" class="ws-color-input">
+            </label>
+            <label class="ws-color-label" title="Text Color">
+              <span class="ws-color-icon" style="font-weight: 900; color: #ef4444;">A</span>
+              <input type="color" id="ws-text-color-picker" value="#0f172a" class="ws-color-input">
+            </label>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Quick Formulas -->
+          <div class="ws-tool-group ws-formulas-group">
+            <span class="ws-group-label hide-mobile">Formulas:</span>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sum" title="Insert SUM formula">=SUM</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sub" title="Subtract">-</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-mul" title="Multiply">*</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-div" title="Divide">/</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Grid Expansion -->
+          <div class="ws-tool-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-row" title="Add 10 more rows">+10 Rows</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-col" title="Add column">+ Col</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-clear-cell" title="Clear current cell">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Spreadsheet Scroll Container -->
+      <div class="workspace-grid-wrapper" id="ws-grid-wrapper">
+        <div class="workspace-grid-scroller" id="ws-grid-scroller">
+          <table class="workspace-table" id="ws-sheet-table">
+            <thead id="ws-thead">
+              <!-- Dynamically rendered column headers: A, B, C... with resize handles -->
+            </thead>
+            <tbody id="ws-tbody">
+              <!-- Dynamically rendered rows: 1..50 with resize handles & cells -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Floating Inbuilt Mini Calculator Widget -->
+      <div class="mini-calculator-popup" id="mini-calculator-popup" style="display: none;">
+        <div class="calc-header" id="calc-header-drag">
+          <div class="calc-title">
+            <span>🧮</span>
+            <span>Sheet Calculator</span>
+          </div>
+          <button type="button" class="calc-close-btn" id="btn-close-calc" title="Close Calculator">✕</button>
+        </div>
+
+        <div class="calc-body">
+          <div class="calc-screen">
+            <div class="calc-expr" id="calc-screen-expr">0</div>
+            <div class="calc-curr" id="calc-screen-curr">0</div>
+          </div>
+
+          <div class="calc-keypad">
+            <button type="button" class="calc-btn calc-btn-op" data-calc="C">C</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="CE">CE</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="BACK">⌫</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="/">÷</button>
+
+            <button type="button" class="calc-btn" data-calc="7">7</button>
+            <button type="button" class="calc-btn" data-calc="8">8</button>
+            <button type="button" class="calc-btn" data-calc="9">9</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="*">×</button>
+
+            <button type="button" class="calc-btn" data-calc="4">4</button>
+            <button type="button" class="calc-btn" data-calc="5">5</button>
+            <button type="button" class="calc-btn" data-calc="6">6</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="-">−</button>
+
+            <button type="button" class="calc-btn" data-calc="1">1</button>
+            <button type="button" class="calc-btn" data-calc="2">2</button>
+            <button type="button" class="calc-btn" data-calc="3">3</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="+">+</button>
+
+            <button type="button" class="calc-btn" data-calc="NEG">±</button>
+            <button type="button" class="calc-btn" data-calc="0">0</button>
+            <button type="button" class="calc-btn" data-calc=".">.</button>
+            <button type="button" class="calc-btn calc-btn-eq" data-calc="=">=</button>
+          </div>
+
+          <div class="calc-actions">
+            <button type="button" class="btn btn-primary btn-block btn-sm" id="btn-calc-paste-to-cell" title="Insert result into selected cell">
+              📋 Paste into Cell (<span id="calc-target-cell-label">A1</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Quick Bar (Docked above bottom) -->
+      <div class="ws-mobile-dock-bar" id="ws-mobile-dock-bar">
+        <button type="button" class="ws-mobile-chip" id="ws-mob-cell-tag">A1</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="=">=</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="+">+</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="-">−</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="*">×</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="/">÷</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="SUM">SUM</button>
+        <button type="button" class="ws-mobile-chip ws-mob-calc-chip" id="ws-mob-calc-toggle">🧮</button>
+      </div>
+
+    </section>
 
     <!-- ============================================================== -->
     <!-- TAB 2: INWARD RECEIVING LOG (Dedicated Line Item Table)         -->
@@ -1217,6 +1457,230 @@
         </div>
       </div>
     </section>
+    <!-- ============================================================== -->
+    <!-- TAB 10: USER EXCEL WORKSPACES & SPREADSHEETS                   -->
+    <!-- Dedicated Multi-Sheet Workspace per User with Mini Calculator  -->
+    <!-- ============================================================== -->
+    <section id="workspaces-view" class="tab-view" role="region" aria-label="Excel Workspaces" aria-hidden="true" style="display: none;">
+      
+      <!-- Top Control Bar: Workspace Switcher, Title, Auto-save Badge & Actions -->
+      <div class="workspace-header-bar">
+        <div class="ws-header-left">
+          <div class="ws-title-box">
+            <span class="ws-sheet-icon">📊</span>
+            <div>
+              <h2 class="ws-title" id="ws-current-title">My Workspace</h2>
+              <div class="ws-subtitle" id="ws-current-subtitle">Live User Spreadsheet with Formula Engine</div>
+            </div>
+          </div>
+
+          <!-- Admin-Only Workspace Selector (Hidden for standard staff) -->
+          <div class="ws-user-select-wrap" id="ws-admin-selector-wrap" style="display: none;">
+            <label for="ws-user-select" class="ws-label-chip">Switch Staff Sheet:</label>
+            <select id="ws-user-select" class="form-select ws-user-select">
+              <!-- Dynamically populated with all users -->
+            </select>
+          </div>
+
+          <!-- Non-Admin User Chip -->
+          <div class="ws-user-badge-wrap" id="ws-user-badge-wrap" style="display: none;">
+            <span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; padding: 4px 10px; font-size: 0.775rem;">
+              👤 <span id="ws-my-user-label">My Private Sheet</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ws-header-right">
+          <span class="ws-save-status" id="ws-save-status">
+            <span class="status-dot-green"></span>
+            <span id="ws-save-text">✓ Auto-saved</span>
+          </span>
+
+          <!-- Calculator Toggle Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-calc" id="btn-toggle-mini-calc" title="Open Built-in Calculator">
+            <span>🧮</span>
+            <span class="hide-mobile">Calculator</span>
+          </button>
+
+          <!-- Export CSV -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-export-csv" title="Export Current Sheet to CSV">
+            <span>📥</span>
+            <span class="hide-mobile">CSV</span>
+          </button>
+
+          <!-- Print Sheet -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-print" title="Print Sheet">
+            <span>🖨️</span>
+            <span class="hide-mobile">Print</span>
+          </button>
+
+          <!-- Admin-Only Delete/Reset Workspace Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-danger" id="btn-ws-reset" title="Clear/Reset Current Sheet" style="display: none; color: var(--accent-rose);">
+            <span>🗑️</span>
+            <span class="hide-mobile">Clear Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel Toolbar Container -->
+      <div class="workspace-toolbar-container">
+        
+        <!-- Row 1: Formula Bar -->
+        <div class="ws-formula-bar">
+          <div class="ws-cell-name-box" id="ws-active-cell-box" title="Selected Cell">A1</div>
+          <div class="ws-fx-icon" title="Formula"><em>f<sub>x</sub></em></div>
+          <input type="text" id="ws-formula-input" class="ws-formula-input" placeholder="Type text, number or formula e.g. =SUM(A1:A10), =B1*C1, =100-20..." autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-formula-enter" id="btn-ws-apply-formula" title="Apply Formula (Enter)">✓</button>
+        </div>
+
+        <!-- Row 2: Formatting & Quick Math Bar -->
+        <div class="ws-formatting-bar">
+          <!-- Text Styling -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-italic" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Font Size -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-dec" title="Decrease Font Size">A-</button>
+            <span class="ws-font-size-display" id="ws-font-size-val">12px</span>
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-inc" title="Increase Font Size">A+</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Alignment -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-left" title="Align Left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="15" y2="12"></line><line x1="3" y1="18" x2="18" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-center" title="Align Center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="6" y1="12" x2="18" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-right" title="Align Right">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="6" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Colors -->
+          <div class="ws-tool-group">
+            <label class="ws-color-label" title="Cell Background Color">
+              <span class="ws-color-icon">🎨</span>
+              <input type="color" id="ws-bg-color-picker" value="#ffffff" class="ws-color-input">
+            </label>
+            <label class="ws-color-label" title="Text Color">
+              <span class="ws-color-icon" style="font-weight: 900; color: #ef4444;">A</span>
+              <input type="color" id="ws-text-color-picker" value="#0f172a" class="ws-color-input">
+            </label>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Quick Formulas -->
+          <div class="ws-tool-group ws-formulas-group">
+            <span class="ws-group-label hide-mobile">Formulas:</span>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sum" title="Insert SUM formula">=SUM</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sub" title="Subtract">-</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-mul" title="Multiply">*</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-div" title="Divide">/</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Grid Expansion -->
+          <div class="ws-tool-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-row" title="Add 10 more rows">+10 Rows</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-col" title="Add column">+ Col</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-clear-cell" title="Clear current cell">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Spreadsheet Scroll Container -->
+      <div class="workspace-grid-wrapper" id="ws-grid-wrapper">
+        <div class="workspace-grid-scroller" id="ws-grid-scroller">
+          <table class="workspace-table" id="ws-sheet-table">
+            <thead id="ws-thead">
+              <!-- Dynamically rendered column headers: A, B, C... with resize handles -->
+            </thead>
+            <tbody id="ws-tbody">
+              <!-- Dynamically rendered rows: 1..50 with resize handles & cells -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Floating Inbuilt Mini Calculator Widget -->
+      <div class="mini-calculator-popup" id="mini-calculator-popup" style="display: none;">
+        <div class="calc-header" id="calc-header-drag">
+          <div class="calc-title">
+            <span>🧮</span>
+            <span>Sheet Calculator</span>
+          </div>
+          <button type="button" class="calc-close-btn" id="btn-close-calc" title="Close Calculator">✕</button>
+        </div>
+
+        <div class="calc-body">
+          <div class="calc-screen">
+            <div class="calc-expr" id="calc-screen-expr">0</div>
+            <div class="calc-curr" id="calc-screen-curr">0</div>
+          </div>
+
+          <div class="calc-keypad">
+            <button type="button" class="calc-btn calc-btn-op" data-calc="C">C</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="CE">CE</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="BACK">⌫</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="/">÷</button>
+
+            <button type="button" class="calc-btn" data-calc="7">7</button>
+            <button type="button" class="calc-btn" data-calc="8">8</button>
+            <button type="button" class="calc-btn" data-calc="9">9</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="*">×</button>
+
+            <button type="button" class="calc-btn" data-calc="4">4</button>
+            <button type="button" class="calc-btn" data-calc="5">5</button>
+            <button type="button" class="calc-btn" data-calc="6">6</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="-">−</button>
+
+            <button type="button" class="calc-btn" data-calc="1">1</button>
+            <button type="button" class="calc-btn" data-calc="2">2</button>
+            <button type="button" class="calc-btn" data-calc="3">3</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="+">+</button>
+
+            <button type="button" class="calc-btn" data-calc="NEG">±</button>
+            <button type="button" class="calc-btn" data-calc="0">0</button>
+            <button type="button" class="calc-btn" data-calc=".">.</button>
+            <button type="button" class="calc-btn calc-btn-eq" data-calc="=">=</button>
+          </div>
+
+          <div class="calc-actions">
+            <button type="button" class="btn btn-primary btn-block btn-sm" id="btn-calc-paste-to-cell" title="Insert result into selected cell">
+              📋 Paste into Cell (<span id="calc-target-cell-label">A1</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Quick Bar (Docked above bottom) -->
+      <div class="ws-mobile-dock-bar" id="ws-mobile-dock-bar">
+        <button type="button" class="ws-mobile-chip" id="ws-mob-cell-tag">A1</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="=">=</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="+">+</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="-">−</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="*">×</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="/">÷</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="SUM">SUM</button>
+        <button type="button" class="ws-mobile-chip ws-mob-calc-chip" id="ws-mob-calc-toggle">🧮</button>
+      </div>
+
+    </section>
 
     <!-- ============================================================== -->
     <!-- TAB 3: OUTWARD DISPATCH LOG (Dedicated Line Item Table)        -->
@@ -1373,6 +1837,230 @@
           </table>
         </div>
       </div>
+    </section>
+    <!-- ============================================================== -->
+    <!-- TAB 10: USER EXCEL WORKSPACES & SPREADSHEETS                   -->
+    <!-- Dedicated Multi-Sheet Workspace per User with Mini Calculator  -->
+    <!-- ============================================================== -->
+    <section id="workspaces-view" class="tab-view" role="region" aria-label="Excel Workspaces" aria-hidden="true" style="display: none;">
+      
+      <!-- Top Control Bar: Workspace Switcher, Title, Auto-save Badge & Actions -->
+      <div class="workspace-header-bar">
+        <div class="ws-header-left">
+          <div class="ws-title-box">
+            <span class="ws-sheet-icon">📊</span>
+            <div>
+              <h2 class="ws-title" id="ws-current-title">My Workspace</h2>
+              <div class="ws-subtitle" id="ws-current-subtitle">Live User Spreadsheet with Formula Engine</div>
+            </div>
+          </div>
+
+          <!-- Admin-Only Workspace Selector (Hidden for standard staff) -->
+          <div class="ws-user-select-wrap" id="ws-admin-selector-wrap" style="display: none;">
+            <label for="ws-user-select" class="ws-label-chip">Switch Staff Sheet:</label>
+            <select id="ws-user-select" class="form-select ws-user-select">
+              <!-- Dynamically populated with all users -->
+            </select>
+          </div>
+
+          <!-- Non-Admin User Chip -->
+          <div class="ws-user-badge-wrap" id="ws-user-badge-wrap" style="display: none;">
+            <span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; padding: 4px 10px; font-size: 0.775rem;">
+              👤 <span id="ws-my-user-label">My Private Sheet</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ws-header-right">
+          <span class="ws-save-status" id="ws-save-status">
+            <span class="status-dot-green"></span>
+            <span id="ws-save-text">✓ Auto-saved</span>
+          </span>
+
+          <!-- Calculator Toggle Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-calc" id="btn-toggle-mini-calc" title="Open Built-in Calculator">
+            <span>🧮</span>
+            <span class="hide-mobile">Calculator</span>
+          </button>
+
+          <!-- Export CSV -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-export-csv" title="Export Current Sheet to CSV">
+            <span>📥</span>
+            <span class="hide-mobile">CSV</span>
+          </button>
+
+          <!-- Print Sheet -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-print" title="Print Sheet">
+            <span>🖨️</span>
+            <span class="hide-mobile">Print</span>
+          </button>
+
+          <!-- Admin-Only Delete/Reset Workspace Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-danger" id="btn-ws-reset" title="Clear/Reset Current Sheet" style="display: none; color: var(--accent-rose);">
+            <span>🗑️</span>
+            <span class="hide-mobile">Clear Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel Toolbar Container -->
+      <div class="workspace-toolbar-container">
+        
+        <!-- Row 1: Formula Bar -->
+        <div class="ws-formula-bar">
+          <div class="ws-cell-name-box" id="ws-active-cell-box" title="Selected Cell">A1</div>
+          <div class="ws-fx-icon" title="Formula"><em>f<sub>x</sub></em></div>
+          <input type="text" id="ws-formula-input" class="ws-formula-input" placeholder="Type text, number or formula e.g. =SUM(A1:A10), =B1*C1, =100-20..." autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-formula-enter" id="btn-ws-apply-formula" title="Apply Formula (Enter)">✓</button>
+        </div>
+
+        <!-- Row 2: Formatting & Quick Math Bar -->
+        <div class="ws-formatting-bar">
+          <!-- Text Styling -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-italic" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Font Size -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-dec" title="Decrease Font Size">A-</button>
+            <span class="ws-font-size-display" id="ws-font-size-val">12px</span>
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-inc" title="Increase Font Size">A+</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Alignment -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-left" title="Align Left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="15" y2="12"></line><line x1="3" y1="18" x2="18" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-center" title="Align Center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="6" y1="12" x2="18" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-right" title="Align Right">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="6" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Colors -->
+          <div class="ws-tool-group">
+            <label class="ws-color-label" title="Cell Background Color">
+              <span class="ws-color-icon">🎨</span>
+              <input type="color" id="ws-bg-color-picker" value="#ffffff" class="ws-color-input">
+            </label>
+            <label class="ws-color-label" title="Text Color">
+              <span class="ws-color-icon" style="font-weight: 900; color: #ef4444;">A</span>
+              <input type="color" id="ws-text-color-picker" value="#0f172a" class="ws-color-input">
+            </label>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Quick Formulas -->
+          <div class="ws-tool-group ws-formulas-group">
+            <span class="ws-group-label hide-mobile">Formulas:</span>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sum" title="Insert SUM formula">=SUM</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sub" title="Subtract">-</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-mul" title="Multiply">*</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-div" title="Divide">/</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Grid Expansion -->
+          <div class="ws-tool-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-row" title="Add 10 more rows">+10 Rows</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-col" title="Add column">+ Col</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-clear-cell" title="Clear current cell">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Spreadsheet Scroll Container -->
+      <div class="workspace-grid-wrapper" id="ws-grid-wrapper">
+        <div class="workspace-grid-scroller" id="ws-grid-scroller">
+          <table class="workspace-table" id="ws-sheet-table">
+            <thead id="ws-thead">
+              <!-- Dynamically rendered column headers: A, B, C... with resize handles -->
+            </thead>
+            <tbody id="ws-tbody">
+              <!-- Dynamically rendered rows: 1..50 with resize handles & cells -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Floating Inbuilt Mini Calculator Widget -->
+      <div class="mini-calculator-popup" id="mini-calculator-popup" style="display: none;">
+        <div class="calc-header" id="calc-header-drag">
+          <div class="calc-title">
+            <span>🧮</span>
+            <span>Sheet Calculator</span>
+          </div>
+          <button type="button" class="calc-close-btn" id="btn-close-calc" title="Close Calculator">✕</button>
+        </div>
+
+        <div class="calc-body">
+          <div class="calc-screen">
+            <div class="calc-expr" id="calc-screen-expr">0</div>
+            <div class="calc-curr" id="calc-screen-curr">0</div>
+          </div>
+
+          <div class="calc-keypad">
+            <button type="button" class="calc-btn calc-btn-op" data-calc="C">C</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="CE">CE</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="BACK">⌫</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="/">÷</button>
+
+            <button type="button" class="calc-btn" data-calc="7">7</button>
+            <button type="button" class="calc-btn" data-calc="8">8</button>
+            <button type="button" class="calc-btn" data-calc="9">9</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="*">×</button>
+
+            <button type="button" class="calc-btn" data-calc="4">4</button>
+            <button type="button" class="calc-btn" data-calc="5">5</button>
+            <button type="button" class="calc-btn" data-calc="6">6</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="-">−</button>
+
+            <button type="button" class="calc-btn" data-calc="1">1</button>
+            <button type="button" class="calc-btn" data-calc="2">2</button>
+            <button type="button" class="calc-btn" data-calc="3">3</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="+">+</button>
+
+            <button type="button" class="calc-btn" data-calc="NEG">±</button>
+            <button type="button" class="calc-btn" data-calc="0">0</button>
+            <button type="button" class="calc-btn" data-calc=".">.</button>
+            <button type="button" class="calc-btn calc-btn-eq" data-calc="=">=</button>
+          </div>
+
+          <div class="calc-actions">
+            <button type="button" class="btn btn-primary btn-block btn-sm" id="btn-calc-paste-to-cell" title="Insert result into selected cell">
+              📋 Paste into Cell (<span id="calc-target-cell-label">A1</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Quick Bar (Docked above bottom) -->
+      <div class="ws-mobile-dock-bar" id="ws-mobile-dock-bar">
+        <button type="button" class="ws-mobile-chip" id="ws-mob-cell-tag">A1</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="=">=</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="+">+</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="-">−</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="*">×</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="/">÷</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="SUM">SUM</button>
+        <button type="button" class="ws-mobile-chip ws-mob-calc-chip" id="ws-mob-calc-toggle">🧮</button>
+      </div>
+
     </section>
 
     <!-- ============================================================== -->
@@ -1578,6 +2266,230 @@
           </div>
         </div>
       </div>
+    </section>
+    <!-- ============================================================== -->
+    <!-- TAB 10: USER EXCEL WORKSPACES & SPREADSHEETS                   -->
+    <!-- Dedicated Multi-Sheet Workspace per User with Mini Calculator  -->
+    <!-- ============================================================== -->
+    <section id="workspaces-view" class="tab-view" role="region" aria-label="Excel Workspaces" aria-hidden="true" style="display: none;">
+      
+      <!-- Top Control Bar: Workspace Switcher, Title, Auto-save Badge & Actions -->
+      <div class="workspace-header-bar">
+        <div class="ws-header-left">
+          <div class="ws-title-box">
+            <span class="ws-sheet-icon">📊</span>
+            <div>
+              <h2 class="ws-title" id="ws-current-title">My Workspace</h2>
+              <div class="ws-subtitle" id="ws-current-subtitle">Live User Spreadsheet with Formula Engine</div>
+            </div>
+          </div>
+
+          <!-- Admin-Only Workspace Selector (Hidden for standard staff) -->
+          <div class="ws-user-select-wrap" id="ws-admin-selector-wrap" style="display: none;">
+            <label for="ws-user-select" class="ws-label-chip">Switch Staff Sheet:</label>
+            <select id="ws-user-select" class="form-select ws-user-select">
+              <!-- Dynamically populated with all users -->
+            </select>
+          </div>
+
+          <!-- Non-Admin User Chip -->
+          <div class="ws-user-badge-wrap" id="ws-user-badge-wrap" style="display: none;">
+            <span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; padding: 4px 10px; font-size: 0.775rem;">
+              👤 <span id="ws-my-user-label">My Private Sheet</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ws-header-right">
+          <span class="ws-save-status" id="ws-save-status">
+            <span class="status-dot-green"></span>
+            <span id="ws-save-text">✓ Auto-saved</span>
+          </span>
+
+          <!-- Calculator Toggle Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-calc" id="btn-toggle-mini-calc" title="Open Built-in Calculator">
+            <span>🧮</span>
+            <span class="hide-mobile">Calculator</span>
+          </button>
+
+          <!-- Export CSV -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-export-csv" title="Export Current Sheet to CSV">
+            <span>📥</span>
+            <span class="hide-mobile">CSV</span>
+          </button>
+
+          <!-- Print Sheet -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-print" title="Print Sheet">
+            <span>🖨️</span>
+            <span class="hide-mobile">Print</span>
+          </button>
+
+          <!-- Admin-Only Delete/Reset Workspace Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-danger" id="btn-ws-reset" title="Clear/Reset Current Sheet" style="display: none; color: var(--accent-rose);">
+            <span>🗑️</span>
+            <span class="hide-mobile">Clear Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel Toolbar Container -->
+      <div class="workspace-toolbar-container">
+        
+        <!-- Row 1: Formula Bar -->
+        <div class="ws-formula-bar">
+          <div class="ws-cell-name-box" id="ws-active-cell-box" title="Selected Cell">A1</div>
+          <div class="ws-fx-icon" title="Formula"><em>f<sub>x</sub></em></div>
+          <input type="text" id="ws-formula-input" class="ws-formula-input" placeholder="Type text, number or formula e.g. =SUM(A1:A10), =B1*C1, =100-20..." autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-formula-enter" id="btn-ws-apply-formula" title="Apply Formula (Enter)">✓</button>
+        </div>
+
+        <!-- Row 2: Formatting & Quick Math Bar -->
+        <div class="ws-formatting-bar">
+          <!-- Text Styling -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-italic" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Font Size -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-dec" title="Decrease Font Size">A-</button>
+            <span class="ws-font-size-display" id="ws-font-size-val">12px</span>
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-inc" title="Increase Font Size">A+</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Alignment -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-left" title="Align Left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="15" y2="12"></line><line x1="3" y1="18" x2="18" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-center" title="Align Center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="6" y1="12" x2="18" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-right" title="Align Right">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="6" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Colors -->
+          <div class="ws-tool-group">
+            <label class="ws-color-label" title="Cell Background Color">
+              <span class="ws-color-icon">🎨</span>
+              <input type="color" id="ws-bg-color-picker" value="#ffffff" class="ws-color-input">
+            </label>
+            <label class="ws-color-label" title="Text Color">
+              <span class="ws-color-icon" style="font-weight: 900; color: #ef4444;">A</span>
+              <input type="color" id="ws-text-color-picker" value="#0f172a" class="ws-color-input">
+            </label>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Quick Formulas -->
+          <div class="ws-tool-group ws-formulas-group">
+            <span class="ws-group-label hide-mobile">Formulas:</span>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sum" title="Insert SUM formula">=SUM</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sub" title="Subtract">-</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-mul" title="Multiply">*</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-div" title="Divide">/</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Grid Expansion -->
+          <div class="ws-tool-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-row" title="Add 10 more rows">+10 Rows</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-col" title="Add column">+ Col</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-clear-cell" title="Clear current cell">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Spreadsheet Scroll Container -->
+      <div class="workspace-grid-wrapper" id="ws-grid-wrapper">
+        <div class="workspace-grid-scroller" id="ws-grid-scroller">
+          <table class="workspace-table" id="ws-sheet-table">
+            <thead id="ws-thead">
+              <!-- Dynamically rendered column headers: A, B, C... with resize handles -->
+            </thead>
+            <tbody id="ws-tbody">
+              <!-- Dynamically rendered rows: 1..50 with resize handles & cells -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Floating Inbuilt Mini Calculator Widget -->
+      <div class="mini-calculator-popup" id="mini-calculator-popup" style="display: none;">
+        <div class="calc-header" id="calc-header-drag">
+          <div class="calc-title">
+            <span>🧮</span>
+            <span>Sheet Calculator</span>
+          </div>
+          <button type="button" class="calc-close-btn" id="btn-close-calc" title="Close Calculator">✕</button>
+        </div>
+
+        <div class="calc-body">
+          <div class="calc-screen">
+            <div class="calc-expr" id="calc-screen-expr">0</div>
+            <div class="calc-curr" id="calc-screen-curr">0</div>
+          </div>
+
+          <div class="calc-keypad">
+            <button type="button" class="calc-btn calc-btn-op" data-calc="C">C</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="CE">CE</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="BACK">⌫</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="/">÷</button>
+
+            <button type="button" class="calc-btn" data-calc="7">7</button>
+            <button type="button" class="calc-btn" data-calc="8">8</button>
+            <button type="button" class="calc-btn" data-calc="9">9</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="*">×</button>
+
+            <button type="button" class="calc-btn" data-calc="4">4</button>
+            <button type="button" class="calc-btn" data-calc="5">5</button>
+            <button type="button" class="calc-btn" data-calc="6">6</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="-">−</button>
+
+            <button type="button" class="calc-btn" data-calc="1">1</button>
+            <button type="button" class="calc-btn" data-calc="2">2</button>
+            <button type="button" class="calc-btn" data-calc="3">3</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="+">+</button>
+
+            <button type="button" class="calc-btn" data-calc="NEG">±</button>
+            <button type="button" class="calc-btn" data-calc="0">0</button>
+            <button type="button" class="calc-btn" data-calc=".">.</button>
+            <button type="button" class="calc-btn calc-btn-eq" data-calc="=">=</button>
+          </div>
+
+          <div class="calc-actions">
+            <button type="button" class="btn btn-primary btn-block btn-sm" id="btn-calc-paste-to-cell" title="Insert result into selected cell">
+              📋 Paste into Cell (<span id="calc-target-cell-label">A1</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Quick Bar (Docked above bottom) -->
+      <div class="ws-mobile-dock-bar" id="ws-mobile-dock-bar">
+        <button type="button" class="ws-mobile-chip" id="ws-mob-cell-tag">A1</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="=">=</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="+">+</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="-">−</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="*">×</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="/">÷</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="SUM">SUM</button>
+        <button type="button" class="ws-mobile-chip ws-mob-calc-chip" id="ws-mob-calc-toggle">🧮</button>
+      </div>
+
     </section>
 
     <!-- ============================================================== -->
@@ -2589,6 +3501,231 @@
       </div>
     </section>
 
+    <!-- ============================================================== -->
+    <!-- TAB 10: USER EXCEL WORKSPACES & SPREADSHEETS                   -->
+    <!-- Dedicated Multi-Sheet Workspace per User with Mini Calculator  -->
+    <!-- ============================================================== -->
+    <section id="workspaces-view" class="tab-view" role="region" aria-label="Excel Workspaces" aria-hidden="true" style="display: none;">
+      
+      <!-- Top Control Bar: Workspace Switcher, Title, Auto-save Badge & Actions -->
+      <div class="workspace-header-bar">
+        <div class="ws-header-left">
+          <div class="ws-title-box">
+            <span class="ws-sheet-icon">📊</span>
+            <div>
+              <h2 class="ws-title" id="ws-current-title">My Workspace</h2>
+              <div class="ws-subtitle" id="ws-current-subtitle">Live User Spreadsheet with Formula Engine</div>
+            </div>
+          </div>
+
+          <!-- Admin-Only Workspace Selector (Hidden for standard staff) -->
+          <div class="ws-user-select-wrap" id="ws-admin-selector-wrap" style="display: none;">
+            <label for="ws-user-select" class="ws-label-chip">Switch Staff Sheet:</label>
+            <select id="ws-user-select" class="form-select ws-user-select">
+              <!-- Dynamically populated with all users -->
+            </select>
+          </div>
+
+          <!-- Non-Admin User Chip -->
+          <div class="ws-user-badge-wrap" id="ws-user-badge-wrap" style="display: none;">
+            <span class="badge-tag inline" style="background: rgba(16, 185, 129, 0.15); color: #10b981; font-weight: 700; padding: 4px 10px; font-size: 0.775rem;">
+              👤 <span id="ws-my-user-label">My Private Sheet</span>
+            </span>
+          </div>
+        </div>
+
+        <div class="ws-header-right">
+          <span class="ws-save-status" id="ws-save-status">
+            <span class="status-dot-green"></span>
+            <span id="ws-save-text">✓ Auto-saved</span>
+          </span>
+
+          <!-- Calculator Toggle Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-calc" id="btn-toggle-mini-calc" title="Open Built-in Calculator">
+            <span>🧮</span>
+            <span class="hide-mobile">Calculator</span>
+          </button>
+
+          <!-- Export CSV -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-export-csv" title="Export Current Sheet to CSV">
+            <span>📥</span>
+            <span class="hide-mobile">CSV</span>
+          </button>
+
+          <!-- Print Sheet -->
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-ws-print" title="Print Sheet">
+            <span>🖨️</span>
+            <span class="hide-mobile">Print</span>
+          </button>
+
+          <!-- Admin-Only Delete/Reset Workspace Button -->
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-danger" id="btn-ws-reset" title="Clear/Reset Current Sheet" style="display: none; color: var(--accent-rose);">
+            <span>🗑️</span>
+            <span class="hide-mobile">Clear Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Excel Toolbar Container -->
+      <div class="workspace-toolbar-container">
+        
+        <!-- Row 1: Formula Bar -->
+        <div class="ws-formula-bar">
+          <div class="ws-cell-name-box" id="ws-active-cell-box" title="Selected Cell">A1</div>
+          <div class="ws-fx-icon" title="Formula"><em>f<sub>x</sub></em></div>
+          <input type="text" id="ws-formula-input" class="ws-formula-input" placeholder="Type text, number or formula e.g. =SUM(A1:A10), =B1*C1, =100-20..." autocomplete="off" spellcheck="false">
+          <button type="button" class="btn btn-secondary btn-sm ws-btn-formula-enter" id="btn-ws-apply-formula" title="Apply Formula (Enter)">✓</button>
+        </div>
+
+        <!-- Row 2: Formatting & Quick Math Bar -->
+        <div class="ws-formatting-bar">
+          <!-- Text Styling -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-bold" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-italic" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Font Size -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-dec" title="Decrease Font Size">A-</button>
+            <span class="ws-font-size-display" id="ws-font-size-val">12px</span>
+            <button type="button" class="ws-tool-btn" id="ws-btn-font-inc" title="Increase Font Size">A+</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Alignment -->
+          <div class="ws-tool-group">
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-left" title="Align Left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="12" x2="15" y2="12"></line><line x1="3" y1="18" x2="18" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-center" title="Align Center">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="6" y1="12" x2="18" y2="12"></line><line x1="4" y1="18" x2="20" y2="18"></line></svg>
+            </button>
+            <button type="button" class="ws-tool-btn" id="ws-btn-align-right" title="Align Right">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="3" y1="6" x2="21" y2="6"></line><line x1="9" y1="12" x2="21" y2="12"></line><line x1="6" y1="18" x2="21" y2="18"></line></svg>
+            </button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Colors -->
+          <div class="ws-tool-group">
+            <label class="ws-color-label" title="Cell Background Color">
+              <span class="ws-color-icon">🎨</span>
+              <input type="color" id="ws-bg-color-picker" value="#ffffff" class="ws-color-input">
+            </label>
+            <label class="ws-color-label" title="Text Color">
+              <span class="ws-color-icon" style="font-weight: 900; color: #ef4444;">A</span>
+              <input type="color" id="ws-text-color-picker" value="#0f172a" class="ws-color-input">
+            </label>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Quick Formulas -->
+          <div class="ws-tool-group ws-formulas-group">
+            <span class="ws-group-label hide-mobile">Formulas:</span>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sum" title="Insert SUM formula">=SUM</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-sub" title="Subtract">-</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-mul" title="Multiply">*</button>
+            <button type="button" class="btn btn-secondary btn-sm ws-quick-formula-btn" id="ws-btn-div" title="Divide">/</button>
+          </div>
+
+          <div class="ws-tool-separator"></div>
+
+          <!-- Grid Expansion -->
+          <div class="ws-tool-group">
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-row" title="Add 10 more rows">+10 Rows</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-add-col" title="Add column">+ Col</button>
+            <button type="button" class="btn btn-secondary btn-sm" id="ws-btn-clear-cell" title="Clear current cell">Clear</button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Main Spreadsheet Scroll Container -->
+      <div class="workspace-grid-wrapper" id="ws-grid-wrapper">
+        <div class="workspace-grid-scroller" id="ws-grid-scroller">
+          <table class="workspace-table" id="ws-sheet-table">
+            <thead id="ws-thead">
+              <!-- Dynamically rendered column headers: A, B, C... with resize handles -->
+            </thead>
+            <tbody id="ws-tbody">
+              <!-- Dynamically rendered rows: 1..50 with resize handles & cells -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Floating Inbuilt Mini Calculator Widget -->
+      <div class="mini-calculator-popup" id="mini-calculator-popup" style="display: none;">
+        <div class="calc-header" id="calc-header-drag">
+          <div class="calc-title">
+            <span>🧮</span>
+            <span>Sheet Calculator</span>
+          </div>
+          <button type="button" class="calc-close-btn" id="btn-close-calc" title="Close Calculator">✕</button>
+        </div>
+
+        <div class="calc-body">
+          <div class="calc-screen">
+            <div class="calc-expr" id="calc-screen-expr">0</div>
+            <div class="calc-curr" id="calc-screen-curr">0</div>
+          </div>
+
+          <div class="calc-keypad">
+            <button type="button" class="calc-btn calc-btn-op" data-calc="C">C</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="CE">CE</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="BACK">⌫</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="/">÷</button>
+
+            <button type="button" class="calc-btn" data-calc="7">7</button>
+            <button type="button" class="calc-btn" data-calc="8">8</button>
+            <button type="button" class="calc-btn" data-calc="9">9</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="*">×</button>
+
+            <button type="button" class="calc-btn" data-calc="4">4</button>
+            <button type="button" class="calc-btn" data-calc="5">5</button>
+            <button type="button" class="calc-btn" data-calc="6">6</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="-">−</button>
+
+            <button type="button" class="calc-btn" data-calc="1">1</button>
+            <button type="button" class="calc-btn" data-calc="2">2</button>
+            <button type="button" class="calc-btn" data-calc="3">3</button>
+            <button type="button" class="calc-btn calc-btn-op" data-calc="+">+</button>
+
+            <button type="button" class="calc-btn" data-calc="NEG">±</button>
+            <button type="button" class="calc-btn" data-calc="0">0</button>
+            <button type="button" class="calc-btn" data-calc=".">.</button>
+            <button type="button" class="calc-btn calc-btn-eq" data-calc="=">=</button>
+          </div>
+
+          <div class="calc-actions">
+            <button type="button" class="btn btn-primary btn-block btn-sm" id="btn-calc-paste-to-cell" title="Insert result into selected cell">
+              📋 Paste into Cell (<span id="calc-target-cell-label">A1</span>)
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mobile Touch Quick Bar (Docked above bottom) -->
+      <div class="ws-mobile-dock-bar" id="ws-mobile-dock-bar">
+        <button type="button" class="ws-mobile-chip" id="ws-mob-cell-tag">A1</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="=">=</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="+">+</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="-">−</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="*">×</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="/">÷</button>
+        <button type="button" class="ws-mobile-chip" data-mob-key="SUM">SUM</button>
+        <button type="button" class="ws-mobile-chip ws-mob-calc-chip" id="ws-mob-calc-toggle">🧮</button>
+      </div>
+
+    </section>
+
   </main>
 
   <!-- ============================================================== -->
@@ -3223,6 +4360,10 @@
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-tab-payment" checked>
                 <span>💳 Payment Sheet</span>
+              </label>
+              <label class="perm-checkbox-card">
+                <input type="checkbox" id="perm-tab-workspaces" checked>
+                <span>📊 Excel Workspaces</span>
               </label>
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-tab-neon">
@@ -4857,13 +5998,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=35"></script>
-  <script src="db.js?v=35"></script>
-  <script src="app.js?v=35"></script>
+  <script src="data.js?v=37"></script>
+  <script src="db.js?v=37"></script>
+  <script src="app.js?v=37"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=35').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=37').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

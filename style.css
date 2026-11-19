@@ -9386,3 +9386,621 @@ td .badge-tag {
     border-right: 2px solid #cbd5e1 !important;
   }
 }
+
+/* ====================================================================
+   EXCEL WORKSPACES & SPREADSHEET ENGINE STYLES
+   Multi-User RBAC, Cell Formulas, Resizable Grid & Built-in Calculator
+   ==================================================================== */
+
+.workspace-header-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 0.85rem 1.15rem;
+  margin-bottom: 0.85rem;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  flex-wrap: wrap;
+}
+
+.ws-header-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.ws-title-box {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.ws-sheet-icon {
+  font-size: 1.5rem;
+}
+
+.ws-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-main);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.ws-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.ws-user-select-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--bg-surface);
+  padding: 0.35rem 0.65rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+}
+
+.ws-label-chip {
+  font-size: 0.725rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.ws-user-select {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  min-width: 170px;
+}
+
+.ws-header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.ws-save-status {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
+  padding: 0.25rem 0.6rem;
+  border-radius: var(--radius-full);
+  margin-right: 0.25rem;
+}
+
+.status-dot-green {
+  width: 7px;
+  height: 7px;
+  background: #10b981;
+  border-radius: 50%;
+  box-shadow: 0 0 6px rgba(16, 185, 129, 0.8);
+}
+
+/* --- Excel Toolbar & Formula Bar --- */
+.workspace-toolbar-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  margin-bottom: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+}
+
+.ws-formula-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-surface);
+}
+
+.ws-cell-name-box {
+  width: 55px;
+  padding: 0.3rem 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.825rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--primary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  user-select: none;
+}
+
+.ws-fx-icon {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  user-select: none;
+  font-family: serif;
+}
+
+.ws-formula-input {
+  flex: 1;
+  padding: 0.32rem 0.65rem;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  background: var(--bg-card);
+  color: var(--text-main);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.ws-formula-input:focus {
+  border-color: var(--primary);
+}
+
+.ws-btn-formula-enter {
+  padding: 0.25rem 0.65rem !important;
+  font-weight: 800;
+  color: var(--primary);
+}
+
+/* --- Formatting Bar --- */
+.ws-formatting-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.45rem 0.85rem;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+
+.ws-tool-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.ws-tool-separator {
+  width: 1px;
+  height: 20px;
+  background: var(--border-color);
+  margin: 0 0.3rem;
+  flex-shrink: 0;
+}
+
+.ws-tool-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-main);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ws-tool-btn:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+}
+
+.ws-tool-btn.active {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.ws-font-size-display {
+  font-size: 0.775rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 32px;
+  text-align: center;
+}
+
+.ws-color-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  position: relative;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+}
+
+.ws-color-label:hover {
+  background: var(--bg-surface);
+  border-color: var(--border-color);
+}
+
+.ws-color-input {
+  position: absolute;
+  opacity: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+}
+
+.ws-quick-formula-btn {
+  padding: 0.2rem 0.5rem !important;
+  font-size: 0.75rem !important;
+  font-family: var(--font-mono) !important;
+  font-weight: 700 !important;
+}
+
+/* --- Main Spreadsheet Grid & Table --- */
+.workspace-grid-wrapper {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+}
+
+.workspace-grid-scroller {
+  max-height: calc(100vh - 290px);
+  min-height: 480px;
+  overflow: auto;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+}
+
+.workspace-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: max-content;
+  font-size: 0.825rem;
+  color: var(--text-main);
+  background: var(--bg-card);
+  user-select: none;
+}
+
+/* Sticky Headers */
+.ws-corner-th {
+  position: sticky;
+  top: 0;
+  left: 0;
+  z-index: 40;
+  width: 48px;
+  min-width: 48px;
+  height: 28px;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+}
+
+.ws-col-th {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.775rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.25rem 0.4rem;
+  height: 28px;
+}
+
+.ws-col-th.active-header {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary);
+}
+
+.ws-row-th {
+  position: sticky;
+  left: 0;
+  z-index: 20;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  font-weight: 700;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-align: center;
+  padding: 0.2rem 0.35rem;
+  width: 48px;
+  min-width: 48px;
+}
+
+.ws-row-th.active-header {
+  background: rgba(16, 185, 129, 0.12);
+  color: var(--primary);
+}
+
+/* Resize Handles */
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 35;
+}
+
+.col-resizer:hover,
+.col-resizer.is-resizing {
+  background: var(--primary);
+}
+
+.row-resizer {
+  position: absolute;
+  left: 0;
+  bottom: -3px;
+  width: 100%;
+  height: 7px;
+  cursor: row-resize;
+  z-index: 25;
+}
+
+.row-resizer:hover,
+.row-resizer.is-resizing {
+  background: var(--primary);
+}
+
+/* Data Cells */
+.ws-cell {
+  border-right: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  padding: 4px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: cell;
+  position: relative;
+  transition: background 0.08s ease;
+  min-height: 26px;
+}
+
+.ws-cell:hover {
+  background: rgba(16, 185, 129, 0.04);
+}
+
+.ws-cell.selected {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  background: rgba(37, 99, 235, 0.12) !important;
+  z-index: 5;
+}
+
+.ws-cell.range-selected {
+  background: rgba(37, 99, 235, 0.15) !important;
+  outline: 1px solid rgba(37, 99, 235, 0.35);
+  outline-offset: -1px;
+  z-index: 3;
+}
+
+.ws-col-th.range-header,
+.ws-row-th.range-header {
+  background: rgba(37, 99, 235, 0.18) !important;
+  color: var(--primary) !important;
+  font-weight: 800 !important;
+}
+
+.ws-cell.editing {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  padding: 0 !important;
+  background: var(--bg-card) !important;
+  z-index: 10;
+}
+
+.ws-inline-editor {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  padding: 4px 8px;
+  font: inherit;
+  color: inherit;
+  box-sizing: border-box;
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Floating Inbuilt Mini Calculator */
+.mini-calculator-popup {
+  position: fixed;
+  bottom: 85px;
+  right: 25px;
+  width: 290px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  z-index: 400;
+  overflow: hidden;
+  animation: slideUpFade 0.2s ease;
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.calc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.85rem;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  cursor: move;
+}
+
+.calc-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.calc-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1rem;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.calc-close-btn:hover {
+  color: var(--accent-rose);
+}
+
+.calc-body {
+  padding: 0.85rem;
+}
+
+.calc-screen {
+  background: var(--bg-main, #0f172a);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  text-align: right;
+  margin-bottom: 0.65rem;
+}
+
+.calc-expr {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+  min-height: 16px;
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calc-curr {
+  font-size: 1.45rem;
+  font-weight: 800;
+  font-family: var(--font-mono);
+  color: var(--primary);
+  line-height: 1.2;
+}
+
+.calc-keypad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 5px;
+  margin-bottom: 0.75rem;
+}
+
+.calc-btn {
+  height: 38px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: all 0.1s ease;
+}
+
+.calc-btn:hover {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: var(--primary);
+}
+
+.calc-btn:active {
+  transform: scale(0.95);
+}
+
+.calc-btn-op {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.calc-btn-eq {
+  background: var(--primary) !important;
+  color: #ffffff !important;
+  border-color: var(--primary) !important;
+}
+
+/* Mobile Quick Bar */
+.ws-mobile-dock-bar {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .ws-mobile-dock-bar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+    position: sticky;
+    bottom: 0;
+    z-index: 50;
+    overflow-x: auto;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+  }
+
+  .ws-mobile-chip {
+    padding: 5px 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    color: var(--text-main);
+    font-weight: 800;
+    font-size: 0.85rem;
+    font-family: var(--font-mono);
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .ws-mob-calc-chip {
+    background: rgba(99, 102, 241, 0.15);
+    color: #818cf8;
+    border-color: rgba(99, 102, 241, 0.3);
+  }
+
+  .workspace-grid-scroller {
+    max-height: calc(100vh - 350px);
+    min-height: 380px;
+  }
+
+  .mini-calculator-popup {
+    bottom: 60px;
+    right: 10px;
+    left: 10px;
+    width: auto;
+  }
+
+  .hide-mobile {
+    display: none !important;
+  }
+}
+
