@@ -9386,3 +9386,379 @@ td .badge-tag {
     border-right: 2px solid #cbd5e1 !important;
   }
 }
+
+/* ==================================================================== */
+/* FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM                      */
+/* ==================================================================== */
+.overdue-alert-card {
+  border-left: 4px solid var(--accent-rose, #f43f5e) !important;
+  background: var(--bg-card);
+}
+
+.overdue-kpi-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.overdue-chip {
+  padding: 0.85rem 1.15rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.overdue-chip.rose {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.12), rgba(244, 63, 94, 0.03));
+  border-color: rgba(244, 63, 94, 0.35);
+}
+
+.overdue-chip.amber {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.03));
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.overdue-chip.emerald {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(16, 185, 129, 0.03));
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.overdue-chip .chip-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.overdue-chip.rose .chip-val {
+  color: #f43f5e;
+}
+
+.overdue-chip.amber .chip-val {
+  color: #f59e0b;
+}
+
+.overdue-chip.emerald .chip-val {
+  color: #10b981;
+}
+
+.overdue-chip .chip-val {
+  font-size: 1.35rem;
+  font-weight: 900;
+  font-family: var(--font-mono);
+}
+
+.overdue-chip .chip-sub {
+  font-size: 0.725rem;
+  color: var(--text-muted);
+}
+
+.overdue-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.overdue-item-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.95rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.overdue-item-row:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--primary);
+}
+
+.overdue-item-row.is-late {
+  border-left: 3.5px solid #f43f5e;
+}
+
+.overdue-item-row.is-due-soon {
+  border-left: 3.5px solid #f59e0b;
+}
+
+/* ==================================================================== */
+/* CONTRACTOR PAYMENT PARCHA / BILLING SHEET STYLES                     */
+/* ==================================================================== */
+.contractor-parcha-paper {
+  background: #ffffff;
+  color: #0f172a;
+  border: 1.5px solid #cbd5e1;
+  border-radius: var(--radius-md);
+  padding: 1.75rem 2rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  position: relative;
+}
+
+.parcha-paper-header {
+  border-bottom: 2px solid #0f172a;
+  padding-bottom: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.parcha-header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.parcha-company-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.parcha-company-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #0f172a;
+}
+
+.parcha-dept-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #475569;
+  margin-top: 2px;
+}
+
+.parcha-slip-badge {
+  text-align: right;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+}
+
+.parcha-slip-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: #0284c7;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.parcha-slip-no {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #0f172a;
+  margin-top: 2px;
+}
+
+.parcha-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.65rem 1.25rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+}
+
+.parcha-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.parcha-meta-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.parcha-meta-value {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.parcha-table-wrap {
+  margin-bottom: 1.25rem;
+  overflow-x: auto;
+}
+
+.parcha-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.825rem;
+}
+
+.parcha-table th {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-weight: 800;
+  padding: 0.6rem 0.75rem;
+  border-top: 1.5px solid #cbd5e1;
+  border-bottom: 1.5px solid #cbd5e1;
+  text-transform: uppercase;
+  font-size: 0.725rem;
+  letter-spacing: 0.03em;
+}
+
+.parcha-table td {
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+  color: #1e293b;
+}
+
+.parcha-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.parcha-table tfoot td {
+  border-top: 2px solid #0f172a;
+  border-bottom: 2px solid #0f172a;
+  padding: 0.75rem;
+  font-weight: 800;
+}
+
+.parcha-summary-container {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .parcha-summary-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+.parcha-words-col {
+  padding: 0.75rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.parcha-words-text {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin-top: 0.25rem;
+  font-style: italic;
+}
+
+.parcha-calc-box {
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.85rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.parcha-calc-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.825rem;
+  color: #334155;
+}
+
+.parcha-calc-row strong {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+}
+
+.parcha-net-payable-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 2px solid #0f172a;
+  margin-top: 0.35rem;
+  padding-top: 0.55rem;
+  color: #047857;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.parcha-net-payable-row strong {
+  font-size: 1.2rem;
+  font-family: var(--font-mono, monospace);
+  background: #ecfdf5;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.parcha-signatures-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  margin-top: 2.25rem;
+  padding-top: 0.5rem;
+}
+
+.parcha-sign-block {
+  text-align: center;
+}
+
+.parcha-sign-line {
+  border-bottom: 1px dashed #64748b;
+  height: 38px;
+  margin-bottom: 0.5rem;
+}
+
+.parcha-sign-block span {
+  font-size: 0.75rem;
+  color: #475569;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Print Styles for Contractor Parcha */
+@media print {
+  body.is-printing-parcha {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body.is-printing-parcha > *:not(#printable-contractor-parcha-root) {
+    display: none !important;
+  }
+
+  body.is-printing-parcha #printable-contractor-parcha-root {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 1.25cm !important;
+  }
+
+  body.is-printing-parcha #printable-contractor-parcha-root .contractor-parcha-paper {
+    box-shadow: none !important;
+    border: none !important;
+    padding: 0 !important;
+  }
+}

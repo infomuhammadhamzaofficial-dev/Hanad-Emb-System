@@ -33,7 +33,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=35">
+  <link rel="stylesheet" href="style.css?v=36">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="shortcut icon" href="icon-192.png">
 </head>
@@ -788,6 +788,56 @@
         </div>
       </div>
 
+      <!-- ============================================================== -->
+      <!-- EXECUTIVE FLOOR DELIVERY DEADLINES & OVERDUE ALERT CENTER       -->
+      <!-- ============================================================== -->
+      <div class="dash-card overdue-alert-card" id="dash-overdue-alert-card" style="margin-bottom: 1.25rem;">
+        <div class="dash-card-header" style="flex-wrap: wrap; gap: 0.75rem;">
+          <div>
+            <h3 class="dash-card-title" style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+              <span>🚨 Floor Delivery Deadlines & Overdue Alerts</span>
+              <span class="badge-tag rose inline" id="dash-overdue-badge-count">0 Overdue</span>
+            </h3>
+            <p class="dash-card-subtitle">Real-time floor tracking of styles exceeding target delivery dates with
+              contractors</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+            <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('master-inventory')"
+              title="View in Master Inventory">
+              📦 Master Inventory →
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" onclick="switchTab('final-style')"
+              title="View in Daily Running Sheet">
+              📋 Daily Sheet →
+            </button>
+          </div>
+        </div>
+
+        <!-- Overdue KPI Mini Grid -->
+        <div class="overdue-kpi-strip">
+          <div class="overdue-chip rose">
+            <span class="chip-label">🚨 Overdue Styles</span>
+            <strong class="chip-val" id="dash-overdue-count">0 Styles</strong>
+            <span class="chip-sub" id="dash-overdue-pcs">0 pcs pending</span>
+          </div>
+          <div class="overdue-chip amber">
+            <span class="chip-label">⏳ Due Soon (≤ 48 Hrs)</span>
+            <strong class="chip-val" id="dash-due-soon-count">0 Styles</strong>
+            <span class="chip-sub" id="dash-due-soon-pcs">0 pcs pending</span>
+          </div>
+          <div class="overdue-chip emerald">
+            <span class="chip-label">✅ On Track</span>
+            <strong class="chip-val" id="dash-on-track-count">0 Styles</strong>
+            <span class="chip-sub">Within delivery target</span>
+          </div>
+        </div>
+
+        <!-- Overdue Styles List / Table -->
+        <div id="dash-overdue-list-container" class="overdue-list-container">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+
       <!-- Two-Column Grid 1: Contractor Workload Matrix & Floor Alerts / Priority Styles -->
       <div class="dash-two-col-grid">
         <!-- Column 1: Contractor Workload Matrix -->
@@ -930,6 +980,13 @@
               <option value="pending_stock">Pending From Stock (> 0)</option>
               <option value="completed">Completed (0 Balance)</option>
             </select>
+
+            <select class="app-select" id="filter-master-deadline" title="Filter by delivery deadline & overdue status">
+              <option value="">All Deadlines</option>
+              <option value="overdue">🚨 Overdue Only</option>
+              <option value="due_soon">⏳ Due Soon (≤ 48h)</option>
+              <option value="on_track">✅ On Track</option>
+            </select>
           </div>
 
           <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
@@ -937,7 +994,7 @@
         </div>
 
         <div class="master-actions-grid">
-          <button class="btn btn-action-dock" id="btn-quick-receiving"
+          <!-- <button class="btn btn-action-dock" id="btn-quick-receiving"
             title="Quickly record incoming goods from cutting">
             <span class="btn-dock-icon">📥</span>
             <span>+ Receive Stock</span>
@@ -954,7 +1011,7 @@
           <button class="btn btn-action-dock" id="btn-goto-dispatch" title="View all dispatch challan line entries">
             <span class="btn-dock-icon">🚚</span>
             <span>View Dispatch Log</span>
-          </button>
+          </button> -->
           <button class="btn btn-action-dock" id="btn-export-master-csv" title="Export current table to CSV file">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
@@ -963,14 +1020,14 @@
             </svg>
             <span>Export Excel/CSV</span>
           </button>
-          <button class="btn btn-action-dock btn-action-danger" id="btn-clear-all"
+          <!-- <button class="btn btn-action-dock btn-action-danger" id="btn-clear-all"
             title="Clear all local data and start fresh">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="3 6 5 6 21 6"></polyline>
               <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
             </svg>
             <span>Clear All Data</span>
-          </button>
+          </button> -->
         </div>
       </div>
 
@@ -1903,6 +1960,12 @@
             <span>Print Sheet</span>
           </button>
 
+          <button class="btn btn-primary btn-sm" id="btn-open-parcha-from-payment"
+            style="background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); border-color: #0284c7; font-weight: 700; box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);"
+            title="Generate Contractor Payment Parcha / Billing Slip">
+            <span>🧾 Contractor Parcha</span>
+          </button>
+
           <button class="btn btn-secondary btn-sm" id="btn-export-payment-csv"
             title="Export to CSV / Excel spreadsheet">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2177,6 +2240,12 @@
               👁️ Show Both
             </button>
           </div>
+
+          <button class="btn btn-secondary" id="btn-open-contractor-parcha"
+            style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;"
+            title="Generate Contractor Payment Parcha / Delivery Hisab Slip">
+            <span>🧾</span> <span>Contractor Parcha Slip</span>
+          </button>
 
           <button class="btn btn-primary" id="btn-open-new-contractor">
             + Add New Contractor
@@ -2748,11 +2817,21 @@
             </div>
           </div>
 
-          <!-- Row 4: 10. Remarks -->
-          <div class="form-group" style="margin-top: 0.75rem;">
-            <label for="entry-remarks">Production Remarks / Status:</label>
-            <input type="text" class="app-input" id="entry-remarks" tabindex="8"
-              placeholder="e.g. MATERIAL NOT AVAILABLE, 810 inline hai, ALTER...">
+          <!-- Row 4: 9. Target Delivery Date | 10. Remarks -->
+          <div class="form-grid-2" style="margin-top: 0.75rem;">
+            <div class="form-group">
+              <label for="entry-target-date" style="color: #f59e0b; font-weight: 700;">Target Delivery Date (Due Date):
+                🎯</label>
+              <input type="date" class="app-input" id="entry-target-date" tabindex="7"
+                onclick="this.showPicker && this.showPicker()"
+                title="Delivery deadline with contractor for overdue tracking">
+            </div>
+
+            <div class="form-group">
+              <label for="entry-remarks">Production Remarks / Status:</label>
+              <input type="text" class="app-input" id="entry-remarks" tabindex="8"
+                placeholder="e.g. MATERIAL NOT AVAILABLE, 810 inline hai, ALTER...">
+            </div>
           </div>
 
           <!-- WRAPPER FOR LIVE KPI SUMMARY (HIDDEN BY DEFAULT WHEN STYLE CODE IS EMPTY) -->
@@ -4819,6 +4898,348 @@
 
   <!-- Direct 1-tap switching for Master, Daily Sheet, Logs & Dashboard -->
   <!-- ============================================================== -->
+
+
+  <!-- ============================================================== -->
+  <!-- MODAL: CONTRACTOR PAYMENT PARCHA & BILLING SHEET GENERATOR     -->
+  <!-- ============================================================== -->
+  <div class="modal-backdrop" id="modal-contractor-parcha" style="z-index: 370;">
+    <div class="modal-card" style="max-width: 860px; width: 95%;">
+      <div class="modal-header" style="background: var(--bg-surface); border-bottom: 1px solid var(--border-color);">
+        <div style="display: flex; align-items: center; gap: 0.75rem;">
+          <div
+            style="width: 40px; height: 40px; border-radius: var(--radius-md); background: linear-gradient(135deg, #0284c7 0%, #0ea5e9 100%); display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            🧾
+          </div>
+          <div>
+            <h2 id="modal-parcha-title" style="margin: 0; font-size: 1.15rem; font-weight: 800;">Contractor Payment
+              Parcha / Billing Slip</h2>
+            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+              Auto-calculate completed pieces, piece rates, advance peshgi & net payable amount
+            </p>
+          </div>
+        </div>
+        <button type="button" class="btn btn-secondary btn-icon" onclick="closeModal('modal-contractor-parcha')"
+          title="Close">✕</button>
+      </div>
+
+      <div class="modal-body" style="padding: 1.15rem; max-height: calc(88vh - 130px); overflow-y: auto;">
+        <!-- Top Configuration Bar -->
+        <div class="parcha-controls-bar"
+          style="background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem;">
+          <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 0.75rem; align-items: end;">
+            <!-- 1. Select Contractor -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-select-contractor" style="font-weight: 700; color: var(--primary); font-size: 0.8rem;">
+                👤 1. Select Contractor *:
+              </label>
+              <select class="app-select" id="parcha-select-contractor" style="font-weight: 700;">
+                <!-- Populated dynamically -->
+              </select>
+            </div>
+
+            <!-- 2. Select Time Period -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-select-period" style="font-weight: 700; font-size: 0.8rem;">
+                📅 2. Production Cycle / Period:
+              </label>
+              <select class="app-select" id="parcha-select-period">
+                <option value="all">⚡ All Completed Dispatches</option>
+                <!-- Dynamically populated from periods -->
+              </select>
+            </div>
+
+            <!-- 3. Slip Date -->
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-date-input" style="font-weight: 700; font-size: 0.8rem;">
+                🗓️ Parcha Date:
+              </label>
+              <input type="date" class="app-input" id="parcha-date-input">
+            </div>
+
+            <!-- 4. Refresh Button -->
+            <div style="display: flex; gap: 0.4rem;">
+              <button type="button" class="btn btn-primary btn-sm" id="btn-parcha-refresh"
+                style="flex: 1; font-weight: 700; padding: 0.55rem 0.75rem;" title="Recalculate with current inputs">
+                🔄 Recalculate
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-parcha-history"
+                style="font-weight: 700; padding: 0.55rem 0.75rem;" title="View past generated parchay">
+                📜 History
+              </button>
+            </div>
+          </div>
+
+          <!-- History Collapse Panel -->
+          <div id="parcha-history-panel"
+            style="display: none; margin-top: 0.85rem; padding-top: 0.85rem; border-top: 1px dashed var(--border-color);">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+              <strong style="font-size: 0.8rem; color: var(--text-main);">Saved Parcha History & Past Vouchers:</strong>
+              <span id="parcha-history-count" class="badge-tag inline">0 Saved</span>
+            </div>
+            <div id="parcha-history-list"
+              style="display: flex; flex-direction: column; gap: 0.4rem; max-height: 140px; overflow-y: auto;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Financial Deductions & Advances Strip -->
+        <div
+          style="background: rgba(14, 165, 233, 0.05); border: 1px solid rgba(14, 165, 233, 0.2); border-radius: var(--radius-md); padding: 0.85rem 1rem; margin-bottom: 1.15rem;">
+          <div
+            style="font-size: 0.75rem; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;">
+            💵 Peshgi (Advance), Kaat (Deductions) & Notes:
+          </div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-input-advance" style="font-size: 0.75rem; font-weight: 700;">Advance / Peshgi Paid
+                (PKR):</label>
+              <input type="number" class="app-input" id="parcha-input-advance" min="0" step="10" value="0"
+                placeholder="e.g. 5000">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-input-deduction" style="font-size: 0.75rem; font-weight: 700;">Alter / Damage Kaat
+                (PKR):</label>
+              <input type="number" class="app-input" id="parcha-input-deduction" min="0" step="10" value="0"
+                placeholder="e.g. 500">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-input-bonus" style="font-size: 0.75rem; font-weight: 700;">Bonus / Extra Commission
+                (PKR):</label>
+              <input type="number" class="app-input" id="parcha-input-bonus" min="0" step="10" value="0"
+                placeholder="e.g. 1000">
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+              <label for="parcha-input-notes" style="font-size: 0.75rem; font-weight: 700;">Remarks / Notes:</label>
+              <input type="text" class="app-input" id="parcha-input-notes" placeholder="e.g. Inspected & cleared"
+                value="Payment cleared on inspection">
+            </div>
+          </div>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- LIVE PRINTABLE CONTRACTOR PARCHA SLIP (VOUCHER PAPER)           -->
+        <!-- ============================================================== -->
+        <div class="contractor-parcha-paper" id="contractor-parcha-paper">
+          <!-- Paper Header -->
+          <div class="parcha-paper-header">
+            <div class="parcha-header-top">
+              <div class="parcha-company-brand">
+                <span style="font-size: 1.4rem;">🪡</span>
+                <div>
+                  <h3 class="parcha-company-title">CRAFTFLOW APPAREL</h3>
+                  <div class="parcha-dept-title">Hand Embroidery Department • Production & Billing Unit</div>
+                </div>
+              </div>
+              <div class="parcha-slip-badge">
+                <div class="parcha-slip-label">CONTRACTOR BILLING PARCHA</div>
+                <div class="parcha-slip-no" id="parcha-paper-no">PCH-2026-0001</div>
+              </div>
+            </div>
+
+            <!-- Meta details row -->
+            <div class="parcha-meta-grid">
+              <div class="parcha-meta-item">
+                <span class="parcha-meta-label">Contractor Name:</span>
+                <strong class="parcha-meta-value" id="parcha-paper-cont-name">Asif</strong>
+              </div>
+              <div class="parcha-meta-item">
+                <span class="parcha-meta-label">Contact / Phone:</span>
+                <strong class="parcha-meta-value" id="parcha-paper-cont-phone">0312-2385341</strong>
+              </div>
+              <div class="parcha-meta-item">
+                <span class="parcha-meta-label">Date of Issue:</span>
+                <strong class="parcha-meta-value" id="parcha-paper-date">21-Nov-2026</strong>
+              </div>
+              <div class="parcha-meta-item">
+                <span class="parcha-meta-label">Production Cycle:</span>
+                <strong class="parcha-meta-value" id="parcha-paper-period">Current Production Cycle</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Items Breakdown Table -->
+          <div class="parcha-table-wrap">
+            <table class="parcha-table" id="parcha-table">
+              <thead>
+                <tr>
+                  <th style="width: 40px; text-align: center;">SR</th>
+                  <th style="text-align: left;">STYLE CODE</th>
+                  <th style="text-align: center; width: 90px;">CATEGORY</th>
+                  <th style="text-align: right; width: 100px;">FINISHED PCS</th>
+                  <th style="text-align: right; width: 100px;">RATE (PKR)</th>
+                  <th style="text-align: right; width: 120px;">TOTAL (PKR)</th>
+                </tr>
+              </thead>
+              <tbody id="parcha-paper-tbody">
+                <!-- Dynamically populated rows -->
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="3" style="text-align: right; font-weight: 800;">GROSS TOTAL:</td>
+                  <td style="text-align: right; font-weight: 800; font-family: var(--font-mono);"
+                    id="parcha-paper-total-pcs">0</td>
+                  <td style="text-align: right; font-weight: 700; color: var(--text-muted);">-</td>
+                  <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: var(--primary);"
+                    id="parcha-paper-gross-total">Rs. 0</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+
+          <!-- Financial Deductions & Net Payable Summary -->
+          <div class="parcha-summary-container">
+            <div class="parcha-words-col">
+              <div style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700;">
+                Amount in Words:</div>
+              <div class="parcha-words-text" id="parcha-paper-words">Rupees Zero Only</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 0.4rem;"
+                id="parcha-paper-notes-text">
+                Notes: Payment cleared on inspection.
+              </div>
+            </div>
+
+            <div class="parcha-calc-box">
+              <div class="parcha-calc-row">
+                <span>Gross Amount:</span>
+                <strong id="parcha-paper-calc-gross">Rs. 0</strong>
+              </div>
+              <div class="parcha-calc-row" style="color: #f43f5e;">
+                <span>Less: Advance (Peshgi):</span>
+                <strong id="parcha-paper-calc-advance">- Rs. 0</strong>
+              </div>
+              <div class="parcha-calc-row" style="color: #f43f5e;">
+                <span>Less: Alter / Kaat:</span>
+                <strong id="parcha-paper-calc-deduction">- Rs. 0</strong>
+              </div>
+              <div class="parcha-calc-row" style="color: #10b981;">
+                <span>Add: Bonus / Extra:</span>
+                <strong id="parcha-paper-calc-bonus">+ Rs. 0</strong>
+              </div>
+              <div class="parcha-net-payable-row">
+                <span>NET PAYABLE (SAAF RAQAM):</span>
+                <strong id="parcha-paper-net-payable">Rs. 0</strong>
+              </div>
+            </div>
+          </div>
+
+          <!-- Official Signatures Strip -->
+          <div class="parcha-signatures-row">
+            <div class="parcha-sign-block">
+              <div class="parcha-sign-line"></div>
+              <span>Prepared By (Incharge)</span>
+            </div>
+            <div class="parcha-sign-block">
+              <div class="parcha-sign-line"></div>
+              <span>Checked & Approved (Manager)</span>
+            </div>
+            <div class="parcha-sign-block">
+              <div class="parcha-sign-line"></div>
+              <span>Contractor Signature (Wasool Paya)</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal Footer -->
+      <div class="modal-footer"
+        style="background: var(--bg-card-hover); justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('modal-contractor-parcha')">
+          Close
+        </button>
+
+        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="btn btn-secondary" id="btn-save-parcha"
+            style="font-weight: 700; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>💾</span> <span>Save Parcha</span>
+          </button>
+          <button type="button" class="btn btn-success" id="btn-whatsapp-parcha"
+            style="font-weight: 700; background: #25d366; border-color: #128c7e; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📲</span> <span>Send WhatsApp</span>
+          </button>
+          <button type="button" class="btn btn-primary" id="btn-print-parcha"
+            style="font-weight: 800; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.6rem 1.25rem;">
+            <span>🖨️</span> <span>Print Parcha Slip</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: QUICK UPDATE DELIVERY DEADLINE                          -->
+  <!-- ============================================================== -->
+  <div class="modal-backdrop" id="modal-update-deadline" style="z-index: 380;">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <div>
+          <h2>Set Delivery Deadline</h2>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Assign or update target completion
+            date for style</p>
+        </div>
+        <button type="button" class="btn btn-secondary btn-icon"
+          onclick="closeModal('modal-update-deadline')">✕</button>
+      </div>
+
+      <form id="form-update-deadline">
+        <input type="hidden" id="deadline-style-id" value="">
+
+        <div class="modal-body">
+          <!-- Summary card -->
+          <div class="contractor-summary-card" style="margin-bottom: 1rem; padding: 0.75rem 0.95rem;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <div>
+                <span class="style-code-badge" id="deadline-summary-code">STYLE</span>
+                <span class="badge-tag inline" id="deadline-summary-cat" style="margin-left: 0.35rem;">Category</span>
+              </div>
+              <span class="contractor-tag" id="deadline-summary-cont">Contractor</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.8rem;">
+              <span>WIP on Floor: <strong style="color: var(--accent-rose);" id="deadline-summary-wip">0
+                  pcs</strong></span>
+              <span>Current Status: <strong id="deadline-summary-status">On Schedule</strong></span>
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="deadline-date-input" style="font-weight: 700; color: #f59e0b;">Target Delivery Date (Due Date)
+              *:</label>
+            <input type="date" class="app-input" id="deadline-date-input" required
+              onclick="this.showPicker && this.showPicker()">
+          </div>
+
+          <!-- Quick Preset Buttons -->
+          <div style="margin-top: 0.5rem;">
+            <span
+              style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; display: block; margin-bottom: 0.35rem;">Quick
+              Presets from Today:</span>
+            <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+              <button type="button" class="btn btn-secondary btn-xs btn-preset-deadline" data-days="3">+3 Days</button>
+              <button type="button" class="btn btn-secondary btn-xs btn-preset-deadline" data-days="5">+5 Days</button>
+              <button type="button" class="btn btn-secondary btn-xs btn-preset-deadline" data-days="7">+7 Days (1
+                Week)</button>
+              <button type="button" class="btn btn-secondary btn-xs btn-preset-deadline" data-days="10">+10
+                Days</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-update-deadline')">Cancel</button>
+          <button type="submit" class="btn btn-primary" style="font-weight: 700;">✓ Save Target Date</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Isolated Dedicated DOM Root for Clean Contractor Parcha Print Output -->
+  <div id="printable-contractor-parcha-root" style="display: none;"></div>
+
   <nav class="mobile-bottom-nav" id="mobile-bottom-nav" aria-label="Mobile Navigation Dock">
     <button type="button" class="mobile-bottom-nav-item active" data-tab="dashboard">
       <span class="bottom-nav-icon">⚡</span>
@@ -4857,13 +5278,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=35"></script>
-  <script src="db.js?v=35"></script>
-  <script src="app.js?v=35"></script>
+  <script src="data.js?v=36"></script>
+  <script src="db.js?v=36"></script>
+  <script src="app.js?v=36"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=35').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=36').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

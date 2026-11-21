@@ -32,6 +32,7 @@ function initApp() {
   try { initFormKeyboardNavigation(); } catch (e) { console.error("Keyboard nav init error:", e); }
   try { initDailyArrivalsTracker(); } catch (e) { console.error("Arrivals Tracker init error:", e); }
   try { initTrashView(); } catch (e) { console.error("Trash View init error:", e); }
+  try { initParchaEventListeners(); } catch (e) { console.error("Parcha init error:", e); }
 
   // 3. If a valid session exists, apply permissions and render
   try {
@@ -885,6 +886,9 @@ function renderDashboardView() {
     const wipTag = document.getElementById("dash-metric-wip-tag");
     if (wipTag) wipTag.textContent = `Floor WIP: ${pctWip}%`;
 
+    // 3.5 FLOOR DELIVERY DEADLINES & OVERDUE ALERTS
+    renderDashboardOverdueAlerts();
+
     // 4. CONTRACTOR WORKLOAD MATRIX
     renderDashboardContractorWorkload(workloads, totalBalHemb);
 
@@ -1427,6 +1431,7 @@ function renderMasterInventory() {
   const selectedContractor = document.getElementById("filter-contractor")?.value || "";
   const selectedCategory = document.getElementById("filter-category")?.value || "";
   const selectedBalance = document.getElementById("filter-balance-status")?.value || "";
+  const selectedDeadline = document.getElementById("filter-master-deadline")?.value || "";
 
   let list = window.db.getMasterInventory();
 
@@ -1449,7 +1454,15 @@ function renderMasterInventory() {
     if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
     if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
 
-    return queryPassed && contractorPassed && categoryPassed && balancePassed;
+    let deadlinePassed = true;
+    if (selectedDeadline) {
+      const status = item.overdue_info ? item.overdue_info.status : "";
+      if (selectedDeadline === "overdue") deadlinePassed = (status === "overdue");
+      else if (selectedDeadline === "due_soon") deadlinePassed = (status === "due_soon" || status === "due_today");
+      else if (selectedDeadline === "on_track") deadlinePassed = (status === "on_schedule");
+    }
+
+    return queryPassed && contractorPassed && categoryPassed && balancePassed && deadlinePassed;
   });
 
   const totalFilteredCount = list.length;
@@ -1499,11 +1512,28 @@ function renderMasterInventory() {
         ? item.contractor_name
         : "Unassigned");
 
+    const odInfo = item.overdue_info;
+    let deadlineBadgeHtml = "";
+    if (odInfo && (item.balance_from_hemb > 0 || item.total_balance > 0)) {
+      if (odInfo.status === "overdue") {
+        deadlineBadgeHtml = `<button type="button" class="badge-tag rose inline" style="cursor: pointer; font-size: 0.65rem; padding: 1px 5px; margin-top: 3px;" onclick="openUpdateDeadlineModal(${item.id})" title="Overdue! Click to change delivery deadline">${odInfo.badgeText}</button>`;
+      } else if (odInfo.status === "due_soon" || odInfo.status === "due_today") {
+        deadlineBadgeHtml = `<button type="button" class="badge-tag amber inline" style="cursor: pointer; font-size: 0.65rem; padding: 1px 5px; margin-top: 3px;" onclick="openUpdateDeadlineModal(${item.id})" title="Due Soon! Click to change delivery deadline">${odInfo.badgeText}</button>`;
+      } else if (item.target_date) {
+        deadlineBadgeHtml = `<button type="button" class="badge-tag inline" style="cursor: pointer; font-size: 0.65rem; padding: 1px 5px; margin-top: 3px;" onclick="openUpdateDeadlineModal(${item.id})" title="Target: ${item.target_date}">${odInfo.badgeText}</button>`;
+      } else {
+        deadlineBadgeHtml = `<button type="button" class="badge-tag inline" style="cursor: pointer; font-size: 0.62rem; padding: 1px 4px; margin-top: 3px; opacity: 0.7;" onclick="openUpdateDeadlineModal(${item.id})" title="Click to set delivery deadline">+ Set Due Date</button>`;
+      }
+    }
+
     return `
       <tr>
         <td style="text-align: center; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);">${item.sr_no || item.id}</td>
         <td>
-          <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+            <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
+            ${deadlineBadgeHtml}
+          </div>
         </td>
         <td><span class="badge-tag inline">${escapeHtml(item.category)}</span></td>
         <td style="font-weight: 700; font-family: var(--font-mono);">${item.cut_qty.toLocaleString()}</td>
@@ -2490,11 +2520,24 @@ function renderFinalStyleSheet() {
         ? item.contractor_name
         : "-");
 
+    const masterItem = window.db.findMasterByStyleAndCategory(item.style_code, item.category);
+    let finalOdBadge = "";
+    if (masterItem && masterItem.overdue_info && (balHemb > 0)) {
+      if (masterItem.overdue_info.status === "overdue") {
+        finalOdBadge = `<span class="badge-tag rose inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Overdue">${masterItem.overdue_info.badgeText}</span>`;
+      } else if (masterItem.overdue_info.status === "due_soon" || masterItem.overdue_info.status === "due_today") {
+        finalOdBadge = `<span class="badge-tag amber inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Due Soon">${masterItem.overdue_info.badgeText}</span>`;
+      }
+    }
+
     return `
       <tr>
         <td style="text-align: center; font-weight: 700; font-family: var(--font-mono); color: var(--text-muted);">${item.s_no || index + 1}</td>
         <td>
-          <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; gap: 2px;">
+            <span class="style-code-badge">${escapeHtml(item.style_code)}</span>
+            ${finalOdBadge}
+          </div>
         </td>
         <td><span class="badge-tag inline">${escapeHtml(item.category)}</span></td>
         <td style="font-weight: 600;">
@@ -3300,13 +3343,18 @@ function renderContractorsView() {
               </div>
 
               <!-- Card Footer -->
-              <div style="margin-top: 1rem; padding-top: 0.65rem; border-top: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem;">
+              <div style="margin-top: 1rem; padding-top: 0.65rem; border-top: 1px dashed var(--border-color); display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; flex-wrap: wrap; font-size: 0.75rem;">
                 <span style="color: var(--text-muted); font-weight: 600;">
                   ${c.styles.length} Style${c.styles.length === 1 ? '' : 's'} Assigned
                 </span>
-                <span style="font-weight: 700; color: var(--accent-rose); font-family: var(--font-mono);">
-                  Pending: ${c.total_balance.toLocaleString()} pcs
-                </span>
+                <div style="display: flex; align-items: center; gap: 0.45rem;">
+                  <span style="font-weight: 700; color: var(--accent-rose); font-family: var(--font-mono);">
+                    ${c.total_balance.toLocaleString()} pcs
+                  </span>
+                  <button type="button" class="btn btn-primary btn-xs" style="padding: 3px 8px; font-weight: 700; font-size: 0.72rem;" onclick="openContractorParchaModal('${escapeHtml(c.name)}')">
+                    🧾 Parcha
+                  </button>
+                </div>
               </div>
             </div>
           `).join("")}
@@ -4804,6 +4852,8 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     document.getElementById("entry-challan-rec").value = "";
     document.getElementById("entry-challan-dis").value = "";
     document.getElementById("entry-remarks").value = "";
+    const targetInput = document.getElementById("entry-target-date");
+    if (targetInput) targetInput.value = itemToEdit.target_date || "";
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
   } else {
     title.textContent = "Style Production & Balance Entry";
@@ -4816,6 +4866,12 @@ function openMasterEntryModal(itemToEdit = null, preferredMode = "receiving") {
     document.getElementById("entry-challan-rec").value = "";
     document.getElementById("entry-challan-dis").value = "";
     document.getElementById("entry-remarks").value = "";
+    const targetInput = document.getElementById("entry-target-date");
+    if (targetInput) {
+      const defTarget = new Date();
+      defTarget.setDate(defTarget.getDate() + 7);
+      targetInput.value = defTarget.toISOString().split("T")[0];
+    }
     setFormMode(preferredMode === "dispatch" ? "dispatch" : "receiving");
   }
 
@@ -4864,6 +4920,7 @@ async function saveMasterEntryFromForm() {
   const ship = (document.getElementById("entry-ship")?.value || "").trim();
   const cutQty = parseInt(document.getElementById("entry-cut-qty")?.value, 10) || 0;
   const remarks = (document.getElementById("entry-remarks")?.value || "").trim();
+  const targetDate = (document.getElementById("entry-target-date")?.value || "").trim();
 
   // 1. Validations
   if (!styleCode) {
@@ -4943,6 +5000,7 @@ async function saveMasterEntryFromForm() {
         date_receive: dateRec,
         challan_rec: challanRec,
         ship: ship,
+        target_date: targetDate,
         remarks: remarks
       });
 
@@ -5000,6 +5058,7 @@ async function saveMasterEntryFromForm() {
         date_dispatch: dateDis,
         challan_dis: challanDis,
         ship: ship,
+        target_date: targetDate,
         remarks: remarks
       });
 
@@ -5052,6 +5111,7 @@ async function saveMasterEntryFromForm() {
         date_dispatch: dateDis,
         challan_dis: challanDis,
         ship: ship,
+        target_date: targetDate,
         remarks: remarks
       });
 
@@ -11890,19 +11950,11 @@ function renderTrashView() {
             👤 ${safeUser}
           </span>
         </td>
-        <td style="text-align: center;">
-          <div style="display: flex; gap: 0.4rem; justify-content: center; align-items: center; flex-wrap: wrap;">
-            <button type="button" class="btn-trash-act btn-trash-restore" onclick="restoreTrashItem('${item.id}')" title="Restore this record back to active database">
-              ↩️ Restore
-            </button>
-            <button type="button" class="btn-trash-act btn-trash-view" onclick="openTrashItemDetails('${item.id}')" title="Inspect record details">
-              👁️ View
-            </button>
-            ${canDestroy ? `
-              <button type="button" class="btn-trash-act btn-trash-destroy" onclick="destroyTrashItem('${item.id}')" title="Permanently destroy this item forever">
-                🗑️ Destroy
-              </button>
-            ` : ''}
+        <td style="text-align: center; white-space: nowrap;">
+          <div style="display: flex; gap: 0.35rem; justify-content: center; align-items: center;">
+            <button class="btn btn-secondary btn-xs" onclick="openTrashDetailsModal('${item.id}')" title="View details">👁️ View</button>
+            <button class="btn btn-success btn-xs" onclick="restoreTrashItem('${item.id}')" title="Restore item">↩️ Restore</button>
+            <button class="btn btn-secondary btn-xs" style="color: var(--accent-rose);" onclick="destroyTrashItem('${item.id}')" title="Permanently delete">✕</button>
           </div>
         </td>
       </tr>
@@ -11910,98 +11962,11 @@ function renderTrashView() {
   }).join("");
 }
 
-async function restoreTrashItem(trashId) {
-  try {
-    const res = await window.db.restoreFromTrash(trashId);
-    if (res && res.success) {
-      renderAll();
-      showToast(`✓ Restored "${res.item.title}" successfully!`, "success");
-    }
-  } catch (err) {
-    showToast(`Error restoring item: ${err.message}`, "error");
-  }
-}
+function openTrashDetailsModal(id) {
+  const item = window.db.getTrashItemById(id);
+  if (!item) return;
 
-async function destroyTrashItem(trashId) {
-  if (!window.db.canUserPerformAction("can_destroy_trash")) {
-    showToast("Permission Denied: You do not have permission to permanently destroy records.", "error");
-    return;
-  }
-
-  const allTrash = window.db.getTrashItems();
-  const target = allTrash.find(t => t.id === trashId);
-  const label = target ? target.title : "this item";
-
-  if (confirm(`⚠️ PERMANENT DELETION WARNING:\n\nAre you sure you want to PERMANENTLY DESTROY:\n"${label}"?\n\nThis action CANNOT be undone!`)) {
-    try {
-      await window.db.destroyFromTrash(trashId);
-      renderAll();
-      showToast("Item permanently destroyed from Trash.", "info");
-      closeModal("modal-trash-details");
-    } catch (err) {
-      showToast(`Error destroying item: ${err.message}`, "error");
-    }
-  }
-}
-
-async function restoreAllTrashAction() {
-  const allTrash = window.db.getTrashItems();
-  if (allTrash.length === 0) {
-    showToast("Trash is already empty.", "info");
-    return;
-  }
-
-  const count = (currentTrashFilterType && currentTrashFilterType !== "all")
-    ? allTrash.filter(t => t.entity_type === currentTrashFilterType).length
-    : allTrash.length;
-
-  const typeLabel = (currentTrashFilterType && currentTrashFilterType !== "all")
-    ? `all ${count} filtered ${currentTrashFilterType} items`
-    : `all ${count} items in Trash`;
-
-  if (confirm(`Are you sure you want to restore ${typeLabel} back to the software?`)) {
-    try {
-      const res = await window.db.restoreAllTrash(currentTrashFilterType);
-      renderAll();
-      showToast(`✓ Successfully restored ${res.restoredCount} items!`, "success");
-    } catch (err) {
-      showToast(`Error restoring items: ${err.message}`, "error");
-    }
-  }
-}
-
-async function emptyTrashAction() {
-  if (!window.db.canUserPerformAction("can_destroy_trash")) {
-    showToast("Permission Denied: You do not have permission to empty trash.", "error");
-    return;
-  }
-
-  const allTrash = window.db.getTrashItems();
-  if (allTrash.length === 0) {
-    showToast("Trash is already empty.", "info");
-    return;
-  }
-
-  if (confirm(`⚠️ EMPTY TRASH WARNING:\n\nAre you sure you want to permanently erase ALL ${allTrash.length} items from Trash?\n\nAll selected records will be irreversibly destroyed and CANNOT be recovered!`)) {
-    try {
-      await window.db.emptyTrash();
-      renderAll();
-      showToast(`Trash emptied: All ${allTrash.length} items permanently deleted.`, "info");
-    } catch (err) {
-      showToast(`Error emptying trash: ${err.message}`, "error");
-    }
-  }
-}
-
-function openTrashItemDetails(trashId) {
-  const allTrash = window.db.getTrashItems();
-  const item = allTrash.find(t => t.id === trashId);
-  if (!item) {
-    showToast("Item not found.", "error");
-    return;
-  }
-
-  const metaBox = document.getElementById("trash-detail-meta-box");
+  const metaBox = document.getElementById("trash-detail-meta");
   const grid = document.getElementById("trash-detail-grid");
   const btnRestore = document.getElementById("btn-trash-detail-restore");
   const btnDestroy = document.getElementById("btn-trash-detail-destroy");
@@ -12066,6 +12031,530 @@ function openTrashItemDetails(trashId) {
   }
 
   openModal("modal-trash-details");
+}
+
+// ====================================================================
+// FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
+// ====================================================================
+function renderDashboardOverdueAlerts() {
+  const container = document.getElementById("dash-overdue-list-container");
+  if (!container) return;
+
+  const summary = (window.db && typeof window.db.getOverdueStylesSummary === "function")
+    ? window.db.getOverdueStylesSummary()
+    : { overdueList: [], dueSoonList: [], onScheduleList: [], totalOverdueCount: 0, totalOverduePieces: 0, totalDueSoonCount: 0, totalDueSoonPieces: 0, totalOnScheduleCount: 0 };
+
+  const badgeCount = document.getElementById("dash-overdue-badge-count");
+  if (badgeCount) {
+    badgeCount.textContent = `${summary.totalOverdueCount} Overdue`;
+    badgeCount.className = summary.totalOverdueCount > 0 ? "badge-tag rose inline" : "badge-tag inline";
+  }
+
+  const elOverdueCount = document.getElementById("dash-overdue-count");
+  if (elOverdueCount) elOverdueCount.textContent = `${summary.totalOverdueCount} Style${summary.totalOverdueCount === 1 ? '' : 's'}`;
+
+  const elOverduePcs = document.getElementById("dash-overdue-pcs");
+  if (elOverduePcs) elOverduePcs.textContent = `${summary.totalOverduePieces.toLocaleString()} pcs pending`;
+
+  const elDueSoonCount = document.getElementById("dash-due-soon-count");
+  if (elDueSoonCount) elDueSoonCount.textContent = `${summary.totalDueSoonCount} Style${summary.totalDueSoonCount === 1 ? '' : 's'}`;
+
+  const elDueSoonPcs = document.getElementById("dash-due-soon-pcs");
+  if (elDueSoonPcs) elDueSoonPcs.textContent = `${summary.totalDueSoonPieces.toLocaleString()} pcs pending`;
+
+  const elOnTrack = document.getElementById("dash-on-track-count");
+  if (elOnTrack) elOnTrack.textContent = `${summary.totalOnScheduleCount} Style${summary.totalOnScheduleCount === 1 ? '' : 's'}`;
+
+  const combinedAlerts = [...summary.overdueList, ...summary.dueSoonList];
+
+  if (combinedAlerts.length === 0) {
+    container.innerHTML = `
+      <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); background: var(--bg-surface); border: 1.5px dashed var(--border-color); border-radius: var(--radius-md);">
+        <div style="font-size: 2rem; margin-bottom: 0.35rem;">🎉</div>
+        <strong style="color: var(--text-main); font-size: 0.95rem;">All Embroidery Floor Orders Are On Schedule!</strong>
+        <p style="font-size: 0.775rem; margin-top: 0.25rem;">Zero styles currently exceeding delivery target dates. Great job team!</p>
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = combinedAlerts.slice(0, 8).map(item => {
+    const isLate = (item.status === "overdue");
+    const rowClass = isLate ? "is-late" : "is-due-soon";
+    const badgeTag = isLate
+      ? `<span class="badge-tag rose inline" style="font-weight: 800;">🚨 ${item.daysLate} Day${item.daysLate === 1 ? '' : 's'} Late</span>`
+      : `<span class="badge-tag amber inline" style="font-weight: 800;">⏳ Due in ${item.daysLeft} Day${item.daysLeft === 1 ? '' : 's'}</span>`;
+
+    const targetFormatted = item.target_date || "No date set";
+
+    return `
+      <div class="overdue-item-row ${rowClass}">
+        <div style="display: flex; align-items: center; gap: 0.65rem; min-width: 200px;">
+          <div style="display: flex; flex-direction: column;">
+            <div style="display: flex; align-items: center; gap: 0.45rem;">
+              <span class="style-code-badge" style="font-size: 0.825rem; font-weight: 800;">${escapeHtml(item.style_code)}</span>
+              <span class="badge-tag inline" style="font-size: 0.7rem;">${escapeHtml(item.category)}</span>
+            </div>
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; display: flex; align-items: center; gap: 0.35rem;">
+              <span>👤 <strong>${escapeHtml(item.contractor_name)}</strong></span>
+              ${item.phone ? `<span style="font-family: var(--font-mono); font-size: 0.7rem;">(${escapeHtml(item.phone)})</span>` : ''}
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+          <div style="text-align: right;">
+            <div style="font-family: var(--font-mono); font-weight: 800; color: ${isLate ? 'var(--accent-rose)' : '#f59e0b'}; font-size: 0.925rem;">
+              ${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs WIP
+            </div>
+            <div style="font-size: 0.7rem; color: var(--text-muted);">Due: ${escapeHtml(targetFormatted)}</div>
+          </div>
+
+          <div>
+            ${badgeTag}
+          </div>
+
+          <div style="display: flex; gap: 0.35rem; align-items: center;">
+            <button type="button" class="btn btn-success btn-xs" 
+              onclick="sendOverdueWhatsAppReminder('${escapeHtml(item.style_code)}', '${escapeHtml(item.category)}', '${escapeHtml(item.contractor_name)}', ${item.balance_from_hemb || item.total_balance || 0}, '${escapeHtml(targetFormatted)}', ${item.daysLate || 0}, '${escapeHtml(item.phone || '')}')"
+              style="padding: 4px 8px; font-weight: 700; background: #25d366; border-color: #128c7e; color: #fff; display: inline-flex; align-items: center; gap: 0.25rem;"
+              title="Send urgent WhatsApp delay reminder to contractor">
+              <span>📲</span> <span>WhatsApp</span>
+            </button>
+            <button type="button" class="btn btn-secondary btn-xs" 
+              onclick="openUpdateDeadlineModal(${item.id})"
+              style="padding: 4px 8px; font-weight: 700;"
+              title="Set or extend delivery target date">
+              <span>🎯 Due Date</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function sendOverdueWhatsAppReminder(styleCode, category, contractor, balance, targetDate, daysLate, phone) {
+  let cleanPhone = (phone || "").replace(/[^0-9]/g, "");
+  if (cleanPhone.startsWith("0")) {
+    cleanPhone = "92" + cleanPhone.substring(1);
+  }
+
+  let delayNotice = daysLate > 0 ? `jo ${daysLate} din pehle guzar chuki hai` : `aaj hai`;
+  const message = `*URGENT: CRAFTFLOW HAND EMBROIDERY FLOOR REMINDER*\n` +
+    `---------------------------------------\n` +
+    `Salam *${contractor}* bhai,\n\n` +
+    `Aap k paas Style *${styleCode}* (*${category}*) k *${Number(balance).toLocaleString()} pieces* pending hain.\n` +
+    `Is order ki target delivery date *${targetDate}* thi (${delayNotice}).\n\n` +
+    `Garment unit dispatch aur finishing k liye yeh maal foran darkar hai. Meharbani farma kar aaj hi finished pieces adday se dispatch karwayen.\n\n` +
+    `Shukriya,\n*Hand Embroidery Department*`;
+
+  const encoded = encodeURIComponent(message);
+  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  window.open(url, "_blank");
+}
+
+function openUpdateDeadlineModal(masterId) {
+  const master = window.db.getMasterInventory();
+  const item = master.find(m => Number(m.id) === Number(masterId));
+  if (!item) {
+    showToast("Style record not found", "error");
+    return;
+  }
+
+  document.getElementById("deadline-style-id").value = item.id;
+  document.getElementById("deadline-summary-code").textContent = item.style_code;
+  document.getElementById("deadline-summary-cat").textContent = item.category;
+  document.getElementById("deadline-summary-cont").textContent = item.contractor_name || "Unassigned";
+  document.getElementById("deadline-summary-wip").textContent = `${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs`;
+
+  const odInfo = item.overdue_info || { badgeText: "On Schedule" };
+  document.getElementById("deadline-summary-status").textContent = odInfo.badgeText;
+
+  const dateInput = document.getElementById("deadline-date-input");
+  if (item.target_date) {
+    dateInput.value = item.target_date;
+  } else {
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    dateInput.value = defaultDate.toISOString().split("T")[0];
+  }
+
+  openModal("modal-update-deadline");
+}
+
+function initDeadlineModalEvents() {
+  const form = document.getElementById("form-update-deadline");
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const id = document.getElementById("deadline-style-id").value;
+      const targetDate = document.getElementById("deadline-date-input").value;
+      if (!id || !targetDate) return;
+
+      window.db.updateMasterTargetDate(id, targetDate);
+      closeModal("modal-update-deadline");
+      showToast(`Target delivery date updated to ${targetDate}!`, "success");
+
+      // Refresh views
+      if (typeof renderMasterInventory === "function") renderMasterInventory();
+      if (typeof renderDashboardView === "function") renderDashboardView();
+      if (typeof renderFinalStyleSheet === "function") renderFinalStyleSheet();
+    });
+  }
+
+  document.querySelectorAll(".btn-preset-deadline").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const days = parseInt(btn.getAttribute("data-days"), 10) || 7;
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      const dateInput = document.getElementById("deadline-date-input");
+      if (dateInput) dateInput.value = d.toISOString().split("T")[0];
+    });
+  });
+}
+
+// ====================================================================
+// AUTOMATIC CONTRACTOR PARCHA & BILLING SHEET CONTROLLER
+// ====================================================================
+let activeParchaData = null;
+
+function openContractorParchaModal(contractorName = null, period = null) {
+  const contractors = window.db.getContractors();
+  if (contractors.length === 0) {
+    showToast("No contractors registered yet. Add a contractor first.", "info");
+    return;
+  }
+
+  populateParchaDropdowns(contractorName, period);
+
+  // Set today's date
+  const dateInput = document.getElementById("parcha-date-input");
+  if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+
+  // Reset inputs
+  document.getElementById("parcha-input-advance").value = 0;
+  document.getElementById("parcha-input-deduction").value = 0;
+  document.getElementById("parcha-input-bonus").value = 0;
+  document.getElementById("parcha-input-notes").value = "Payment cleared on inspection.";
+
+  renderContractorParchaPreview();
+  renderParchaHistoryList();
+  openModal("modal-contractor-parcha");
+}
+
+function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
+  const contSelect = document.getElementById("parcha-select-contractor");
+  if (contSelect) {
+    const contractors = window.db.getContractors();
+    contSelect.innerHTML = contractors.map(c => `
+      <option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} ${c.phone ? `(${escapeHtml(c.phone)})` : ''}</option>
+    `).join("");
+
+    if (selectedCont) {
+      contSelect.value = selectedCont;
+    }
+  }
+
+  const periodSelect = document.getElementById("parcha-select-period");
+  if (periodSelect) {
+    const periods = (window.db && typeof window.db.getRateApprovalPeriods === "function")
+      ? window.db.getRateApprovalPeriods()
+      : [];
+
+    let periodOptions = `<option value="all">⚡ All Completed Dispatches</option>`;
+    periods.forEach(p => {
+      periodOptions += `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}</option>`;
+    });
+    periodSelect.innerHTML = periodOptions;
+
+    if (selectedPeriod) {
+      periodSelect.value = selectedPeriod;
+    }
+  }
+}
+
+function renderContractorParchaPreview() {
+  const contSelect = document.getElementById("parcha-select-contractor");
+  const periodSelect = document.getElementById("parcha-select-period");
+  const dateInput = document.getElementById("parcha-date-input");
+
+  const contractorName = contSelect ? contSelect.value : "";
+  const period = periodSelect ? periodSelect.value : "all";
+  const slipDate = dateInput ? dateInput.value : new Date().toISOString().split("T")[0];
+
+  if (!contractorName) return;
+
+  const data = window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period);
+  data.slip_date = slipDate;
+
+  // Read overrides from inputs
+  const advance = Number(document.getElementById("parcha-input-advance")?.value) || 0;
+  const deduction = Number(document.getElementById("parcha-input-deduction")?.value) || 0;
+  const bonus = Number(document.getElementById("parcha-input-bonus")?.value) || 0;
+  const notes = document.getElementById("parcha-input-notes")?.value || "";
+
+  data.advance_amount = advance;
+  data.deduction_amount = deduction;
+  data.bonus_amount = bonus;
+  data.net_payable = Math.max(0, data.gross_amount - advance - deduction + bonus);
+  data.notes = notes;
+
+  activeParchaData = data;
+
+  // Render on paper voucher
+  document.getElementById("parcha-paper-no").textContent = data.parcha_no;
+  document.getElementById("parcha-paper-cont-name").textContent = data.contractor_name;
+  document.getElementById("parcha-paper-cont-phone").textContent = data.contractor_phone || "Not recorded";
+  document.getElementById("parcha-paper-date").textContent = data.slip_date;
+  document.getElementById("parcha-paper-period").textContent = data.period || "All Production Records";
+
+  const tbody = document.getElementById("parcha-paper-tbody");
+  if (tbody) {
+    if (data.items.length === 0) {
+      tbody.innerHTML = `
+        <tr>
+          <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
+            No dispatched or finished pieces found for <strong>${escapeHtml(data.contractor_name)}</strong> in this period.
+          </td>
+        </tr>
+      `;
+    } else {
+      tbody.innerHTML = data.items.map(item => `
+        <tr>
+          <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: #64748b;">${item.sr}</td>
+          <td><strong style="color: #0f172a; font-family: var(--font-mono);">${escapeHtml(item.style_code)}</strong></td>
+          <td style="text-align: center;">${escapeHtml(item.category)}</td>
+          <td style="text-align: right; font-weight: 700; font-family: var(--font-mono);">${item.pieces.toLocaleString()}</td>
+          <td style="text-align: right; font-family: var(--font-mono);">Rs. ${item.rate.toLocaleString()}</td>
+          <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: #0f172a;">Rs. ${item.total_amount.toLocaleString()}</td>
+        </tr>
+      `).join("");
+    }
+  }
+
+  document.getElementById("parcha-paper-total-pcs").textContent = data.total_pieces.toLocaleString();
+  document.getElementById("parcha-paper-gross-total").textContent = `Rs. ${data.gross_amount.toLocaleString()}`;
+
+  document.getElementById("parcha-paper-calc-gross").textContent = `Rs. ${data.gross_amount.toLocaleString()}`;
+  document.getElementById("parcha-paper-calc-advance").textContent = `- Rs. ${advance.toLocaleString()}`;
+  document.getElementById("parcha-paper-calc-deduction").textContent = `- Rs. ${deduction.toLocaleString()}`;
+  document.getElementById("parcha-paper-calc-bonus").textContent = `+ Rs. ${bonus.toLocaleString()}`;
+  document.getElementById("parcha-paper-net-payable").textContent = `Rs. ${data.net_payable.toLocaleString()}`;
+
+  document.getElementById("parcha-paper-words").textContent = numberToWordsUrduEnglish(data.net_payable);
+  document.getElementById("parcha-paper-notes-text").textContent = `Notes: ${data.notes || "None"}`;
+}
+
+function numberToWordsUrduEnglish(amount) {
+  const num = Math.round(Number(amount)) || 0;
+  if (num === 0) return "Rupees Zero Only";
+
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function convertChunk(n) {
+    let str = "";
+    if (n >= 100) {
+      str += ones[Math.floor(n / 100)] + " Hundred ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      str += tens[Math.floor(n / 10)] + " ";
+      n %= 10;
+    }
+    if (n > 0) {
+      str += ones[n] + " ";
+    }
+    return str.trim();
+  }
+
+  let words = "";
+  if (num >= 10000000) {
+    const crore = Math.floor(num / 10000000);
+    words += convertChunk(crore) + " Crore ";
+    num %= 10000000;
+  }
+  if (num >= 100000) {
+    const lakh = Math.floor(num / 100000);
+    words += convertChunk(lakh) + " Lakh ";
+    num %= 100000;
+  }
+  if (num >= 1000) {
+    const thousand = Math.floor(num / 1000);
+    words += convertChunk(thousand) + " Thousand ";
+    num %= 1000;
+  }
+  if (num > 0) {
+    words += convertChunk(num);
+  }
+
+  return `Rupees ${words.trim()} Only`;
+}
+
+function printContractorParcha() {
+  if (!activeParchaData) {
+    showToast("No active parcha to print", "error");
+    return;
+  }
+
+  const paperElement = document.getElementById("contractor-parcha-paper");
+  const printRoot = document.getElementById("printable-contractor-parcha-root");
+  if (!paperElement || !printRoot) return;
+
+  printRoot.innerHTML = paperElement.outerHTML;
+  document.body.classList.add("is-printing-parcha");
+
+  setTimeout(() => {
+    window.print();
+    setTimeout(() => {
+      document.body.classList.remove("is-printing-parcha");
+      printRoot.innerHTML = "";
+    }, 1000);
+  }, 100);
+}
+
+function sendContractorParchaWhatsApp() {
+  if (!activeParchaData) {
+    showToast("No parcha data available", "error");
+    return;
+  }
+
+  const d = activeParchaData;
+  let cleanPhone = (d.contractor_phone || "").replace(/[^0-9]/g, "");
+  if (cleanPhone.startsWith("0")) {
+    cleanPhone = "92" + cleanPhone.substring(1);
+  }
+
+  let itemsSummary = "";
+  d.items.forEach(i => {
+    itemsSummary += `• ${i.style_code} (${i.category}): ${i.pieces.toLocaleString()} pcs @ Rs. ${i.rate} = Rs. ${i.total_amount.toLocaleString()}\n`;
+  });
+
+  const msg = `*CRAFTFLOW - CONTRACTOR PAYMENT PARCHA*\n` +
+    `*Parcha No:* ${d.parcha_no}\n` +
+    `*Date:* ${d.slip_date}\n` +
+    `*Contractor:* ${d.contractor_name}\n` +
+    `*Cycle:* ${d.period}\n` +
+    `---------------------------------------\n` +
+    `*WORK BREAKDOWN:*\n` +
+    itemsSummary +
+    `---------------------------------------\n` +
+    `*Total Finished Pieces:* ${d.total_pieces.toLocaleString()} pcs\n` +
+    `*Gross Amount:* Rs. ${d.gross_amount.toLocaleString()}\n` +
+    (d.advance_amount > 0 ? `*Advance (Peshgi):* - Rs. ${d.advance_amount.toLocaleString()}\n` : ``) +
+    (d.deduction_amount > 0 ? `*Alter / Kaat:* - Rs. ${d.deduction_amount.toLocaleString()}\n` : ``) +
+    (d.bonus_amount > 0 ? `*Bonus / Extra:* + Rs. ${d.bonus_amount.toLocaleString()}\n` : ``) +
+    `*NET PAYABLE (SAAF RAQAM): Rs. ${d.net_payable.toLocaleString()}*\n` +
+    `*In Words:* ${numberToWordsUrduEnglish(d.net_payable)}\n` +
+    `---------------------------------------\n` +
+    `*Hand Embroidery Department*`;
+
+  const encoded = encodeURIComponent(msg);
+  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  window.open(url, "_blank");
+}
+
+function saveContractorParchaAction() {
+  if (!activeParchaData) {
+    showToast("No parcha data to save", "error");
+    return;
+  }
+
+  const saved = window.db.saveContractorParcha(activeParchaData);
+  if (saved) {
+    showToast(`Parcha #${saved.parcha_no} saved successfully in history!`, "success");
+    renderParchaHistoryList();
+  }
+}
+
+function toggleParchaHistoryPanel() {
+  const panel = document.getElementById("parcha-history-panel");
+  if (!panel) return;
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+function renderParchaHistoryList() {
+  const container = document.getElementById("parcha-history-list");
+  const countBadge = document.getElementById("parcha-history-count");
+  if (!container) return;
+
+  const list = window.db.getContractorParchas();
+  if (countBadge) countBadge.textContent = `${list.length} Saved`;
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem;">No saved parchay yet.</div>`;
+    return;
+  }
+
+  container.innerHTML = list.slice(0, 10).map(p => `
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem;">
+      <div>
+        <strong style="color: var(--primary); font-family: var(--font-mono);">${escapeHtml(p.parcha_no)}</strong>
+        <span style="margin-left: 0.4rem;">${escapeHtml(p.contractor_name)}</span>
+        <span style="color: var(--text-muted); margin-left: 0.4rem;">(${escapeHtml(p.slip_date)})</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 0.5rem;">
+        <strong style="color: #10b981; font-family: var(--font-mono);">Rs. ${(Number(p.net_payable) || 0).toLocaleString()}</strong>
+        <button type="button" class="btn btn-secondary btn-xs" style="padding: 1px 6px;" onclick="loadParchaFromHistory('${p.id}')">View</button>
+        <button type="button" class="btn btn-secondary btn-xs" style="padding: 1px 5px; color: var(--accent-rose);" onclick="deleteParchaHistoryItem('${p.id}')">✕</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function loadParchaFromHistory(id) {
+  const p = window.db.getContractorParchaById(id);
+  if (!p) return;
+
+  activeParchaData = p;
+
+  const contSelect = document.getElementById("parcha-select-contractor");
+  if (contSelect) contSelect.value = p.contractor_name;
+
+  const dateInput = document.getElementById("parcha-date-input");
+  if (dateInput) dateInput.value = p.slip_date;
+
+  document.getElementById("parcha-input-advance").value = p.advance_amount || 0;
+  document.getElementById("parcha-input-deduction").value = p.deduction_amount || 0;
+  document.getElementById("parcha-input-bonus").value = p.bonus_amount || 0;
+  document.getElementById("parcha-input-notes").value = p.notes || "";
+
+  renderContractorParchaPreview();
+  showToast(`Loaded Parcha #${p.parcha_no}`, "info");
+}
+
+function deleteParchaHistoryItem(id) {
+  window.db.deleteContractorParcha(id);
+  renderParchaHistoryList();
+  showToast("Parcha deleted from history", "info");
+}
+
+function initParchaEventListeners() {
+  document.getElementById("btn-open-contractor-parcha")?.addEventListener("click", () => openContractorParchaModal());
+  document.getElementById("btn-open-parcha-from-payment")?.addEventListener("click", () => openContractorParchaModal());
+
+  document.getElementById("btn-parcha-refresh")?.addEventListener("click", renderContractorParchaPreview);
+  document.getElementById("btn-toggle-parcha-history")?.addEventListener("click", toggleParchaHistoryPanel);
+
+  document.getElementById("parcha-select-contractor")?.addEventListener("change", renderContractorParchaPreview);
+  document.getElementById("parcha-select-period")?.addEventListener("change", renderContractorParchaPreview);
+  document.getElementById("parcha-date-input")?.addEventListener("change", renderContractorParchaPreview);
+
+  ["parcha-input-advance", "parcha-input-deduction", "parcha-input-bonus", "parcha-input-notes"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", renderContractorParchaPreview);
+  });
+
+  document.getElementById("btn-print-parcha")?.addEventListener("click", printContractorParcha);
+  document.getElementById("btn-whatsapp-parcha")?.addEventListener("click", sendContractorParchaWhatsApp);
+  document.getElementById("btn-save-parcha")?.addEventListener("click", saveContractorParchaAction);
+
+  initDeadlineModalEvents();
+
+  // Filter deadline listener in Master Inventory
+  document.getElementById("filter-master-deadline")?.addEventListener("change", () => {
+    if (typeof renderMasterInventory === "function") renderMasterInventory();
+  });
 }
 
 // ====================================================================

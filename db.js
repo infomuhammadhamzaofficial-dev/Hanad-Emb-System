@@ -17,7 +17,8 @@ const DB_KEYS = {
   RATE_APPROVAL_PERIODS: "hand_emb_rate_approval_periods_v1",
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
   DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1",
-  TRASH: "hand_emb_trash_v1"
+  TRASH: "hand_emb_trash_v1",
+  CONTRACTOR_PARCHAS: "hand_emb_contractor_parchas_v1"
 };
 
 // ====================================================================
@@ -438,10 +439,88 @@ class DatabaseService {
     const balanceFromHemb = rec - dis; // True WIP balance (negative indicates over-dispatch/deficit)
     const totalBalance = Math.max(0, cut - dis);
 
+    let overdueInfo = {
+      status: "on_schedule",
+      daysLate: 0,
+      daysLeft: 0,
+      badgeText: "✅ On Track",
+      badgeClass: "emerald"
+    };
+
+    if (balanceFromHemb <= 0 && totalBalance <= 0) {
+      overdueInfo = {
+        status: "completed",
+        daysLate: 0,
+        daysLeft: 0,
+        badgeText: "Completed",
+        badgeClass: "emerald"
+      };
+    } else {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const today = new Date(todayStr + "T00:00:00");
+
+      if (item.target_date) {
+        const target = new Date(item.target_date + "T00:00:00");
+        if (!isNaN(target.getTime())) {
+          const diffDays = Math.round((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
+          if (diffDays > 0) {
+            overdueInfo = {
+              status: "overdue",
+              daysLate: diffDays,
+              daysLeft: 0,
+              badgeText: `🚨 ${diffDays}d Late`,
+              badgeClass: "rose"
+            };
+          } else if (diffDays === 0) {
+            overdueInfo = {
+              status: "due_today",
+              daysLate: 0,
+              daysLeft: 0,
+              badgeText: "⚠️ Due Today",
+              badgeClass: "amber"
+            };
+          } else if (diffDays >= -2) {
+            overdueInfo = {
+              status: "due_soon",
+              daysLate: 0,
+              daysLeft: Math.abs(diffDays),
+              badgeText: `⏳ Due in ${Math.abs(diffDays)}d`,
+              badgeClass: "amber"
+            };
+          } else {
+            overdueInfo = {
+              status: "on_schedule",
+              daysLate: 0,
+              daysLeft: Math.abs(diffDays),
+              badgeText: `✅ ${Math.abs(diffDays)}d left`,
+              badgeClass: "emerald"
+            };
+          }
+        }
+      } else if (item.date_receive) {
+        // Fallback: if style is on floor > 7 days without explicit target_date
+        const cleanRecDate = String(item.date_receive).split("/")[0].trim();
+        const recDate = new Date(cleanRecDate + "T00:00:00");
+        if (!isNaN(recDate.getTime())) {
+          const ageDays = Math.round((today.getTime() - recDate.getTime()) / (1000 * 60 * 60 * 24));
+          if (ageDays > 7) {
+            overdueInfo = {
+              status: "overdue",
+              daysLate: ageDays - 7,
+              daysLeft: 0,
+              badgeText: `🚨 ${ageDays}d on Floor`,
+              badgeClass: "rose"
+            };
+          }
+        }
+      }
+    }
+
     return {
       balance_from_stock: balanceFromStock,
       balance_from_hemb: balanceFromHemb,
-      total_balance: totalBalance
+      total_balance: totalBalance,
+      overdue_info: overdueInfo
     };
   }
 
@@ -489,6 +568,7 @@ class DatabaseService {
       date_dispatch: item.date_dispatch || "",
       challan_dis: item.challan_dis || "",
       contractor_name: (item.contractor_name || "").trim(),
+      target_date: (item.target_date || "").trim(),
       status: item.status || "In Progress",
       remarks: item.remarks || ""
     };
@@ -509,7 +589,7 @@ class DatabaseService {
 
   updateMasterInventory(id, updatedFields) {
     const list = this.getMasterInventory();
-    const index = list.findIndex(i => i.id === id);
+    const index = list.findIndex(i => Number(i.id) === Number(id));
     if (index === -1) return null;
 
     list[index] = {
@@ -518,7 +598,8 @@ class DatabaseService {
       id: id,
       cut_qty: parseInt(updatedFields.cut_qty !== undefined ? updatedFields.cut_qty : list[index].cut_qty, 10) || 0,
       received_qty: parseInt(updatedFields.received_qty !== undefined ? updatedFields.received_qty : list[index].received_qty, 10) || 0,
-      dispatch_from_hemb: parseInt(updatedFields.dispatch_from_hemb !== undefined ? updatedFields.dispatch_from_hemb : list[index].dispatch_from_hemb, 10) || 0
+      dispatch_from_hemb: parseInt(updatedFields.dispatch_from_hemb !== undefined ? updatedFields.dispatch_from_hemb : list[index].dispatch_from_hemb, 10) || 0,
+      target_date: updatedFields.target_date !== undefined ? String(updatedFields.target_date).trim() : (list[index].target_date || "")
     };
 
     if (list[index].contractor_name) {
@@ -527,6 +608,264 @@ class DatabaseService {
 
     this.saveMasterInventory(list);
     return list[index];
+  }
+
+  updateMasterTargetDate(id, targetDate) {
+    return this.updateMasterInventory(id, { target_date: (targetDate || "").trim() });
+  }
+
+  // -------------------------------------------------------------
+  // CONTRACTOR PARCHA & BILLING SHEET MANAGEMENT
+  // -------------------------------------------------------------
+  getContractorParchas() {
+    try {
+      const data = JSON.parse(localStorage.getItem(DB_KEYS.CONTRACTOR_PARCHAS) || "[]");
+      return Array.isArray(data) ? data : [];
+    } catch (e) {
+      console.warn("Failed reading contractor parchas:", e);
+      return [];
+    }
+  }
+
+  saveContractorParcha(parcha) {
+    if (!parcha) return null;
+    const list = this.getContractorParchas();
+    const existingIndex = list.findIndex(p => p.id === parcha.id || (parcha.parcha_no && p.parcha_no === parcha.parcha_no));
+
+    const now = new Date();
+    const record = {
+      ...parcha,
+      id: parcha.id || ("pch_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5)),
+      parcha_no: parcha.parcha_no || ("PCH-" + now.getFullYear() + "-" + String(list.length + 1).padStart(4, "0")),
+      contractor_name: (parcha.contractor_name || "").trim(),
+      slip_date: parcha.slip_date || now.toISOString().split("T")[0],
+      period: parcha.period || "Current Production Cycle",
+      total_pieces: Number(parcha.total_pieces) || 0,
+      gross_amount: Number(parcha.gross_amount) || 0,
+      advance_amount: Number(parcha.advance_amount) || 0,
+      deduction_amount: Number(parcha.deduction_amount) || 0,
+      bonus_amount: Number(parcha.bonus_amount) || 0,
+      net_payable: Number(parcha.net_payable) || 0,
+      items: Array.isArray(parcha.items) ? parcha.items : [],
+      notes: parcha.notes || "",
+      created_at: parcha.created_at || now.toISOString()
+    };
+
+    if (existingIndex !== -1) {
+      list[existingIndex] = record;
+    } else {
+      list.unshift(record);
+    }
+
+    try {
+      localStorage.setItem(DB_KEYS.CONTRACTOR_PARCHAS, JSON.stringify(list));
+    } catch (e) {
+      console.warn("Failed saving contractor parcha:", e);
+    }
+    return record;
+  }
+
+  deleteContractorParcha(id) {
+    let list = this.getContractorParchas();
+    const filtered = list.filter(p => p.id !== id && p.parcha_no !== id);
+    try {
+      localStorage.setItem(DB_KEYS.CONTRACTOR_PARCHAS, JSON.stringify(filtered));
+    } catch (e) {
+      console.warn("Failed deleting contractor parcha:", e);
+    }
+    return filtered;
+  }
+
+  getContractorParchaById(id) {
+    const list = this.getContractorParchas();
+    return list.find(p => p.id === id || p.parcha_no === id) || null;
+  }
+
+  generateContractorParchaData(contractorName, period = "") {
+    const cleanCont = (contractorName || "").trim().toLowerCase();
+    const contractors = this.getContractors();
+    const contObj = contractors.find(c => (c.name || "").toLowerCase() === cleanCont) || { name: contractorName, phone: "" };
+
+    const master = this.getMasterInventory();
+    const disLogs = this.getDispatchLogs();
+    const paySheets = this.getPaymentSheets();
+
+    // Map of style_code + category -> { style_code, category, pieces, rate, total_amount, remarks }
+    const itemsMap = new Map();
+
+    // 1. Gather from dispatches
+    disLogs.forEach(d => {
+      if ((d.contractor_name || "").toLowerCase() === cleanCont) {
+        const code = (d.style_code || "").trim().toUpperCase();
+        const cat = (d.category || "Shirt").trim();
+        const key = `${code}:::${cat.toUpperCase()}`;
+        if (!itemsMap.has(key)) {
+          itemsMap.set(key, {
+            style_code: code,
+            category: cat,
+            pieces: 0,
+            rate: 0,
+            total_amount: 0,
+            remarks: d.remarks || ""
+          });
+        }
+        const row = itemsMap.get(key);
+        row.pieces += (parseInt(d.dispatch_qty, 10) || 0);
+      }
+    });
+
+    // 2. Also check master inventory if dispatches weren't entered separately
+    if (itemsMap.size === 0) {
+      master.forEach(m => {
+        if ((m.contractor_name || "").toLowerCase() === cleanCont && (m.dispatch_from_hemb > 0 || m.received_qty > 0)) {
+          const code = (m.style_code || "").trim().toUpperCase();
+          const cat = (m.category || "Shirt").trim();
+          const key = `${code}:::${cat.toUpperCase()}`;
+          const pcs = m.dispatch_from_hemb > 0 ? m.dispatch_from_hemb : m.received_qty;
+          itemsMap.set(key, {
+            style_code: code,
+            category: cat,
+            pieces: pcs,
+            rate: 0,
+            total_amount: 0,
+            remarks: m.remarks || ""
+          });
+        }
+      });
+    }
+
+    // 3. Match rates from Payment Sheet or default
+    const items = Array.from(itemsMap.values()).map((item, idx) => {
+      const matchPay = paySheets.find(p =>
+        (p.style_code || "").toLowerCase() === item.style_code.toLowerCase() &&
+        (p.category || p.working || "").toLowerCase() === item.category.toLowerCase()
+      );
+
+      let rate = 0;
+      if (matchPay) {
+        rate = Number(matchPay.carigar_rate) || Number(matchPay.h_emb_po_fix_rate) || Number(matchPay.rate_per_pc) || 0;
+      }
+      if (!rate) {
+        rate = Number(contObj.rate_per_piece) || 150;
+      }
+
+      const total = item.pieces * rate;
+      return {
+        sr: idx + 1,
+        style_code: item.style_code,
+        category: item.category,
+        pieces: item.pieces,
+        rate: rate,
+        total_amount: total,
+        remarks: item.remarks
+      };
+    });
+
+    const totalPieces = items.reduce((sum, i) => sum + i.pieces, 0);
+    const grossAmount = items.reduce((sum, i) => sum + i.total_amount, 0);
+
+    const now = new Date();
+    const parchaNo = `PCH-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${String(Math.floor(Math.random() * 900) + 100)}`;
+
+    return {
+      parcha_no: parchaNo,
+      contractor_name: contObj.name || contractorName,
+      contractor_phone: contObj.phone || "",
+      period: period || "Current Production Cycle",
+      slip_date: now.toISOString().split("T")[0],
+      items: items,
+      total_pieces: totalPieces,
+      gross_amount: grossAmount,
+      advance_amount: 0,
+      deduction_amount: 0,
+      bonus_amount: 0,
+      net_payable: grossAmount,
+      notes: "Payment cleared upon quality inspection."
+    };
+  }
+
+  // -------------------------------------------------------------
+  // OVERDUE STYLES & DEADLINES MONITOR
+  // -------------------------------------------------------------
+  getOverdueStylesSummary() {
+    const master = this.getMasterInventory();
+    const contractors = this.getContractors();
+
+    const overdueList = [];
+    const dueSoonList = [];
+    const onScheduleList = [];
+
+    let totalOverdueCount = 0;
+    let totalOverduePieces = 0;
+    let totalDueSoonCount = 0;
+    let totalDueSoonPieces = 0;
+    let totalOnScheduleCount = 0;
+
+    master.forEach(item => {
+      const wip = Number(item.balance_from_hemb) || 0;
+      const totalBal = Number(item.total_balance) || 0;
+
+      if (wip <= 0 && totalBal <= 0) return; // Completed style
+
+      const contName = (item.contractor_name && item.contractor_name !== "Unassigned" && item.contractor_name !== "-")
+        ? item.contractor_name
+        : "Unassigned";
+
+      const contObj = contractors.find(c => (c.name || "").toLowerCase() === contName.toLowerCase());
+      const phone = contObj ? (contObj.phone || "") : "";
+
+      const balances = this.computeRecordBalances(item);
+      const info = balances.overdue_info || { status: "pending", daysLate: 0, daysLeft: 0, badgeText: "", badgeClass: "" };
+
+      const enriched = {
+        id: item.id,
+        sr_no: item.sr_no,
+        style_code: item.style_code,
+        category: item.category,
+        contractor_name: contName,
+        phone: phone,
+        cut_qty: item.cut_qty,
+        received_qty: item.received_qty,
+        dispatch_from_hemb: item.dispatch_from_hemb,
+        balance_from_hemb: wip,
+        total_balance: totalBal,
+        target_date: item.target_date || "",
+        date_receive: item.date_receive || "",
+        status: info.status,
+        daysLate: info.daysLate || 0,
+        daysLeft: info.daysLeft || 0,
+        badgeText: info.badgeText,
+        badgeClass: info.badgeClass,
+        remarks: item.remarks || ""
+      };
+
+      if (info.status === "overdue") {
+        totalOverdueCount++;
+        totalOverduePieces += (wip > 0 ? wip : totalBal);
+        overdueList.push(enriched);
+      } else if (info.status === "due_soon" || info.status === "due_today") {
+        totalDueSoonCount++;
+        totalDueSoonPieces += (wip > 0 ? wip : totalBal);
+        dueSoonList.push(enriched);
+      } else {
+        totalOnScheduleCount++;
+        onScheduleList.push(enriched);
+      }
+    });
+
+    overdueList.sort((a, b) => (b.daysLate || 0) - (a.daysLate || 0));
+    dueSoonList.sort((a, b) => (a.daysLeft || 0) - (b.daysLeft || 0));
+
+    return {
+      overdueList,
+      dueSoonList,
+      onScheduleList,
+      totalOverdueCount,
+      totalOverduePieces,
+      totalDueSoonCount,
+      totalDueSoonPieces,
+      totalOnScheduleCount
+    };
   }
 
   // -------------------------------------------------------------
@@ -2065,6 +2404,7 @@ class DatabaseService {
       item.date_dispatch = dateDis;
       item.challan_dis = challanDis;
       if (remarks) item.remarks = remarks;
+      if (hints.target_date) item.target_date = hints.target_date;
       item.status = (cutQty > 0 && item.dispatch_from_hemb >= cutQty) ? "Completed" : "In Progress";
     } else {
       const newId = masterList.length > 0 ? Math.max(...masterList.map(i => Number(i.id) || 0)) + 1 : 1;
@@ -2083,6 +2423,7 @@ class DatabaseService {
         date_dispatch: dateDis,
         challan_dis: challanDis,
         contractor_name: contractor,
+        target_date: hints.target_date || '',
         status: (cutQty > 0 && totalDispatched >= cutQty) ? "Completed" : "In Progress",
         remarks: remarks
       };

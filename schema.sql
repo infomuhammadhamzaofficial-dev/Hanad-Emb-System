@@ -36,6 +36,7 @@ CREATE TABLE IF NOT EXISTS master_inventory (
     
     -- Contractor & Remarks
     contractor_name VARCHAR(100),
+    target_date VARCHAR(50),
     status VARCHAR(30) DEFAULT 'In Progress',
     remarks TEXT,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -160,4 +161,24 @@ CREATE TABLE IF NOT EXISTS trash_items (
     deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
+
+-- 10. Contractor Parchas / Payment Slips History
+CREATE TABLE IF NOT EXISTS contractor_parchas (
+    id VARCHAR(100) PRIMARY KEY,
+    parcha_no VARCHAR(100) NOT NULL UNIQUE,
+    contractor_name VARCHAR(100) NOT NULL,
+    period VARCHAR(150),
+    slip_date DATE DEFAULT CURRENT_DATE,
+    total_pieces INT DEFAULT 0,
+    gross_amount NUMERIC(12, 2) DEFAULT 0,
+    advance_amount NUMERIC(12, 2) DEFAULT 0,
+    deduction_amount NUMERIC(12, 2) DEFAULT 0,
+    bonus_amount NUMERIC(12, 2) DEFAULT 0,
+    net_payable NUMERIC(12, 2) DEFAULT 0,
+    items JSONB,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_parcha_cont ON contractor_parchas(contractor_name);
+CREATE INDEX IF NOT EXISTS idx_parcha_no ON contractor_parchas(parcha_no);
 
