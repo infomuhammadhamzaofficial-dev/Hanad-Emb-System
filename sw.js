@@ -2,7 +2,7 @@
 // CraftFlow - Service Worker for PWA (Offline-First & Resilient)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v37';
+const CACHE_NAME = 'craftflow-cache-v38';
 const STATIC_ASSETS = [
   './',
   './index.html',

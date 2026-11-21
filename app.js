@@ -12220,39 +12220,57 @@ function initDeadlineModalEvents() {
 let activeParchaData = null;
 
 function openContractorParchaModal(contractorName = null, period = null) {
-  const contractors = window.db.getContractors();
-  if (contractors.length === 0) {
-    showToast("No contractors registered yet. Add a contractor first.", "info");
-    return;
+  try {
+    const contractors = (window.db && typeof window.db.getContractors === "function")
+      ? window.db.getContractors()
+      : [];
+
+    if (!contractors || contractors.length === 0) {
+      showToast("No contractors registered yet. Add a contractor first.", "info");
+      return;
+    }
+
+    populateParchaDropdowns(contractorName, period);
+
+    // Set today's date
+    const dateInput = document.getElementById("parcha-date-input");
+    if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+
+    // Reset inputs
+    const adv = document.getElementById("parcha-input-advance");
+    if (adv) adv.value = 0;
+    const ded = document.getElementById("parcha-input-deduction");
+    if (ded) ded.value = 0;
+    const bon = document.getElementById("parcha-input-bonus");
+    if (bon) bon.value = 0;
+    const nts = document.getElementById("parcha-input-notes");
+    if (nts) nts.value = "Payment cleared on inspection.";
+
+    // Open modal FIRST so user sees instant feedback
+    openModal("modal-contractor-parcha");
+
+    try { renderContractorParchaPreview(); } catch (err) { console.error("Parcha preview render error:", err); }
+    try { renderParchaHistoryList(); } catch (err) { console.error("Parcha history render error:", err); }
+  } catch (e) {
+    console.error("openContractorParchaModal error:", e);
+    showToast("Error opening Contractor Parcha: " + (e.message || e), "error");
   }
-
-  populateParchaDropdowns(contractorName, period);
-
-  // Set today's date
-  const dateInput = document.getElementById("parcha-date-input");
-  if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
-
-  // Reset inputs
-  document.getElementById("parcha-input-advance").value = 0;
-  document.getElementById("parcha-input-deduction").value = 0;
-  document.getElementById("parcha-input-bonus").value = 0;
-  document.getElementById("parcha-input-notes").value = "Payment cleared on inspection.";
-
-  renderContractorParchaPreview();
-  renderParchaHistoryList();
-  openModal("modal-contractor-parcha");
 }
 
 function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
   const contSelect = document.getElementById("parcha-select-contractor");
   if (contSelect) {
-    const contractors = window.db.getContractors();
+    const contractors = (window.db && typeof window.db.getContractors === "function")
+      ? window.db.getContractors()
+      : [];
     contSelect.innerHTML = contractors.map(c => `
       <option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} ${c.phone ? `(${escapeHtml(c.phone)})` : ''}</option>
     `).join("");
 
     if (selectedCont) {
       contSelect.value = selectedCont;
+    } else if (contractors.length > 0 && contractors[0].name) {
+      contSelect.value = contractors[0].name;
     }
   }
 
@@ -12279,13 +12297,21 @@ function renderContractorParchaPreview() {
   const periodSelect = document.getElementById("parcha-select-period");
   const dateInput = document.getElementById("parcha-date-input");
 
-  const contractorName = contSelect ? contSelect.value : "";
+  let contractorName = contSelect ? contSelect.value : "";
+  if (!contractorName && contSelect && contSelect.options && contSelect.options.length > 0) {
+    contractorName = contSelect.options[0].value;
+    contSelect.value = contractorName;
+  }
   const period = periodSelect ? periodSelect.value : "all";
-  const slipDate = dateInput ? dateInput.value : new Date().toISOString().split("T")[0];
+  const slipDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
 
   if (!contractorName) return;
 
-  const data = window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period);
+  const data = (window.db && typeof window.db.generateContractorParchaData === "function")
+    ? window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period)
+    : null;
+
+  if (!data) return;
   data.slip_date = slipDate;
 
   // Read overrides from inputs
@@ -12297,21 +12323,26 @@ function renderContractorParchaPreview() {
   data.advance_amount = advance;
   data.deduction_amount = deduction;
   data.bonus_amount = bonus;
-  data.net_payable = Math.max(0, data.gross_amount - advance - deduction + bonus);
+  data.net_payable = Math.max(0, (data.gross_amount || 0) - advance - deduction + bonus);
   data.notes = notes;
 
   activeParchaData = data;
 
-  // Render on paper voucher
-  document.getElementById("parcha-paper-no").textContent = data.parcha_no;
-  document.getElementById("parcha-paper-cont-name").textContent = data.contractor_name;
-  document.getElementById("parcha-paper-cont-phone").textContent = data.contractor_phone || "Not recorded";
-  document.getElementById("parcha-paper-date").textContent = data.slip_date;
-  document.getElementById("parcha-paper-period").textContent = data.period || "All Production Records";
+  // Helper for safe DOM text updates
+  const setTxt = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+
+  setTxt("parcha-paper-no", data.parcha_no || "PCH-0000");
+  setTxt("parcha-paper-cont-name", data.contractor_name || "—");
+  setTxt("parcha-paper-cont-phone", data.contractor_phone || "Not recorded");
+  setTxt("parcha-paper-date", data.slip_date || slipDate);
+  setTxt("parcha-paper-period", data.period || "All Production Records");
 
   const tbody = document.getElementById("parcha-paper-tbody");
   if (tbody) {
-    if (data.items.length === 0) {
+    if (!data.items || data.items.length === 0) {
       tbody.innerHTML = `
         <tr>
           <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
@@ -12325,25 +12356,25 @@ function renderContractorParchaPreview() {
           <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: #64748b;">${item.sr}</td>
           <td><strong style="color: #0f172a; font-family: var(--font-mono);">${escapeHtml(item.style_code)}</strong></td>
           <td style="text-align: center;">${escapeHtml(item.category)}</td>
-          <td style="text-align: right; font-weight: 700; font-family: var(--font-mono);">${item.pieces.toLocaleString()}</td>
-          <td style="text-align: right; font-family: var(--font-mono);">Rs. ${item.rate.toLocaleString()}</td>
-          <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: #0f172a;">Rs. ${item.total_amount.toLocaleString()}</td>
+          <td style="text-align: right; font-weight: 700; font-family: var(--font-mono);">${(item.pieces || 0).toLocaleString()}</td>
+          <td style="text-align: right; font-family: var(--font-mono);">Rs. ${(item.rate || 0).toLocaleString()}</td>
+          <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: #0f172a;">Rs. ${(item.total_amount || 0).toLocaleString()}</td>
         </tr>
       `).join("");
     }
   }
 
-  document.getElementById("parcha-paper-total-pcs").textContent = data.total_pieces.toLocaleString();
-  document.getElementById("parcha-paper-gross-total").textContent = `Rs. ${data.gross_amount.toLocaleString()}`;
+  setTxt("parcha-paper-total-pcs", (data.total_pieces || 0).toLocaleString());
+  setTxt("parcha-paper-gross-total", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
 
-  document.getElementById("parcha-paper-calc-gross").textContent = `Rs. ${data.gross_amount.toLocaleString()}`;
-  document.getElementById("parcha-paper-calc-advance").textContent = `- Rs. ${advance.toLocaleString()}`;
-  document.getElementById("parcha-paper-calc-deduction").textContent = `- Rs. ${deduction.toLocaleString()}`;
-  document.getElementById("parcha-paper-calc-bonus").textContent = `+ Rs. ${bonus.toLocaleString()}`;
-  document.getElementById("parcha-paper-net-payable").textContent = `Rs. ${data.net_payable.toLocaleString()}`;
+  setTxt("parcha-paper-calc-gross", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
+  setTxt("parcha-paper-calc-advance", `- Rs. ${advance.toLocaleString()}`);
+  setTxt("parcha-paper-calc-deduction", `- Rs. ${deduction.toLocaleString()}`);
+  setTxt("parcha-paper-calc-bonus", `+ Rs. ${bonus.toLocaleString()}`);
+  setTxt("parcha-paper-net-payable", `Rs. ${(data.net_payable || 0).toLocaleString()}`);
 
-  document.getElementById("parcha-paper-words").textContent = numberToWordsUrduEnglish(data.net_payable);
-  document.getElementById("parcha-paper-notes-text").textContent = `Notes: ${data.notes || "None"}`;
+  setTxt("parcha-paper-words", numberToWordsUrduEnglish(data.net_payable || 0));
+  setTxt("parcha-paper-notes-text", `Notes: ${data.notes || "None"}`);
 }
 
 function numberToWordsUrduEnglish(amount) {
@@ -12556,6 +12587,15 @@ function initParchaEventListeners() {
     if (typeof renderMasterInventory === "function") renderMasterInventory();
   });
 }
+
+// Global window exposure for reliable HTML inline onclick access
+window.openContractorParchaModal = openContractorParchaModal;
+window.openUpdateDeadlineModal = openUpdateDeadlineModal;
+window.renderContractorParchaPreview = renderContractorParchaPreview;
+window.toggleParchaHistoryPanel = toggleParchaHistoryPanel;
+window.saveContractorParchaAction = saveContractorParchaAction;
+window.printContractorParcha = printContractorParcha;
+window.sendContractorParchaWhatsApp = sendContractorParchaWhatsApp;
 
 // ====================================================================
 // WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
