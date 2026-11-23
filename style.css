@@ -1572,7 +1572,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   flex-shrink: 0;
 }
 

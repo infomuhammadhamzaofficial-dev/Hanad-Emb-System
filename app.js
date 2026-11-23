@@ -55,10 +55,7 @@ function initApp() {
 
       // Real-time cross-tab & background change listener
       window.addEventListener("storage", (e) => {
-        if (e.key === "craftflow_last_mutation" ||
-          e.key === "hand_emb_receiving_log_v2" ||
-          e.key === "hand_emb_dispatch_log_v2" ||
-          e.key === "hand_emb_master_inventory_v2") {
+        if (!e.key || e.key.startsWith("craftflow_") || e.key.startsWith("hand_emb_")) {
           if (window.db && typeof window.db.clearCache === "function") window.db.clearCache();
           renderAll();
         }
@@ -497,7 +494,16 @@ function renderTargetView(tabId) {
     else if (tabId === "master-inventory") renderMasterInventory();
     else if (tabId === "receiving-log") renderReceivingLog();
     else if (tabId === "dispatch-log") renderDispatchLog();
-    else if (tabId === "final-style") renderFinalStyleSheet();
+    else if (tabId === "final-style") {
+      const curDate = window.db.getReportDate();
+      if (typeof window.db.loadFinalStylesForDate === "function") {
+        window.db.loadFinalStylesForDate(curDate).then(() => {
+          renderFinalStyleSheet();
+          updateDailySheetArrivalsBanner();
+        });
+      }
+      renderFinalStyleSheet();
+    }
     else if (tabId === "contractors") renderContractorsView();
     else if (tabId === "work-distribution") {
       populateDistributionPeriods();
@@ -2317,15 +2323,25 @@ function initFinalStyleView() {
     datePicker.value = window.db.getReportDate();
     updateDateDisplay(datePicker.value);
 
-    datePicker.addEventListener("change", async (e) => {
-      window.db.setReportDate(e.target.value);
-      updateDateDisplay(e.target.value);
+    const onDateChange = async (e) => {
+      const selectedDate = e.target.value;
+      if (!selectedDate) return;
+      window.db.setReportDate(selectedDate);
+      updateDateDisplay(selectedDate);
       if (typeof window.db.loadFinalStylesForDate === "function") {
-        await window.db.loadFinalStylesForDate(e.target.value);
+        await window.db.loadFinalStylesForDate(selectedDate);
       }
       renderFinalStyleSheet();
       updateDailySheetArrivalsBanner();
-    });
+    };
+
+    datePicker.addEventListener("change", onDateChange);
+    datePicker.addEventListener("input", onDateChange);
+  }
+
+  const btnClearDaily = document.getElementById("btn-clear-daily-sheet");
+  if (btnClearDaily) {
+    btnClearDaily.addEventListener("click", clearDailySheetAction);
   }
 
   // Live Style Code autocomplete & category update for Daily Sheet quick add
@@ -2613,6 +2629,53 @@ function removeFinalStyleRow(sNo) {
     showToast("Style moved from Daily Sheet to Trash.", "info");
   }
 }
+
+async function clearDailySheetAction() {
+  if (!window.db.canUserPerformAction("can_delete")) {
+    showToast("Permission Denied: You do not have permission to delete data.", "error");
+    return;
+  }
+
+  const currentDate = window.db.getReportDate() || new Date().toISOString().split("T")[0];
+  const currentList = window.db.getFinalStyles() || [];
+
+  if (currentList.length === 0) {
+    const wipeAll = confirm(
+      `Current Daily Sheet (${currentDate}) is already empty.\n\n` +
+      `Do you want to permanently delete ALL styles across ALL dates from the Neon Cloud final_style_report table?`
+    );
+    if (wipeAll) {
+      await window.db.clearAllFinalStylesFromNeon();
+      renderAll();
+      showToast("All final style records wiped from Neon Cloud table!", "info");
+    }
+    return;
+  }
+
+  const choice = confirm(
+    `⚠️ DELETE DAILY SHEET DATA\n\n` +
+    `• Click [OK] to delete all ${currentList.length} styles from this sheet (${currentDate}) and move them to Trash.\n` +
+    `• Click [Cancel] if you want to wipe the ENTIRE final_style_report table across ALL dates from Neon.`
+  );
+
+  if (choice) {
+    await window.db.clearFinalStylesForDate(currentDate);
+    renderAll();
+    showToast(`Daily Sheet data for ${currentDate} cleared and moved to Trash.`, "info");
+  } else {
+    const wipeAll = confirm(
+      `⚠️ WIPE ENTIRE FINAL STYLE CLOUD TABLE?\n\n` +
+      `Are you sure you want to permanently delete ALL styles across ALL dates from the Neon Cloud final_style_report table?\n\n` +
+      `This action cannot be undone.`
+    );
+    if (wipeAll) {
+      await window.db.clearAllFinalStylesFromNeon();
+      renderAll();
+      showToast("All final style records wiped from Neon Cloud table!", "info");
+    }
+  }
+}
+window.clearDailySheetAction = clearDailySheetAction;
 
 function renderContractorSummarySidebar() {
   const container = document.getElementById("contractor-summary-list");
@@ -8088,7 +8151,16 @@ function renderPaymentSheet() {
 
   // Calculate entries specifically for the active period (or all if "all" is selected)
   const targetPeriodItems = (periodFilter && periodFilter !== "all")
-    ? list.filter(item => (item.period || "").trim().toLowerCase() === periodFilter.trim().toLowerCase())
+    ? list.filter(item => {
+        const itemPeriod = (item.period || "").trim().toLowerCase();
+        const activePeriod = periodFilter.trim().toLowerCase();
+        if (itemPeriod === activePeriod) return true;
+        // Match if start dates match (e.g. "11-nov-2026" matches "11-nov-2026 to 25-nov-2026")
+        const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+        const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+        if (itemStart && activeStart && itemStart === activeStart) return true;
+        return false;
+      })
     : list;
 
   // When searching, search across ALL sheets and periods; otherwise view active period sheet
@@ -8176,7 +8248,7 @@ function renderPaymentSheet() {
       const displayPeriod = (periodFilter && periodFilter !== "all") ? periodFilter : "All Periods";
       tbodyExcel.innerHTML = `
         <tr>
-          <td colspan="16" style="text-align: center; vertical-align: middle; padding: 3rem 1.5rem; color: var(--text-muted);">
+          <td colspan="17" style="text-align: center; vertical-align: middle; padding: 3rem 1.5rem; color: var(--text-muted);">
             <div style="font-size: 2.2rem; margin-bottom: 0.5rem;">📋</div>
             <div style="font-weight: 700; font-size: 1.05rem; margin-bottom: 0.35rem; color: var(--text-main);">
               ${isSearchActive ? `No rate approval / payment records match "${escapeHtml(query)}" across all time periods.` : `Rate Approval Sheet for "${escapeHtml(displayPeriod)}" is empty.`}
@@ -8216,7 +8288,7 @@ function renderPaymentSheet() {
         }
       }
 
-      let fCut = 0, fProd = 0, fStockBal = 0, fHembBal = 0, fTotBal = 0, fCumulative = 0;
+      let fCut = 0, fProd = 0, fDeduction = 0, fStockBal = 0, fHembBal = 0, fTotBal = 0, fCumulative = 0;
 
       // Master Inventory lookup map for live auto-sync balances
       const masterList = window.db.getMasterInventory();
@@ -8231,7 +8303,7 @@ function renderPaymentSheet() {
       });
 
       tbodyExcel.innerHTML = displayList.map((item, idx) => {
-        const srNo = item.sr_no || (idx + 1);
+        const srNo = idx + 1; // Sequential serial number starting cleanly at 1
         const styleCode = item.style_code || "";
         const working = item.working || item.category || "SHIRT";
         const distAssigned = (window.db && typeof window.db.getContractorForStyle === "function")
@@ -8240,12 +8312,25 @@ function renderPaymentSheet() {
         const contName = item.contractor_name || (distAssigned ? distAssigned.contractor_name : "");
         const rate = (item.rate_per_pc && Number(item.rate_per_pc) > 0) ? item.rate_per_pc : "";
         const cutQty = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
-        const prodQty = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
+
+        // Inline deduction calculation
+        let deductionPcs = parseInt(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs, 10) || 0;
+        const remarks1 = item.remarks_1 || item.remarks || "";
+        if (deductionPcs === 0 && remarks1) {
+          const m = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+          if (m) {
+            deductionPcs = parseInt(m[1], 10) || 0;
+          }
+        }
+        const baseProd = (item.base_prod_pcs != null && Number(item.base_prod_pcs) > 0)
+          ? Number(item.base_prod_pcs)
+          : ((item.prod_pcs_qty != null ? Number(item.prod_pcs_qty) : Number(item.paid_pcs || 0)) + deductionPcs);
+        const prodQty = Math.max(0, baseProd - deductionPcs);
+
         const carigarRate = (item.carigar_rate != null && Number(item.carigar_rate) > 0) ? Number(item.carigar_rate) : 0;
         const commission = (item.commission != null && Number(item.commission) > 0) ? Number(item.commission) : 0;
         const rateTotal = (item.rate_total != null && Number(item.rate_total) > 0) ? Number(item.rate_total) : 0;
         const prevPaid = parseInt(item.previous_paid_pcs, 10) || 0;
-        const remarks1 = item.remarks_1 || item.remarks || "";
 
         // Auto-fetch balances from Master Inventory matching this style
         const cleanCode = styleCode.trim().toLowerCase();
@@ -8258,6 +8343,7 @@ function renderPaymentSheet() {
         const remarks2 = item.remarks_2 || item.status_remarks || item.status || "";
 
         fCut += cutQty;
+        fDeduction += deductionPcs;
         fProd += prodQty;
         fStockBal += stockBal;
         fHembBal += hembBal;
@@ -8277,7 +8363,20 @@ function renderPaymentSheet() {
             <td style="text-align: center; vertical-align: middle; font-weight: 600;">${escapeHtml(contName)}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${rate ? rate : ''}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700;">${cutQty.toLocaleString()}</td>
-            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; color: #10b981; font-size: 0.875rem;">${prodQty.toLocaleString()}</td>
+            <td style="text-align: center; vertical-align: middle; background: rgba(244, 63, 94, 0.04); padding: 2px 4px !important;">
+              <input type="number" min="0" step="1"
+                class="app-input-xs pay-inline-deduction"
+                data-id="${item.id}"
+                value="${deductionPcs > 0 ? deductionPcs : ''}"
+                placeholder="0"
+                onchange="window.handlePaymentInlineDeduction(${item.id}, this.value)"
+                onkeydown="if(event.key==='Enter'){this.blur();}"
+                style="width: 68px; text-align: center; font-weight: 700; color: #f43f5e; background: rgba(244, 63, 94, 0.08); border: 1px solid rgba(244, 63, 94, 0.35); border-radius: 4px; padding: 2px 4px; font-family: var(--font-mono); font-size: 0.85rem;"
+                title="Kaat / Deduction pieces - enter here to auto-minus from Prod Pcs Qty">
+            </td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; color: #10b981; font-size: 0.875rem;">
+              ${prodQty.toLocaleString()}
+            </td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${carigarRate > 0 ? carigarRate.toLocaleString() : ''}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono);">${commission > 0 ? commission.toLocaleString() : ''}</td>
             <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 700; color: #10b981;">${rateTotal > 0 ? rateTotal.toLocaleString() : (carigarRate + commission > 0 ? (carigarRate + commission).toLocaleString() : '')}</td>
@@ -8324,6 +8423,9 @@ function renderPaymentSheet() {
           <tr>
             <td colspan="6" class="total-label-cell" style="padding: 4px 6px; font-weight: 850; font-size: 0.825rem; text-align: center; vertical-align: middle;">
               Total Pcs Qt:
+            </td>
+            <td style="text-align: center; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; color: #f43f5e; padding: 3px 4px;">
+              ${fDeduction > 0 ? `-${fDeduction.toLocaleString()}` : '0'}
             </td>
             <td class="total-qty-cell" style="padding: 4px 6px; font-size: 0.925rem; font-weight: 900; color: #10b981; border: 2px solid #000; text-align: center; vertical-align: middle;">
               ${fCumulative.toLocaleString()}
@@ -8700,6 +8802,8 @@ function openPaymentEntryModal(id = null, prefillData = null) {
     document.getElementById("payment-floor-received-by").value = item.floor_received_by || "";
 
     document.getElementById("payment-total-pcs").value = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
+    const dedInp = document.getElementById("payment-deduction-pcs");
+    if (dedInp) dedInp.value = (item.deduction_pcs != null && item.deduction_pcs > 0) ? item.deduction_pcs : (item.deducted_pcs > 0 ? item.deducted_pcs : "");
     document.getElementById("payment-prod-pcs").value = item.prod_pcs_qty != null ? item.prod_pcs_qty : (item.paid_pcs || 0);
     if (document.getElementById("payment-rate-per-pc")) document.getElementById("payment-rate-per-pc").value = item.rate_per_pc || 0;
 
@@ -8750,6 +8854,7 @@ function openPaymentEntryModal(id = null, prefillData = null) {
     if (document.getElementById("payment-rate-total")) document.getElementById("payment-rate-total").value = "";
     if (document.getElementById("payment-rate-per-pc")) document.getElementById("payment-rate-per-pc").value = "0";
     if (document.getElementById("payment-remarks-2")) document.getElementById("payment-remarks-2").value = "";
+    if (document.getElementById("payment-deduction-pcs")) document.getElementById("payment-deduction-pcs").value = "";
 
     if (prefillData) {
       if (prefillData.style_code) document.getElementById("payment-style-code").value = prefillData.style_code;
@@ -8883,6 +8988,7 @@ async function savePaymentEntryFromForm() {
   const floorReceivedBy = (document.getElementById("payment-floor-received-by")?.value || "").trim();
 
   const cutQty = parseInt(document.getElementById("payment-total-pcs")?.value, 10) || 0;
+  const deductionPcs = parseInt(document.getElementById("payment-deduction-pcs")?.value, 10) || 0;
   const prodPcs = parseInt(document.getElementById("payment-prod-pcs")?.value, 10) || 0;
   const ratePerPc = parseFloat(document.getElementById("payment-rate-per-pc")?.value) || 0;
 
@@ -8940,6 +9046,9 @@ async function savePaymentEntryFromForm() {
       contractor_name: contractor,
       cut_qty: cutQty,
       total_pcs: cutQty,
+      deduction_pcs: deductionPcs,
+      deducted_pcs: deductionPcs,
+      base_prod_pcs: (deductionPcs > 0 ? (prodPcs + deductionPcs) : (cutQty || prodPcs)),
       prod_pcs_qty: prodPcs,
       carigar_rate: carigarRate,
       commission: commission,
@@ -9064,6 +9173,96 @@ async function deletePaymentEntryAction(id) {
     }
   }
 }
+
+// -------------------------------------------------------------
+// DEDUCTION REMARKS FORMATTER
+// Preserves existing balance/advance notes (e.g. "1000 pcs pay receive")
+// and dynamically appends or updates the deduction text.
+// -------------------------------------------------------------
+function formatRemarksWithDeduction(currentRemarks, deductionVal) {
+  let text = (currentRemarks || "").trim();
+  // Strip any existing deduction/kaat phrase while keeping everything else intact
+  let baseRemarks = text
+    .replace(/\s*[\/,|\-]?\s*\d+\s*(?:pcs)?\s*(?:deduction|kaat)\b/gi, "")
+    .trim();
+  baseRemarks = baseRemarks.replace(/^[\/,|\-\s]+|[\/,|\-\s]+$/g, "").trim();
+
+  const ded = parseInt(deductionVal, 10) || 0;
+  if (ded > 0) {
+    if (baseRemarks) {
+      return `${baseRemarks} / ${ded} pcs deduction`;
+    } else {
+      return `${ded} pcs deduction`;
+    }
+  } else {
+    return baseRemarks;
+  }
+}
+window.formatRemarksWithDeduction = formatRemarksWithDeduction;
+
+// -------------------------------------------------------------
+// INLINE PAYMENT DEDUCTION (Kaat) CONTROLLER
+// Enables fast, direct piece deductions right in the table without opening modals
+// -------------------------------------------------------------
+window.handlePaymentInlineDeduction = async function (id, value) {
+  const deductionVal = Math.max(0, parseInt(value, 10) || 0);
+  const item = window.db.getPaymentSheetById(id);
+  if (!item) return;
+
+  const rawCut = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
+  let prevDeduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
+  if (prevDeduction === 0 && (item.remarks_1 || item.remarks)) {
+    const remMatch = (item.remarks_1 || item.remarks || "").match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+    if (remMatch) {
+      prevDeduction = parseInt(remMatch[1], 10) || 0;
+    }
+  }
+
+  const baseProd = (item.base_prod_pcs != null && Number(item.base_prod_pcs) > 0)
+    ? Number(item.base_prod_pcs)
+    : ((item.prod_pcs_qty != null ? Number(item.prod_pcs_qty) : Number(item.paid_pcs || 0)) + prevDeduction);
+  const newProdPcs = Math.max(0, baseProd - deductionVal);
+
+  const currentRemarks = item.remarks_1 || item.remarks || "";
+  const newRemarks = formatRemarksWithDeduction(currentRemarks, deductionVal);
+
+  const rate = Number(item.rate_per_pc) || Number(item.rate_total) || 0;
+  const newRateTotal = rate > 0 ? Math.round(newProdPcs * rate) : 0;
+
+  await window.db.updatePaymentSheet(id, {
+    deduction_pcs: deductionVal,
+    deducted_pcs: deductionVal,
+    base_prod_pcs: baseProd,
+    prod_pcs_qty: newProdPcs,
+    paid_pcs: newProdPcs,
+    rate_total: newRateTotal,
+    remarks_1: newRemarks,
+    remarks: newRemarks
+  });
+
+  if (typeof showToast === "function") {
+    showToast(`✓ Deduction saved: ${deductionVal} pcs kaat (Net Prod Pcs: ${newProdPcs.toLocaleString()})`, "success");
+  }
+  renderPaymentSheet();
+  if (typeof renderKPIs === "function") renderKPIs();
+};
+
+window.handleModalDeductionInput = function () {
+  const cutInp = document.getElementById("payment-total-pcs");
+  const dedInp = document.getElementById("payment-deduction-pcs");
+  const prodInp = document.getElementById("payment-prod-pcs");
+  if (!cutInp || !dedInp || !prodInp) return;
+
+  const cut = parseInt(cutInp.value, 10) || 0;
+  const ded = parseInt(dedInp.value, 10) || 0;
+  const net = Math.max(0, cut - ded);
+  prodInp.value = net;
+
+  const remInp = document.getElementById("payment-remarks-1");
+  if (remInp) {
+    remInp.value = formatRemarksWithDeduction(remInp.value, ded);
+  }
+};
 
 function openPaymentReceiptModal(paymentId) {
   if (!window.db.canUserPerformAction("can_edit")) {
@@ -9485,66 +9684,125 @@ function initWorkDistributionView() {
   const nameInp = document.getElementById("dist-setup-name");
 
   function autoGeneratePeriodName() {
-    if (startDateInp && endDateInp && startDateInp.value && endDateInp.value && nameInp) {
-      const sFmt = formatDateDisplay(startDateInp.value);
-      const eFmt = formatDateDisplay(endDateInp.value);
-      nameInp.value = `${sFmt} TO ${eFmt}`;
+    if (startDateInp && startDateInp.value && nameInp) {
+      nameInp.value = formatDistDate(startDateInp.value);
+    }
+    if (endDateInp && startDateInp) {
+      endDateInp.value = startDateInp.value;
     }
   }
 
-  if (startDateInp) startDateInp.addEventListener("change", autoGeneratePeriodName);
+  if (startDateInp) {
+    startDateInp.addEventListener("change", autoGeneratePeriodName);
+    startDateInp.addEventListener("input", autoGeneratePeriodName);
+  }
   if (endDateInp) endDateInp.addEventListener("change", autoGeneratePeriodName);
+}
+
+function normalizePeriodDate(val) {
+  if (!val) return "";
+  let s = String(val).trim();
+  if (/\s+to\s+/i.test(s)) {
+    s = s.split(/\s+to\s+/i)[0].trim();
+  }
+  return s;
+}
+
+function formatDistDate(val) {
+  if (!val) return "-";
+  let s = normalizePeriodDate(val);
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mIdx = parseInt(isoMatch[2], 10) - 1;
+    return `${isoMatch[3]}-${months[mIdx] || isoMatch[2]}-${isoMatch[1]}`;
+  }
+  return s;
+}
+
+function toIsoDate(val) {
+  if (!val) return new Date().toISOString().split("T")[0];
+  let s = normalizePeriodDate(val);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const mMatch = s.match(/^(\d{1,2})[-/]([A-Za-z]{3})[-/](\d{4})/);
+  if (mMatch) {
+    const months = { jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12" };
+    const m = months[mMatch[2].toLowerCase()] || "01";
+    const d = mMatch[1].padStart(2, "0");
+    return `${mMatch[3]}-${m}-${d}`;
+  }
+  return new Date().toISOString().split("T")[0];
 }
 
 function getActiveDistributionPeriod() {
   const periodInput = document.getElementById("input-distribution-period");
   if (periodInput && periodInput.style.display !== "none" && periodInput.value.trim()) {
-    return periodInput.value.trim();
+    return normalizePeriodDate(periodInput.value.trim());
   }
   const select = document.getElementById("select-distribution-period");
-  if (select && select.value) return select.value.trim();
+  if (select && select.value) return normalizePeriodDate(select.value.trim());
   const savedActive = localStorage.getItem("craftflow_active_dist_period");
-  if (savedActive && savedActive.trim()) return savedActive.trim();
-  const periods = (window.db && typeof window.db.getDistributionPeriods === "function")
-    ? window.db.getDistributionPeriods()
-    : [];
-  return periods.length > 0 ? periods[0].period_name : "11-Oct-2026 TO 25-Oct-2026";
+  if (savedActive && savedActive.trim()) return normalizePeriodDate(savedActive.trim());
+  return "all";
 }
 
 function populateDistributionPeriods() {
   const select = document.getElementById("select-distribution-period");
-  const entryPeriodSelect = document.getElementById("dist-entry-period");
   const dataList = document.getElementById("datalist-distribution-periods");
   if (!select) return;
 
+  const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+    ? window.db.getWorkDistribution()
+    : [];
   const periods = (window.db && typeof window.db.getDistributionPeriods === "function")
     ? window.db.getDistributionPeriods()
     : [];
 
-  const savedActive = localStorage.getItem("craftflow_active_dist_period") || "";
-  const currentVal = select.value || savedActive;
+  const dateSet = new Set();
 
-  select.innerHTML = periods.map(p => {
-    return `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}</option>`;
-  }).join("");
+  periods.forEach(p => {
+    const raw = p.period_name || p.name || "";
+    const clean = normalizePeriodDate(raw);
+    if (clean) dateSet.add(clean);
+  });
+
+  distList.forEach(w => {
+    const raw = w.dist_date || w.date || w.period || "";
+    const clean = normalizePeriodDate(raw);
+    if (clean) dateSet.add(clean);
+  });
+
+  let rawActive = localStorage.getItem("craftflow_active_dist_period") || "all";
+  let activePeriod = normalizePeriodDate(rawActive);
+  if (rawActive !== activePeriod) {
+    localStorage.setItem("craftflow_active_dist_period", activePeriod);
+  }
+
+  const currentVal = normalizePeriodDate(select.value) || activePeriod;
+
+  let optionsHtml = `<option value="all">⚡ All Distribution Records (Complete Sheet)</option>`;
+
+  const sortedDates = Array.from(dateSet).sort((a, b) => {
+    const da = new Date(toIsoDate(a)).getTime();
+    const db = new Date(toIsoDate(b)).getTime();
+    return (isNaN(db) ? 0 : db) - (isNaN(da) ? 0 : da);
+  });
+
+  sortedDates.forEach(d => {
+    optionsHtml += `<option value="${escapeHtml(d)}">📅 ${escapeHtml(formatDistDate(d))}</option>`;
+  });
+
+  select.innerHTML = optionsHtml;
 
   if (dataList) {
-    dataList.innerHTML = periods.map(p => `<option value="${escapeHtml(p.period_name)}">`).join("");
+    dataList.innerHTML = sortedDates.map(d => `<option value="${escapeHtml(d)}">`).join("");
   }
 
-  if (entryPeriodSelect) {
-    entryPeriodSelect.innerHTML = periods.map(p => {
-      return `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}</option>`;
-    }).join("");
-  }
-
-  if (currentVal && periods.some(p => p.period_name.toLowerCase() === currentVal.toLowerCase())) {
-    const matched = periods.find(p => p.period_name.toLowerCase() === currentVal.toLowerCase());
-    select.value = matched.period_name;
-    if (entryPeriodSelect) entryPeriodSelect.value = matched.period_name;
-  } else if (periods.length > 0) {
-    select.value = periods[0].period_name;
-    if (entryPeriodSelect) entryPeriodSelect.value = periods[0].period_name;
+  if (currentVal && (currentVal === "all" || sortedDates.some(d => d.toLowerCase() === currentVal.toLowerCase()))) {
+    const matched = sortedDates.find(d => d.toLowerCase() === currentVal.toLowerCase());
+    select.value = matched || currentVal;
+  } else {
+    select.value = "all";
   }
 }
 
@@ -9615,9 +9873,17 @@ function renderWorkDistribution() {
     ? window.db.getWorkDistribution()
     : [];
 
-  // Filter entries for the selected bi-monthly distribution period
+  // Filter entries for the selected distribution date or all
   const periodEntries = (activePeriod && activePeriod !== "all")
-    ? allEntries.filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase())
+    ? allEntries.filter(e => {
+        const actVal = formatDistDate(activePeriod).toLowerCase();
+        const p1 = formatDistDate(e.period || "").toLowerCase();
+        const p2 = formatDistDate(e.dist_date || "").toLowerCase();
+        const p3 = formatDistDate(e.date || "").toLowerCase();
+        return p1 === actVal || p2 === actVal || p3 === actVal ||
+               (e.period && e.period.trim().toLowerCase() === activePeriod.trim().toLowerCase()) ||
+               (e.dist_date && e.dist_date.trim().toLowerCase() === activePeriod.trim().toLowerCase());
+      })
     : allEntries;
 
   // 1. Compute KPIs for the active period
@@ -9782,8 +10048,8 @@ function renderWorkDistribution() {
         <td style="text-align: center; vertical-align: middle; font-weight: 700; font-family: var(--font-mono); color: #38bdf8;">${escapeHtml(floor || '-')}</td>
         <td class="col-total" style="text-align: right; vertical-align: middle; font-family: var(--font-mono); font-weight: 800; font-size: 0.875rem; color: #10b981; width: 110px; max-width: 125px; white-space: nowrap;">${total > 0 ? Math.round(total).toLocaleString() : '-'}</td>
         <td style="text-align: center; vertical-align: middle; white-space: nowrap;">
-          <span class="badge-tag inline" style="font-size: 0.72rem; font-weight: 700; background: rgba(16, 185, 129, 0.12); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
-            ${escapeHtml(item.period || activePeriod || '-')}
+          <span class="badge-tag inline" style="font-size: 0.75rem; font-weight: 700; background: rgba(14, 165, 233, 0.12); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3);">
+            📅 ${escapeHtml(formatDistDate(item.dist_date || item.date || item.period || item.created_at))}
           </span>
         </td>
         <td style="text-align: center; vertical-align: middle; white-space: nowrap;">
@@ -9917,6 +10183,8 @@ function openDistributionEntryModal(id) {
 
   populateDistributionPeriods();
 
+  const dateInput = document.getElementById("dist-entry-date");
+
   if (id) {
     const all = window.db.getWorkDistribution();
     const item = all.find(e => e.id === id);
@@ -9927,7 +10195,8 @@ function openDistributionEntryModal(id) {
 
     if (titleEl) titleEl.textContent = "✏️ Edit Distribution Entry";
     if (idInput) idInput.value = item.id;
-    if (periodInput) periodInput.value = item.period || getActiveDistributionPeriod();
+    if (dateInput) dateInput.value = toIsoDate(item.dist_date || item.date || item.period || item.created_at);
+    if (periodInput) periodInput.value = item.period || "";
     if (srInput) srInput.value = item.sr_no || "";
     if (styleInput) styleInput.value = item.style_code || "";
     if (contInput) contInput.value = item.contractor_name || "";
@@ -9940,11 +10209,18 @@ function openDistributionEntryModal(id) {
   } else {
     if (titleEl) titleEl.textContent = "📦 Work Distribution Entry";
     if (idInput) idInput.value = "";
-    if (periodInput) periodInput.value = getActiveDistributionPeriod();
+    if (dateInput) {
+      const activeP = getActiveDistributionPeriod();
+      if (activeP && activeP !== "all") {
+        dateInput.value = toIsoDate(activeP);
+      } else {
+        dateInput.value = new Date().toISOString().split("T")[0];
+      }
+    }
+    if (periodInput) periodInput.value = "";
 
-    const activePeriod = getActiveDistributionPeriod();
-    const currentList = window.db.getWorkDistribution().filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-    const nextSr = currentList.length + 1;
+    const allWork = window.db.getWorkDistribution();
+    const nextSr = allWork.length + 1;
 
     if (srInput) srInput.value = nextSr;
     if (styleInput) styleInput.value = "";
@@ -9983,7 +10259,11 @@ async function saveDistributionEntryAction(e) {
     return;
   }
 
-  const period = document.getElementById("dist-entry-period")?.value || getActiveDistributionPeriod();
+  const dist_date_val = document.getElementById("dist-entry-date")?.value || new Date().toISOString().split("T")[0];
+  const formatted_date = formatDistDate(dist_date_val);
+  const period = formatted_date;
+  const dist_date = formatted_date;
+
   const sr_no = parseInt(document.getElementById("dist-entry-sr")?.value, 10) || null;
   const style_code = (document.getElementById("dist-entry-style-code")?.value || "").trim().toUpperCase();
   const contractor_name = toProperCase((document.getElementById("dist-entry-contractor")?.value || "").trim());
@@ -9993,10 +10273,10 @@ async function saveDistributionEntryAction(e) {
   const floor = (document.getElementById("dist-entry-floor")?.value || "").trim();
   const remarks = (document.getElementById("dist-entry-remarks")?.value || "").trim();
 
-  // 1. Mandatory Validations: Time Period, Style Code, and Contractor Name
-  if (!period) {
-    showToast("Please select a Distribution Period", "error");
-    document.getElementById("dist-entry-period")?.focus();
+  // 1. Mandatory Validations: Date, Style Code, and Contractor Name
+  if (!dist_date_val) {
+    showToast("Please select a Distribution Date", "error");
+    document.getElementById("dist-entry-date")?.focus();
     return;
   }
   if (!style_code) {
@@ -10032,6 +10312,7 @@ async function saveDistributionEntryAction(e) {
 
   const payload = {
     period,
+    dist_date,
     sr_no,
     style_code,
     contractor_name,
@@ -10048,13 +10329,23 @@ async function saveDistributionEntryAction(e) {
       await window.db.updateWorkDistributionEntry(parseInt(idVal, 10), payload);
       showToast(`✓ Distribution entry for ${style_code} (${contractor_name}) updated and propagated across sheets!`);
       closeModal("modal-distribution-entry");
-      renderAll();
+      populateDistributionPeriods();
+      renderWorkDistribution();
     } else {
       await window.db.addWorkDistributionEntry(payload);
       showToast(`✓ Style ${style_code} (${contractor_name}) save ho gaya! Agli entry ke liye Style Code par cursor ready hai.`);
 
-      // Render updated list in background
-      renderAll();
+      // Ensure active period in dropdown matches the entered period if not in 'all' view
+      const curActive = getActiveDistributionPeriod();
+      if (curActive !== "all" && formatDistDate(curActive).toLowerCase() !== formatDistDate(period).toLowerCase()) {
+        const sel = document.getElementById("select-distribution-period");
+        if (sel) sel.value = period;
+        localStorage.setItem("craftflow_active_dist_period", period);
+      }
+
+      // Render updated list in background — force work distribution table to re-render immediately
+      populateDistributionPeriods();
+      renderWorkDistribution();
 
       // Form close nahi hoga, continuous entry ke liye fields reset aur focus Style Code par
       // Sirf selected time period aur next serial number show hoga, baaqi pura form empty
@@ -10081,11 +10372,10 @@ async function saveDistributionEntryAction(e) {
       if (floorInput) floorInput.value = "";
       if (remarksInput) remarksInput.value = "";
 
-      // Selected period remains untouched, auto-increment SR NO for next entry
+      // Distribution date remains untouched, auto-increment SR NO for next entry
       if (srInput) {
-        const activePeriod = document.getElementById("dist-entry-period")?.value || getActiveDistributionPeriod();
-        const currentList = window.db.getWorkDistribution().filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-        srInput.value = currentList.length + 1;
+        const allList = window.db.getWorkDistribution();
+        srInput.value = allList.length + 1;
       }
 
       // Next entry ke liye Style Code text box par focus
@@ -10140,10 +10430,13 @@ function openDistPeriodSetupModal(isNew = false) {
   const status = document.getElementById("dist-setup-status");
   const notes = document.getElementById("dist-setup-notes");
 
+  const todayIso = new Date().toISOString().split("T")[0];
+  const todayFormatted = formatDistDate(todayIso);
+
   if (setupId) setupId.value = "";
-  if (sDate) sDate.value = "";
-  if (eDate) eDate.value = "";
-  if (title) title.value = isNew ? "" : getActiveDistributionPeriod();
+  if (sDate) sDate.value = todayIso;
+  if (eDate) eDate.value = todayIso;
+  if (title) title.value = todayFormatted;
   if (dept) dept.value = "Hand Embroidery Department";
   if (status) status.value = "Active";
   if (notes) notes.value = "";
@@ -10166,22 +10459,26 @@ function renderDistPeriodSetupList() {
 
   const activePeriod = getActiveDistributionPeriod();
 
-  if (countBadge) countBadge.textContent = `${periods.length} Periods`;
+  if (countBadge) countBadge.textContent = `${periods.length} Sheets`;
 
   if (periods.length === 0) {
-    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No distribution periods configured yet.</div>`;
+    container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 1rem; font-size: 0.8rem;">No distribution sheets configured yet. Click Save above to create today's sheet!</div>`;
     return;
   }
 
   container.innerHTML = periods.map(p => {
-    const pEntries = entries.filter(e => (e.period || "").trim().toLowerCase() === p.period_name.trim().toLowerCase());
-    const isAct = p.period_name.trim().toLowerCase() === activePeriod.trim().toLowerCase();
+    const pName = normalizePeriodDate(p.period_name || "");
+    const pEntries = entries.filter(e => {
+      const ep = normalizePeriodDate(e.period || e.dist_date || "");
+      return ep.toLowerCase() === pName.toLowerCase();
+    });
+    const isAct = pName.toLowerCase() === activePeriod.trim().toLowerCase();
 
     return `
       <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border-color); background: ${isAct ? 'rgba(16, 185, 129, 0.08)' : 'transparent'};">
         <div>
           <div style="display: flex; align-items: center; gap: 0.5rem;">
-            <strong style="font-family: var(--font-mono); font-size: 0.85rem; color: ${isAct ? '#10b981' : 'var(--text-main)'};">${escapeHtml(p.period_name)}</strong>
+            <strong style="font-family: var(--font-mono); font-size: 0.85rem; color: ${isAct ? '#10b981' : 'var(--text-main)'};">📅 ${escapeHtml(pName)}</strong>
             ${isAct ? '<span class="badge-tag success" style="font-size: 0.65rem; padding: 1px 6px;">Active</span>' : ''}
           </div>
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
@@ -10190,11 +10487,11 @@ function renderDistPeriodSetupList() {
         </div>
         <div style="display: flex; gap: 0.4rem; align-items: center;">
           ${!isAct ? `
-            <button type="button" class="btn btn-secondary btn-xs" style="padding: 2px 7px; font-size: 0.725rem;" onclick="selectDistPeriodFromSetup('${escapeHtml(p.period_name)}')">
+            <button type="button" class="btn btn-secondary btn-xs" style="padding: 2px 7px; font-size: 0.725rem;" onclick="selectDistPeriodFromSetup('${escapeHtml(pName)}')">
               Switch To
             </button>
           ` : ''}
-          <button type="button" class="btn btn-secondary btn-xs" style="color: var(--accent-rose); padding: 2px 6px; font-size: 0.725rem;" onclick="deleteDistPeriodAction('${escapeHtml(p.id || p.period_name)}')" title="Delete period sheet">
+          <button type="button" class="btn btn-secondary btn-xs" style="color: var(--accent-rose); padding: 2px 6px; font-size: 0.725rem;" onclick="deleteDistPeriodAction('${escapeHtml(p.id || pName)}')" title="Delete sheet">
             ✕
           </button>
         </div>
@@ -10204,14 +10501,15 @@ function renderDistPeriodSetupList() {
 }
 
 function selectDistPeriodFromSetup(periodName) {
+  const clean = normalizePeriodDate(periodName);
   const select = document.getElementById("select-distribution-period");
   if (select) {
-    select.value = periodName;
+    select.value = clean;
   }
-  localStorage.setItem("craftflow_active_dist_period", periodName);
+  localStorage.setItem("craftflow_active_dist_period", clean);
   closeModal("modal-dist-period-setup");
   renderWorkDistribution();
-  showToast(`Switched to distribution period "${periodName}"`, "info");
+  showToast(`Switched to distribution sheet "${clean}"`, "info");
 }
 
 async function saveDistPeriodAction(e) {
@@ -10224,16 +10522,18 @@ async function saveDistPeriodAction(e) {
   const statusInp = document.getElementById("dist-setup-status");
   const notesInp = document.getElementById("dist-setup-notes");
 
-  const period_name = (titleInp?.value || "").trim();
+  let period_name = normalizePeriodDate(titleInp?.value || "");
   if (!period_name) {
-    showToast("Please specify a period title", "error");
+    showToast("Please specify a distribution date or sheet name", "error");
     return;
   }
 
+  const sDateVal = sDateInp?.value || toIsoDate(period_name);
+
   const periodObj = {
     period_name,
-    start_date: sDateInp?.value || "",
-    end_date: eDateInp?.value || "",
+    start_date: sDateVal,
+    end_date: eDateInp?.value || sDateVal,
     department: deptInp?.value || "Hand Embroidery Department",
     status: statusInp?.value || "Active",
     notes: notesInp?.value || ""
@@ -10250,36 +10550,36 @@ async function saveDistPeriodAction(e) {
     renderDistPeriodSetupList();
     closeModal("modal-dist-period-setup");
     renderWorkDistribution();
-    showToast(`✓ Distribution period "${period_name}" created & synced to Neon!`);
+    showToast(`✓ Distribution sheet "${period_name}" created & synced to Neon!`);
   } catch (err) {
-    showToast(`Error saving period: ${err.message}`, "error");
+    showToast(`Error saving sheet: ${err.message}`, "error");
   }
 }
 
 async function deleteDistPeriodAction(periodKey) {
   if (!window.db.canUserPerformAction("can_delete")) {
-    showToast("Permission Denied: You cannot delete distribution periods.", "error");
+    showToast("Permission Denied: You cannot delete distribution sheets.", "error");
     return;
   }
 
   const periods = window.db.getDistributionPeriods();
-  const target = periods.find(p => p.id === periodKey || p.period_name === periodKey);
-  const name = target ? target.period_name : periodKey;
+  const target = periods.find(p => p.id === periodKey || normalizePeriodDate(p.period_name) === normalizePeriodDate(periodKey));
+  const name = target ? normalizePeriodDate(target.period_name) : normalizePeriodDate(periodKey);
 
-  const entries = window.db.getWorkDistribution().filter(e => (e.period || "").trim().toLowerCase() === name.trim().toLowerCase());
+  const entries = window.db.getWorkDistribution().filter(e => normalizePeriodDate(e.period || e.dist_date).toLowerCase() === name.toLowerCase());
 
-  let promptMsg = `Delete distribution period sheet "${name}"?`;
+  let promptMsg = `Delete distribution sheet "${name}"?`;
   if (entries.length > 0) {
-    promptMsg += ` WARNING: This period contains ${entries.length} style allocations!`;
+    promptMsg += ` WARNING: This sheet contains ${entries.length} style allocations!`;
   }
 
   if (confirm(promptMsg)) {
     try {
-      await window.db.deleteDistributionPeriod(periodKey);
+      await window.db.deleteDistributionPeriod(target?.id || periodKey);
 
-      // Clear setup form fields if this period was shown in the form
+      // Clear setup form fields if this sheet was shown in the form
       const nameInput = document.getElementById("dist-setup-name");
-      if (nameInput && nameInput.value.trim().toLowerCase() === name.trim().toLowerCase()) {
+      if (nameInput && normalizePeriodDate(nameInput.value).toLowerCase() === name.toLowerCase()) {
         nameInput.value = "";
         const sDate = document.getElementById("dist-setup-start-date");
         const eDate = document.getElementById("dist-setup-end-date");
@@ -10289,26 +10589,30 @@ async function deleteDistPeriodAction(periodKey) {
         if (notes) notes.value = "";
       }
 
-      // If active period was deleted, switch to next available or blank
+      // If active sheet was deleted, switch to next available or blank
       const remaining = window.db.getDistributionPeriods();
       const currentActive = getActiveDistributionPeriod();
-      if (!remaining.some(r => (r.period_name || "").toLowerCase() === currentActive.toLowerCase())) {
-        const nextPeriod = remaining.length > 0 ? remaining[0].period_name : "";
+      if (!remaining.some(r => normalizePeriodDate(r.period_name).toLowerCase() === currentActive.toLowerCase())) {
+        const nextPeriod = remaining.length > 0 ? normalizePeriodDate(remaining[0].period_name) : "all";
         const sel = document.getElementById("select-distribution-period");
-        const entrySel = document.getElementById("dist-entry-period");
         if (sel) sel.value = nextPeriod;
-        if (entrySel) entrySel.value = nextPeriod;
+        localStorage.setItem("craftflow_active_dist_period", nextPeriod);
       }
 
       populateDistributionPeriods();
       renderDistPeriodSetupList();
       renderWorkDistribution();
-      showToast(`Distribution period "${name}" removed.`, "info");
+      showToast(`Distribution sheet "${name}" removed.`, "info");
     } catch (err) {
       showToast(`Error: ${err.message}`, "error");
     }
   }
 }
+
+window.openDistPeriodSetupModal = openDistPeriodSetupModal;
+window.selectDistPeriodFromSetup = selectDistPeriodFromSetup;
+window.deleteDistPeriodAction = deleteDistPeriodAction;
+window.populateDistributionPeriods = populateDistributionPeriods;
 
 function exportDistributionCsv() {
   const activePeriod = getActiveDistributionPeriod();
@@ -11708,159 +12012,66 @@ function executeStudioPrint() {
     showToast("Unable to generate print document.", "error");
     return;
   }
-
-  // Copy rendered vector A4 content to isolated print root
   printRoot.innerHTML = previewContent;
-  printRoot.style.display = "block";
-
-  // Dynamic @page orientation rule (Universal Chrome/Edge compatible syntax!)
-  let pageStyle = document.getElementById("print-studio-dynamic-page-style");
-  if (!pageStyle) {
-    pageStyle = document.createElement("style");
-    pageStyle.id = "print-studio-dynamic-page-style";
-    document.head.appendChild(pageStyle);
-  }
-
-  pageStyle.textContent = `
-    @page {
-      size: ${printStudioOrientation};
-      margin: 6mm;
-    }
-    @media print {
-      body.is-printing-from-studio {
-        background: #ffffff !important;
-        color: #000000 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-      }
-      body.is-printing-from-studio > *:not(#print-studio-paper-root) {
-        display: none !important;
-      }
-      body.is-printing-from-studio #print-studio-paper-root {
-        display: block !important;
-        position: static !important;
-        width: 100% !important;
-        max-width: ${printStudioOrientation === 'landscape' ? '285mm' : '198mm'} !important;
-        margin: 0 auto !important;
-        padding: 0 !important;
-        background: #ffffff !important;
-        color: #000000 !important;
-      }
-      body.is-printing-from-studio .print-render-table {
-        width: 100% !important;
-        table-layout: fixed !important;
-      }
-    }
-  `;
-
-  // Body printing state classes
-  document.body.classList.add("is-printing-from-studio");
-  if (printStudioOrientation === "landscape") {
-    document.body.classList.add("print-landscape");
-    document.body.classList.remove("print-portrait");
-  } else {
-    document.body.classList.add("print-portrait");
-    document.body.classList.remove("print-landscape");
-  }
-
-  const cleanUpAfterPrint = () => {
-    document.body.classList.remove("is-printing-from-studio", "print-landscape", "print-portrait");
-    if (printRoot) {
-      printRoot.style.display = "none";
-      printRoot.innerHTML = "";
-    }
-    window.removeEventListener("afterprint", cleanUpAfterPrint);
-  };
-
-  window.addEventListener("afterprint", cleanUpAfterPrint);
-
-  setTimeout(() => {
-    window.print();
-    setTimeout(cleanUpAfterPrint, 3500);
-  }, 100);
+  window.print();
 }
-
-// =============================================================
-// TAB 9: TRASH & RECYCLE BIN CONTROLLER (Recovery & Purge)
-// =============================================================
 let currentTrashFilterType = "all";
-let currentTrashSearchTerm = "";
-
-function initTrashView() {
-  const searchInput = document.getElementById("trash-search-input");
-  const filterSelect = document.getElementById("filter-trash-type");
-  const btnRestoreAll = document.getElementById("btn-trash-restore-all");
-  const btnEmpty = document.getElementById("btn-trash-empty");
-
-  const debouncedRender = debounce(() => renderTrashView(), 120);
-
-  if (searchInput) {
-    searchInput.addEventListener("input", (e) => {
-      currentTrashSearchTerm = (e.target.value || "").trim().toLowerCase();
-      debouncedRender();
-    });
-  }
-
-  if (filterSelect) {
-    filterSelect.addEventListener("change", (e) => {
-      currentTrashFilterType = e.target.value;
-      renderTrashView();
-    });
-  }
-
-  if (btnRestoreAll) {
-    btnRestoreAll.addEventListener("click", () => restoreAllTrashAction());
-  }
-
-  if (btnEmpty) {
-    btnEmpty.addEventListener("click", () => emptyTrashAction());
-  }
-}
 
 function renderTrashView() {
-  const allTrash = (window.db && typeof window.db.getTrashItems === "function")
-    ? window.db.getTrashItems()
-    : [];
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
 
-  // Update Mini KPI Banner
-  const countRec = allTrash.filter(t => t.entity_type === "receiving").length;
-  const countDis = allTrash.filter(t => t.entity_type === "dispatch").length;
-  const countMasterDaily = allTrash.filter(t => t.entity_type === "master" || t.entity_type === "final_style").length;
-  const countPayDist = allTrash.filter(t => t.entity_type === "payment" || t.entity_type === "distribution").length;
+  // Update KPI counters
+  let receivingCount = 0;
+  let dispatchCount = 0;
+  let masterDailyCount = 0;
+  let paymentDistCount = 0;
 
-  const setElText = (id, val) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = val;
-  };
+  allTrash.forEach(item => {
+    const t = item.entity_type;
+    if (t === "receiving") receivingCount++;
+    else if (t === "dispatch") dispatchCount++;
+    else if (t === "master" || t === "final_style") masterDailyCount++;
+    else if (t === "payment" || t === "distribution" || t === "period" || t === "distribution_period") paymentDistCount++;
+  });
 
-  setElText("trash-kpi-total", allTrash.length);
-  setElText("trash-kpi-receiving", countRec);
-  setElText("trash-kpi-dispatch", countDis);
-  setElText("trash-kpi-master-daily", countMasterDaily);
-  setElText("trash-kpi-payment-dist", countPayDist);
-  setElText("trash-kpi-count-badge", `${allTrash.length} Items`);
+  const totalEl = document.getElementById("trash-kpi-total");
+  if (totalEl) totalEl.textContent = allTrash.length;
+  const recEl = document.getElementById("trash-kpi-receiving");
+  if (recEl) recEl.textContent = receivingCount;
+  const disEl = document.getElementById("trash-kpi-dispatch");
+  if (disEl) disEl.textContent = dispatchCount;
+  const mdEl = document.getElementById("trash-kpi-master-daily");
+  if (mdEl) mdEl.textContent = masterDailyCount;
+  const pdEl = document.getElementById("trash-kpi-payment-dist");
+  if (pdEl) pdEl.textContent = paymentDistCount;
+  const badgeEl = document.getElementById("trash-kpi-count-badge");
+  if (badgeEl) badgeEl.textContent = `${allTrash.length} Items`;
 
-  // Filtering
-  let filtered = allTrash;
+  // Search and Module Filter
+  const query = (document.getElementById("trash-search-input")?.value || document.getElementById("input-trash-search")?.value || "").toLowerCase().trim();
+  const modFilter = document.getElementById("filter-trash-type")?.value || document.getElementById("filter-trash-module")?.value || "all";
+  currentTrashFilterType = modFilter;
 
-  if (currentTrashFilterType && currentTrashFilterType !== "all") {
-    filtered = filtered.filter(t => t.entity_type === currentTrashFilterType);
-  }
-
-  if (currentTrashSearchTerm) {
-    const s = currentTrashSearchTerm;
-    filtered = filtered.filter(t => {
-      const matchTitle = (t.title || "").toLowerCase().includes(s);
-      const matchSub = (t.subtitle || "").toLowerCase().includes(s);
-      const matchUser = (t.deleted_by || "").toLowerCase().includes(s);
-      const matchType = (t.entity_type || "").toLowerCase().includes(s);
-      const matchStyle = (t.data?.style_code || "").toLowerCase().includes(s);
-      const matchContractor = (t.data?.contractor_name || "").toLowerCase().includes(s);
-      const matchChallanRec = (t.data?.challan_rec || "").toLowerCase().includes(s);
-      const matchChallanDis = (t.data?.challan_dis || "").toLowerCase().includes(s);
-      return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis;
-    });
-  }
+  let filtered = allTrash.filter(item => {
+    if (modFilter && modFilter !== "all") {
+      if (modFilter === "period") {
+        if (item.entity_type !== "period" && item.entity_type !== "distribution_period") return false;
+      } else if (item.entity_type !== modFilter) {
+        return false;
+      }
+    }
+    if (!query) return true;
+    const matchTitle = (item.title || "").toLowerCase().includes(query);
+    const matchSub = (item.subtitle || "").toLowerCase().includes(query);
+    const matchUser = (item.deleted_by || "").toLowerCase().includes(query);
+    const matchType = (item.entity_type || "").toLowerCase().includes(query);
+    const d = item.data || item.item_data || {};
+    const matchStyle = (d.style_code || "").toLowerCase().includes(query);
+    const matchContractor = (d.contractor_name || "").toLowerCase().includes(query);
+    const matchChallanRec = (d.challan_rec || "").toLowerCase().includes(query);
+    const matchChallanDis = (d.challan_dis || "").toLowerCase().includes(query);
+    return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis;
+  });
 
   const tbody = document.getElementById("trash-table-body");
   const emptyState = document.getElementById("trash-empty-state");
@@ -11966,7 +12177,7 @@ function openTrashDetailsModal(id) {
   const item = window.db.getTrashItemById(id);
   if (!item) return;
 
-  const metaBox = document.getElementById("trash-detail-meta");
+  const metaBox = document.getElementById("trash-detail-meta-box") || document.getElementById("trash-detail-meta");
   const grid = document.getElementById("trash-detail-grid");
   const btnRestore = document.getElementById("btn-trash-detail-restore");
   const btnDestroy = document.getElementById("btn-trash-detail-destroy");
@@ -12032,6 +12243,109 @@ function openTrashDetailsModal(id) {
 
   openModal("modal-trash-details");
 }
+
+async function restoreTrashItem(id) {
+  if (!id) return;
+  try {
+    const item = window.db.getTrashItemById(id);
+    const title = item ? item.title : "record";
+    showToast(`Restoring ${title}...`, "info");
+    await window.db.restoreFromTrash(id);
+    showToast(`✓ Successfully restored: ${title}`, "success");
+    renderTrashView();
+    if (typeof refreshAllViews === "function") refreshAllViews();
+    else if (typeof renderAll === "function") renderAll();
+  } catch (err) {
+    console.error("restoreTrashItem error:", err);
+    showToast(`✕ Error restoring item: ${err.message || err}`, "error");
+  }
+}
+
+async function destroyTrashItem(id) {
+  if (!id) return;
+  const item = window.db.getTrashItemById(id);
+  const title = item ? item.title : "this item";
+  if (!confirm(`Are you sure you want to permanently destroy "${title}"?\nThis action cannot be undone.`)) {
+    return;
+  }
+  try {
+    showToast(`Permanently deleting...`, "info");
+    await window.db.destroyFromTrash(id);
+    showToast(`✓ Item permanently destroyed.`, "success");
+    closeModal("modal-trash-details");
+    renderTrashView();
+  } catch (err) {
+    console.error("destroyTrashItem error:", err);
+    showToast(`✕ Error destroying item: ${err.message || err}`, "error");
+  }
+}
+
+async function restoreAllTrashAction() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+  if (!confirm(`Restore all ${allTrash.length} items from trash?`)) {
+    return;
+  }
+  try {
+    showToast("Restoring all items...", "info");
+    const res = await window.db.restoreAllTrash(currentTrashFilterType);
+    showToast(`✓ Restored ${(res && res.restoredCount) || allTrash.length} items successfully!`, "success");
+    renderTrashView();
+    if (typeof refreshAllViews === "function") refreshAllViews();
+    else if (typeof renderAll === "function") renderAll();
+  } catch (err) {
+    console.error("restoreAllTrashAction error:", err);
+    showToast(`✕ Error restoring all: ${err.message || err}`, "error");
+  }
+}
+
+async function emptyTrashAction() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+  if (!confirm(`⚠️ PERMANENT DESTRUCTION WARNING!\n\nAre you sure you want to permanently empty the trash (${allTrash.length} items)?\nThis cannot be undone.`)) {
+    return;
+  }
+  try {
+    showToast("Emptying trash...", "info");
+    await window.db.emptyTrash();
+    showToast("✓ Trash has been emptied completely.", "success");
+    renderTrashView();
+  } catch (err) {
+    console.error("emptyTrashAction error:", err);
+    showToast(`✕ Error emptying trash: ${err.message || err}`, "error");
+  }
+}
+
+function initTrashView() {
+  const btnRestoreAll = document.getElementById("btn-trash-restore-all");
+  if (btnRestoreAll) btnRestoreAll.onclick = restoreAllTrashAction;
+
+  const btnEmpty = document.getElementById("btn-trash-empty");
+  if (btnEmpty) btnEmpty.onclick = emptyTrashAction;
+
+  const searchInp = document.getElementById("trash-search-input") || document.getElementById("input-trash-search");
+  if (searchInp) searchInp.oninput = renderTrashView;
+
+  const typeFilter = document.getElementById("filter-trash-type") || document.getElementById("filter-trash-module");
+  if (typeFilter) typeFilter.onchange = renderTrashView;
+
+  renderTrashView();
+}
+
+window.initTrashView = initTrashView;
+window.openTrashDetailsModal = openTrashDetailsModal;
+window.restoreTrashItem = restoreTrashItem;
+window.destroyTrashItem = destroyTrashItem;
+window.restoreAllTrashAction = restoreAllTrashAction;
+window.emptyTrashAction = emptyTrashAction;
+window.renderTrashView = renderTrashView;
+window.renderTrashTable = renderTrashView;
 
 // ====================================================================
 // FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
@@ -12263,31 +12577,79 @@ function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
     const contractors = (window.db && typeof window.db.getContractors === "function")
       ? window.db.getContractors()
       : [];
-    contSelect.innerHTML = contractors.map(c => `
+    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+      ? window.db.getWorkDistribution()
+      : [];
+
+    const contMap = new Map();
+    contractors.forEach(c => {
+      if (c && c.name && c.name.trim()) {
+        const cleanKey = c.name.trim().toLowerCase();
+        contMap.set(cleanKey, { name: toProperCase(c.name.trim()), phone: c.phone || "" });
+      }
+    });
+
+    distList.forEach(w => {
+      if (w && w.contractor_name && w.contractor_name.trim()) {
+        const cleanKey = w.contractor_name.trim().toLowerCase();
+        if (!contMap.has(cleanKey)) {
+          contMap.set(cleanKey, { name: w.contractor_name.trim(), phone: "" });
+        }
+      }
+    });
+
+    const allConts = Array.from(contMap.values());
+    contSelect.innerHTML = allConts.map(c => `
       <option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} ${c.phone ? `(${escapeHtml(c.phone)})` : ''}</option>
     `).join("");
 
     if (selectedCont) {
-      contSelect.value = selectedCont;
-    } else if (contractors.length > 0 && contractors[0].name) {
-      contSelect.value = contractors[0].name;
+      const match = allConts.find(c => c.name.toLowerCase() === selectedCont.trim().toLowerCase());
+      if (match) contSelect.value = match.name;
+    } else if (allConts.length > 0) {
+      contSelect.value = allConts[0].name;
     }
   }
 
   const periodSelect = document.getElementById("parcha-select-period");
   if (periodSelect) {
-    const periods = (window.db && typeof window.db.getRateApprovalPeriods === "function")
-      ? window.db.getRateApprovalPeriods()
+    const distPeriods = (window.db && typeof window.db.getDistributionPeriods === "function")
+      ? window.db.getDistributionPeriods()
+      : [];
+    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+      ? window.db.getWorkDistribution()
       : [];
 
-    let periodOptions = `<option value="all">⚡ All Completed Dispatches</option>`;
-    periods.forEach(p => {
-      periodOptions += `<option value="${escapeHtml(p.period_name)}">${escapeHtml(p.period_name)}</option>`;
+    const periodSet = new Set();
+    distPeriods.forEach(p => {
+      if (p && p.period_name && p.period_name.trim()) periodSet.add(p.period_name.trim());
     });
+    distList.forEach(w => {
+      if (w && w.period && w.period.trim()) periodSet.add(w.period.trim());
+    });
+
+    const uniquePeriods = Array.from(periodSet);
+    let periodOptions = "";
+    uniquePeriods.forEach(p => {
+      periodOptions += `<option value="${escapeHtml(p)}">📅 ${escapeHtml(p)}</option>`;
+    });
+    periodOptions += `<option value="all">⚡ All Production Cycles</option>`;
     periodSelect.innerHTML = periodOptions;
 
-    if (selectedPeriod) {
-      periodSelect.value = selectedPeriod;
+    const activeP = (typeof getActiveDistributionPeriod === "function")
+      ? getActiveDistributionPeriod()
+      : (uniquePeriods[0] || "all");
+
+    if (selectedPeriod && (selectedPeriod === "all" || uniquePeriods.some(p => p.toLowerCase() === selectedPeriod.toLowerCase()))) {
+      const match = uniquePeriods.find(p => p.toLowerCase() === selectedPeriod.toLowerCase());
+      periodSelect.value = match || selectedPeriod;
+    } else if (uniquePeriods.some(p => p.toLowerCase() === (activeP || "").toLowerCase())) {
+      const match = uniquePeriods.find(p => p.toLowerCase() === activeP.toLowerCase());
+      periodSelect.value = match;
+    } else if (uniquePeriods.length > 0) {
+      periodSelect.value = uniquePeriods[0];
+    } else {
+      periodSelect.value = "all";
     }
   }
 }
@@ -12845,7 +13207,15 @@ const WHATSAPP_SHEET_DEFS = {
       if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
 
       if (!query && periodFilter && periodFilter !== "all") {
-        list = list.filter(item => (item.period || "").trim().toLowerCase() === periodFilter.toLowerCase());
+        list = list.filter(item => {
+          const itemPeriod = (item.period || "").trim().toLowerCase();
+          const activePeriod = periodFilter.trim().toLowerCase();
+          if (itemPeriod === activePeriod) return true;
+          const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+          const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+          if (itemStart && activeStart && itemStart === activeStart) return true;
+          return false;
+        });
       }
 
       if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
@@ -12879,26 +13249,37 @@ const WHATSAPP_SHEET_DEFS = {
         list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
       }
 
-      const rows = list.map((item, idx) => ({
-        sr_no: item.sr_no || (idx + 1),
-        style_code: item.style_code || "",
-        working: item.working || item.category || "SHIRT",
-        contractor_name: item.contractor_name || "-",
-        rate: Number(item.rate) || 0,
-        cut_qty: Number(item.cut_qty) || 0,
-        prod_pcs_qty: Number(item.prod_pcs_qty) || 0,
-        carigar_rate: Number(item.carigar_rate) || 0,
-        commission: Number(item.commission) || 0,
-        rate_total: Number(item.rate_total) || 0,
-        remarks: item.remarks || "-",
-        balance_stock: Number(item.balance_stock) || 0,
-        balance_hemb: Number(item.balance_hemb) || 0,
-        total_balance: Number(item.total_balance) || 0,
-        period: item.period || "-"
-      }));
+      const rows = list.map((item, idx) => {
+        const rawCut = Number(item.cut_qty || item.total_pcs || 0);
+        const deduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
+        const baseProd = (item.base_prod_pcs != null)
+          ? Number(item.base_prod_pcs)
+          : ((Number(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs) || 0) + (deduction > 0 && item.base_prod_pcs == null ? deduction : 0));
+        const netProd = Math.max(0, baseProd - deduction);
+
+        return {
+          sr_no: idx + 1,
+          style_code: item.style_code || "",
+          working: item.working || item.category || "SHIRT",
+          contractor_name: item.contractor_name || "-",
+          rate: Number(item.rate_per_pc || item.rate) || 0,
+          cut_qty: rawCut,
+          deduction_pcs: deduction,
+          prod_pcs_qty: netProd,
+          carigar_rate: Number(item.carigar_rate) || 0,
+          commission: Number(item.commission) || 0,
+          rate_total: Number(item.rate_total) || 0,
+          remarks: item.remarks_1 || item.remarks || "-",
+          balance_stock: Number(item.balance_from_stock != null ? item.balance_from_stock : item.balance_stock) || 0,
+          balance_hemb: Number(item.balance_from_hemb != null ? item.balance_from_hemb : item.balance_hemb) || 0,
+          total_balance: Number(item.total_balance != null ? item.total_balance : item.balance_pcs) || 0,
+          period: item.period || "-"
+        };
+      });
 
       const totals = {
         cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        deduction_pcs: rows.reduce((s, r) => s + (Number(r.deduction_pcs) || 0), 0),
         prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
         rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
         balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
@@ -12915,6 +13296,7 @@ const WHATSAPP_SHEET_DEFS = {
       { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
       { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
       { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "deduction_pcs", label: "KAAT", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.deduction_pcs },
       { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
       { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
       { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },

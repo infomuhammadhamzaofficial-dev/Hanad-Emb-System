@@ -41,16 +41,90 @@ const DEFAULT_NEON_CONFIG = {
   autoSync: true
 };
 
+function formatDistDate(val) {
+  if (!val) return "";
+  let s = String(val).trim();
+  if (/\s+to\s+/i.test(s)) s = s.split(/\s+to\s+/i)[0].trim();
+  const isoMatch = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoMatch) {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const mIdx = parseInt(isoMatch[2], 10) - 1;
+    return `${isoMatch[3]}-${months[mIdx] || isoMatch[2]}-${isoMatch[1]}`;
+  }
+  return s;
+}
+
 class DatabaseService {
   constructor() {
     this._memCache = {};
     this.cleanLegacyDummyData();
+    this.cleanLegacyDistributionPeriodRanges();
     this.cleanCorruptedNumericTombstones();
     this.initLocalStorage();
     this.deduplicateMasterInventorySerialNumbers();
     this.deduplicateFinalStyles();
     this.syncAllDistributionContractorsToLogsAndMaster();
     this._neonTablesReady = false;
+  }
+
+  // -------------------------------------------------------------
+  // Clean Legacy Distribution Time Period Ranges (Keep only start date)
+  // Strips " TO ..." from work_distribution and distribution_periods
+  // -------------------------------------------------------------
+  cleanLegacyDistributionPeriodRanges() {
+    try {
+      // 1. Clean WORK_DISTRIBUTION in localStorage
+      const rawDist = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION);
+      if (rawDist) {
+        const parsed = JSON.parse(rawDist);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let changed = false;
+          parsed.forEach(item => {
+            if (item) {
+              if (item.period && /\s+to\s+/i.test(item.period)) {
+                item.period = item.period.split(/\s+to\s+/i)[0].trim();
+                changed = true;
+              }
+              if (item.dist_date && /\s+to\s+/i.test(item.dist_date)) {
+                item.dist_date = item.dist_date.split(/\s+to\s+/i)[0].trim();
+                changed = true;
+              }
+            }
+          });
+          if (changed) {
+            localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(parsed));
+            this.clearCache(DB_KEYS.WORK_DISTRIBUTION);
+          }
+        }
+      }
+
+      // 2. Clean DISTRIBUTION_PERIODS in localStorage
+      const rawPeriods = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
+      if (rawPeriods) {
+        const parsed = JSON.parse(rawPeriods);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          let changed = false;
+          parsed.forEach(item => {
+            if (item && item.period_name && /\s+to\s+/i.test(item.period_name)) {
+              item.period_name = item.period_name.split(/\s+to\s+/i)[0].trim();
+              changed = true;
+            }
+          });
+          if (changed) {
+            localStorage.setItem(DB_KEYS.DISTRIBUTION_PERIODS, JSON.stringify(parsed));
+            this.clearCache(DB_KEYS.DISTRIBUTION_PERIODS);
+          }
+        }
+      }
+
+      // 3. Clean active selected distribution period in localStorage
+      const active = localStorage.getItem("craftflow_active_dist_period");
+      if (active && /\s+to\s+/i.test(active)) {
+        localStorage.setItem("craftflow_active_dist_period", active.split(/\s+to\s+/i)[0].trim());
+      }
+    } catch (e) {
+      console.warn("cleanLegacyDistributionPeriodRanges notice:", e);
+    }
   }
 
   // -------------------------------------------------------------
@@ -138,9 +212,38 @@ class DatabaseService {
     legacyKeys.forEach(k => localStorage.removeItem(k));
   }
 
-  // Tombstones are retained permanently so deleted records NEVER resurface from cloud/cache
+  // Clean Stale Numeric Tombstones from hand_emb_deleted_records_v1
+  // Prevents legitimate rows (e.g. S.NO 1 or Row 15) from being hidden
   cleanCorruptedNumericTombstones() {
-    return;
+    try {
+      const delRecs = JSON.parse(localStorage.getItem("hand_emb_deleted_records_v1") || "{}");
+      let changed = false;
+      if (delRecs.payment && Array.isArray(delRecs.payment)) {
+        const filtered = delRecs.payment.filter(id => !/^\d{1,5}$/.test(String(id).trim()));
+        if (filtered.length !== delRecs.payment.length) {
+          delRecs.payment = filtered;
+          changed = true;
+        }
+      }
+      if (delRecs.distribution && Array.isArray(delRecs.distribution)) {
+        const filtered = delRecs.distribution.filter(id => !/^\d{1,5}$/.test(String(id).trim()));
+        if (filtered.length !== delRecs.distribution.length) {
+          delRecs.distribution = filtered;
+          changed = true;
+        }
+      }
+      if (delRecs.final_style && Array.isArray(delRecs.final_style)) {
+        // Daily Sheet tombstones must be date-scoped (YYYY-MM-DD|style|cat) so previous dates are not blocked
+        const filtered = delRecs.final_style.filter(id => /^\d{4}-\d{2}-\d{2}\|/.test(String(id).trim()));
+        if (filtered.length !== delRecs.final_style.length) {
+          delRecs.final_style = filtered;
+          changed = true;
+        }
+      }
+      if (changed) {
+        localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(delRecs));
+      }
+    } catch (e) { }
   }
 
   // Initialize clean empty data
@@ -684,25 +787,100 @@ class DatabaseService {
   generateContractorParchaData(contractorName, period = "") {
     const cleanCont = (contractorName || "").trim().toLowerCase();
     const contractors = this.getContractors();
-    const contObj = contractors.find(c => (c.name || "").toLowerCase() === cleanCont) || { name: contractorName, phone: "" };
+    const contObj = contractors.find(c => (c.name || "").trim().toLowerCase() === cleanCont) || { name: contractorName, phone: "" };
 
-    const master = this.getMasterInventory();
-    const disLogs = this.getDispatchLogs();
-    const paySheets = this.getPaymentSheets();
+    const workDist = (typeof this.getWorkDistribution === "function") ? this.getWorkDistribution() : [];
+    const paySheets = (typeof this.getPaymentSheets === "function") ? this.getPaymentSheets() : [];
+    const cleanPeriod = (period || "").trim().toLowerCase();
+    const isAllPeriods = !cleanPeriod || cleanPeriod === "all" || cleanPeriod.includes("all completed") || cleanPeriod.includes("all production");
 
-    // Map of style_code + category -> { style_code, category, pieces, rate, total_amount, remarks }
-    const itemsMap = new Map();
+    let items = [];
 
-    // 1. Gather from dispatches
-    disLogs.forEach(d => {
-      if ((d.contractor_name || "").toLowerCase() === cleanCont) {
+    const toTitle = (str) => {
+      if (!str) return "";
+      return String(str).toLowerCase().replace(/\b\w/g, c => c.toUpperCase());
+    };
+
+    // 1. PRIMARY AUTHENTIC SOURCE: Work Distribution
+    let matchingDist = workDist.filter(w => {
+      const cName = (w.contractor_name || "").trim().toLowerCase();
+      if (cName !== cleanCont) return false;
+      if (isAllPeriods) return true;
+      return (w.period || "").trim().toLowerCase() === cleanPeriod;
+    });
+
+    // If no exact match found (e.g. contractor only has joint entries in this cycle), check joint combinations
+    if (matchingDist.length === 0) {
+      matchingDist = workDist.filter(w => {
+        const cName = (w.contractor_name || "").trim().toLowerCase();
+        const parts = cName.split(/[/,&+]/).map(s => s.trim().toLowerCase());
+        if (!parts.includes(cleanCont)) return false;
+        if (isAllPeriods) return true;
+        return (w.period || "").trim().toLowerCase() === cleanPeriod;
+      });
+    }
+
+    if (matchingDist.length > 0) {
+      items = matchingDist.map((w, idx) => {
+        const pcs = parseInt(w.pcs_qty, 10) || 0;
+        let rate = parseFloat(w.rate) || 0;
+
+        if (rate <= 0) {
+          const matchPay = paySheets.find(p =>
+            (p.style_code || "").trim().toLowerCase() === (w.style_code || "").trim().toLowerCase() &&
+            ((p.category || p.working || "").trim().toLowerCase() === (w.item || "").trim().toLowerCase() || !(p.category || p.working))
+          );
+          if (matchPay) {
+            rate = Number(matchPay.carigar_rate) || Number(matchPay.h_emb_po_fix_rate) || Number(matchPay.rate_per_pc) || 0;
+          }
+        }
+        if (rate <= 0) {
+          const otherEntry = workDist.find(other =>
+            (other.style_code || "").trim().toLowerCase() === (w.style_code || "").trim().toLowerCase() &&
+            (other.item || "").trim().toLowerCase() === (w.item || "").trim().toLowerCase() &&
+            parseFloat(other.rate) > 0
+          );
+          if (otherEntry) rate = parseFloat(otherEntry.rate);
+        }
+
+        const total = (w.total_amount != null && !isNaN(Number(w.total_amount)) && Number(w.total_amount) > 0 && rate > 0)
+          ? Number(w.total_amount)
+          : (pcs * rate);
+
+        return {
+          sr: idx + 1,
+          style_code: (w.style_code || "").trim().toUpperCase(),
+          category: toTitle(w.item || w.category || "Shirt"),
+          pieces: pcs,
+          rate: rate,
+          total_amount: total,
+          remarks: w.remarks || (w.floor ? `Floor: ${w.floor}` : "") || (w.contractor_name && w.contractor_name.toLowerCase() !== (contObj.name || "").toLowerCase() ? `Joint: ${w.contractor_name}` : "")
+        };
+      });
+    }
+
+    // 2. FALLBACK (Only if work_distribution has 0 matching entries for this contractor)
+    if (items.length === 0) {
+      const disLogs = (typeof this.getDispatchLogs === "function") ? this.getDispatchLogs() : [];
+      const itemsMap = new Map();
+
+      disLogs.forEach(d => {
+        const dCont = (d.contractor_name || "").trim().toLowerCase();
+        let matchesCont = (dCont === cleanCont);
+        if (!matchesCont) {
+          const parts = dCont.split(/[/,&+]/).map(s => s.trim().toLowerCase());
+          matchesCont = parts.includes(cleanCont);
+        }
+        if (!matchesCont) return;
+
         const code = (d.style_code || "").trim().toUpperCase();
         const cat = (d.category || "Shirt").trim();
         const key = `${code}:::${cat.toUpperCase()}`;
+
         if (!itemsMap.has(key)) {
           itemsMap.set(key, {
             style_code: code,
-            category: cat,
+            category: toTitle(cat),
             pieces: 0,
             rate: 0,
             total_amount: 0,
@@ -711,55 +889,53 @@ class DatabaseService {
         }
         const row = itemsMap.get(key);
         row.pieces += (parseInt(d.dispatch_qty, 10) || 0);
-      }
-    });
+      });
 
-    // 2. Also check master inventory if dispatches weren't entered separately
-    if (itemsMap.size === 0) {
-      master.forEach(m => {
-        if ((m.contractor_name || "").toLowerCase() === cleanCont && (m.dispatch_from_hemb > 0 || m.received_qty > 0)) {
-          const code = (m.style_code || "").trim().toUpperCase();
-          const cat = (m.category || "Shirt").trim();
-          const key = `${code}:::${cat.toUpperCase()}`;
-          const pcs = m.dispatch_from_hemb > 0 ? m.dispatch_from_hemb : m.received_qty;
-          itemsMap.set(key, {
-            style_code: code,
-            category: cat,
-            pieces: pcs,
-            rate: 0,
-            total_amount: 0,
-            remarks: m.remarks || ""
-          });
+      items = Array.from(itemsMap.values()).map((item, idx) => {
+        let rate = 0;
+        const distMatch = workDist.find(w =>
+          (w.style_code || "").trim().toLowerCase() === item.style_code.toLowerCase() &&
+          (w.item || "").trim().toLowerCase() === item.category.toLowerCase() &&
+          parseFloat(w.rate) > 0
+        );
+        if (distMatch) {
+          rate = parseFloat(distMatch.rate);
+        } else {
+          const matchPay = paySheets.find(p =>
+            (p.style_code || "").trim().toLowerCase() === item.style_code.toLowerCase() &&
+            ((p.category || p.working || "").trim().toLowerCase() === item.category.toLowerCase() || !(p.category || p.working))
+          );
+          if (matchPay) {
+            rate = Number(matchPay.carigar_rate) || Number(matchPay.h_emb_po_fix_rate) || Number(matchPay.rate_per_pc) || 0;
+          }
         }
+        if (!rate && contObj.rate_per_piece) {
+          rate = Number(contObj.rate_per_piece) || 0;
+        }
+
+        const total = item.pieces * rate;
+        return {
+          sr: idx + 1,
+          style_code: item.style_code,
+          category: item.category,
+          pieces: item.pieces,
+          rate: rate,
+          total_amount: total,
+          remarks: item.remarks
+        };
       });
     }
 
-    // 3. Match rates from Payment Sheet or default
-    const items = Array.from(itemsMap.values()).map((item, idx) => {
-      const matchPay = paySheets.find(p =>
-        (p.style_code || "").toLowerCase() === item.style_code.toLowerCase() &&
-        (p.category || p.working || "").toLowerCase() === item.category.toLowerCase()
-      );
-
-      let rate = 0;
-      if (matchPay) {
-        rate = Number(matchPay.carigar_rate) || Number(matchPay.h_emb_po_fix_rate) || Number(matchPay.rate_per_pc) || 0;
+    let displayPeriod = period;
+    if (!displayPeriod || displayPeriod === "all" || isAllPeriods) {
+      if (matchingDist.length > 0 && !isAllPeriods) {
+        displayPeriod = matchingDist[0].period || "Current Production Cycle";
+      } else if (isAllPeriods) {
+        displayPeriod = "All Production Cycles";
+      } else {
+        displayPeriod = "Current Production Cycle";
       }
-      if (!rate) {
-        rate = Number(contObj.rate_per_piece) || 150;
-      }
-
-      const total = item.pieces * rate;
-      return {
-        sr: idx + 1,
-        style_code: item.style_code,
-        category: item.category,
-        pieces: item.pieces,
-        rate: rate,
-        total_amount: total,
-        remarks: item.remarks
-      };
-    });
+    }
 
     const totalPieces = items.reduce((sum, i) => sum + i.pieces, 0);
     const grossAmount = items.reduce((sum, i) => sum + i.total_amount, 0);
@@ -771,7 +947,7 @@ class DatabaseService {
       parcha_no: parchaNo,
       contractor_name: contObj.name || contractorName,
       contractor_phone: contObj.phone || "",
-      period: period || "Current Production Cycle",
+      period: displayPeriod,
       slip_date: now.toISOString().split("T")[0],
       items: items,
       total_pieces: totalPieces,
@@ -889,27 +1065,7 @@ class DatabaseService {
       records[type].push(cleanId);
       localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(records));
     }
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      const tombstoneKey = `${type}:::${cleanId}`.slice(0, 255);
-      this.executeNeonQuery(
-        `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier)
-         VALUES ($1, $2, $3)
-         ON CONFLICT (tombstone_key) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP;`,
-        [tombstoneKey, String(type).slice(0, 50), cleanId.slice(0, 255)]
-      ).catch((err) => {
-        if (err && err.message && err.message.toLowerCase().includes("deleted_tombstones")) {
-          this.ensureNeonTrashTableReady().then(() => {
-            this.executeNeonQuery(
-              `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier)
-               VALUES ($1, $2, $3)
-               ON CONFLICT (tombstone_key) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP;`,
-              [tombstoneKey, String(type).slice(0, 50), cleanId.slice(0, 255)]
-            ).catch(() => null);
-          }).catch(() => null);
-        }
-      });
-    }
+    this.pushDeletedTombstoneToNeon(type, cleanId).catch(() => null);
   }
 
   untrackDeletedRecord(type, identifier) {
@@ -925,12 +1081,40 @@ class DatabaseService {
           localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(records));
         }
       }
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        const tombstoneKey = `${type}:::${cleanId}`.slice(0, 255);
-        this.executeNeonQuery("DELETE FROM deleted_tombstones WHERE tombstone_key = $1;", [tombstoneKey]).catch(() => null);
-      }
+      this.deleteDeletedTombstoneFromNeon(type, cleanId).catch(() => null);
     } catch (e) { }
+  }
+
+  async pushDeletedTombstoneToNeon(type, identifier) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    const cleanId = String(identifier).trim().toLowerCase();
+    if (!cleanId) return;
+    const tombstoneKey = `${type}:::${cleanId}`;
+    try {
+      await this.executeNeonQuery(
+        `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier, deleted_at)
+         VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+         ON CONFLICT (tombstone_key) DO UPDATE SET deleted_at = CURRENT_TIMESTAMP;`,
+        [tombstoneKey, type, cleanId]
+      );
+    } catch (e) {
+      console.warn("Neon push tombstone notice:", e);
+    }
+  }
+
+  async deleteDeletedTombstoneFromNeon(type, identifier) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    const cleanId = String(identifier).trim().toLowerCase();
+    if (!cleanId) return;
+    const tombstoneKey = `${type}:::${cleanId}`;
+    try {
+      await this.executeNeonQuery(
+        `DELETE FROM deleted_tombstones WHERE tombstone_key = $1 OR (entity_type = $2 AND LOWER(TRIM(identifier)) = $3);`,
+        [tombstoneKey, type, cleanId]
+      );
+    } catch (e) {}
   }
 
   markTrashDestroyed(trashId, originalId = "") {
@@ -965,7 +1149,11 @@ class DatabaseService {
     if (!list || list.length === 0) return false;
     return identifiers.some(id => {
       if (id === undefined || id === null || id === "") return false;
-      return list.includes(String(id).trim().toLowerCase());
+      const clean = String(id).trim().toLowerCase();
+      // Guard: Never match plain short numeric IDs (e.g. 1, 2, 12, 15) for payment or distribution
+      // to avoid accidental suppression of legitimate rows by stale sequential IDs
+      if (/^\d{1,5}$/.test(clean) && (type === "payment" || type === "distribution")) return false;
+      return list.includes(clean);
     });
   }
 
@@ -980,6 +1168,11 @@ class DatabaseService {
         return [];
       }
     });
+  }
+
+  getTrashItemById(id) {
+    const list = this.getTrashItems();
+    return list.find(t => t.id === id || String(t.original_id) === String(id)) || null;
   }
 
   saveTrashItems(list) {
@@ -1640,15 +1833,6 @@ class DatabaseService {
       await this.executeNeonQuery(`
         CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
       `).catch(() => null);
-
-      await this.executeNeonQuery(`
-        CREATE TABLE IF NOT EXISTS deleted_tombstones (
-          tombstone_key VARCHAR(255) PRIMARY KEY,
-          entity_type VARCHAR(50) NOT NULL,
-          identifier VARCHAR(255) NOT NULL,
-          deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-        );
-      `);
 
       // Purge any locally-known permanently destroyed trash IDs from Neon (never re-push stale local trash on startup)
       const destroyedIds = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
@@ -2733,7 +2917,7 @@ class DatabaseService {
           const code = (r.style_code || "").trim().toUpperCase();
           const cat = (r.category || "Shirt").trim();
           if (!code) continue;
-          if (this.isRecordDeleted("final_style", `${targetDate}|${code.toLowerCase()}|${cat.toLowerCase()}`, `${code.toLowerCase()}|${cat.toLowerCase()}`)) {
+          if (this.isRecordDeleted("final_style", `${targetDate}|${code.toLowerCase()}|${cat.toLowerCase()}`)) {
             continue;
           }
           const key = `${code}:::${cat.toUpperCase()}`;
@@ -2820,7 +3004,6 @@ class DatabaseService {
         const codeLower = item.style_code.trim().toLowerCase();
         const catLower = item.category.trim().toLowerCase();
         this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
-        this.trackDeletedRecord("final_style", `${codeLower}|${catLower}`);
       }
     }
     const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
@@ -2846,6 +3029,53 @@ class DatabaseService {
     }
 
     return this.getFinalStyles();
+  }
+
+  async clearFinalStylesForDate(dateStr) {
+    const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
+    const currentList = this.getFinalStyles();
+
+    for (const item of currentList) {
+      this.moveToTrash("final_style", { ...item, report_date: targetDate });
+      if (item.style_code && item.category) {
+        const codeLower = item.style_code.trim().toLowerCase();
+        const catLower = item.category.trim().toLowerCase();
+        this.trackDeletedRecord("final_style", `${targetDate}|${codeLower}|${catLower}`);
+      }
+    }
+
+    localStorage.setItem(DB_KEYS.FINAL_STYLES, "[]");
+    this.clearCache(DB_KEYS.FINAL_STYLES);
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      try {
+        await this.executeNeonQuery(
+          "DELETE FROM final_style_report WHERE report_date = $1::date;",
+          [targetDate]
+        );
+      } catch (err) {
+        console.warn("Neon clearFinalStylesForDate error:", err);
+      }
+    }
+
+    return [];
+  }
+
+  async clearAllFinalStylesFromNeon() {
+    localStorage.setItem(DB_KEYS.FINAL_STYLES, "[]");
+    this.clearCache(DB_KEYS.FINAL_STYLES);
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      try {
+        await this.executeNeonQuery("DELETE FROM final_style_report;");
+      } catch (err) {
+        console.warn("Neon clearAllFinalStylesFromNeon error:", err);
+      }
+    }
+
+    return [];
   }
 
   // -------------------------------------------------------------
@@ -3441,11 +3671,25 @@ class DatabaseService {
     const rate = rateTotal > 0 ? rateTotal : (parseFloat(item.rate_per_pc) || 0);
     const totalAmount = totalPcs * rate;
     const deliveredInTime = parseInt(item.delivered_in_time_pcs, 10) || 0;
-    const deductedPcs = parseInt(item.deducted_pcs, 10) || 0;
-    const deductionAmount = parseFloat(item.deduction_amount) || (deductedPcs * rate);
+    let deductionPcs = parseInt(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs, 10) || 0;
+    const remarks1 = item.remarks_1 || item.remarks || "";
+    if (deductionPcs === 0 && remarks1) {
+      const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+      if (match) {
+        deductionPcs = parseInt(match[1], 10) || 0;
+      }
+    }
+    const deductionAmount = parseFloat(item.deduction_amount) || (deductionPcs * rate);
 
-    // Current sheet approved production pcs
-    const prodPcs = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
+    const baseProdPcs = (item.base_prod_pcs != null && Number(item.base_prod_pcs) > 0)
+      ? parseInt(item.base_prod_pcs, 10)
+      : ((parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0) + deductionPcs);
+
+    // Current sheet approved production pcs (auto net of deduction)
+    let prodPcs = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
+    if (deductionPcs > 0 && item.base_prod_pcs != null) {
+      prodPcs = Math.max(0, baseProdPcs - deductionPcs);
+    }
     const prevPaidPcs = parseInt(item.previous_paid_pcs, 10) || 0;
     const cumulativePaidPcs = prodPcs + prevPaidPcs;
     const paidAmount = parseFloat(item.paid_amount) || (cumulativePaidPcs * rate);
@@ -3502,6 +3746,8 @@ class DatabaseService {
       category: item.category || item.working || "SHIRT",
       cut_qty: totalPcs,
       total_pcs: totalPcs,
+      base_prod_pcs: baseProdPcs,
+      deduction_pcs: deductionPcs,
       prod_pcs_qty: prodPcs,
       previous_paid_pcs: prevPaidPcs,
       carigar_rate: carigarRate,
@@ -3510,7 +3756,7 @@ class DatabaseService {
       rate_per_pc: rate,
       total_amount: totalAmount,
       delivered_in_time_pcs: deliveredInTime,
-      deducted_pcs: deductedPcs,
+      deducted_pcs: deductionPcs,
       deduction_amount: deductionAmount,
       paid_pcs: cumulativePaidPcs,
       paid_amount: paidAmount,
@@ -3736,10 +3982,20 @@ class DatabaseService {
               const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
                 ? Number(item.total_amount)
                 : (pcs * rate);
+              let periodClean = (item.period || "").trim();
+              if (periodClean.includes(" TO ")) {
+                periodClean = periodClean.split(/\s+TO\s+/i)[0].trim();
+              }
+              let distDateClean = (item.dist_date || item.date || item.period || (item.created_at ? item.created_at.split("T")[0] : "")).trim();
+              if (distDateClean.includes(" TO ")) {
+                distDateClean = distDateClean.split(/\s+TO\s+/i)[0].trim();
+              }
               return {
                 ...item,
                 id: Number(item.id),
                 sr_no: item.sr_no != null ? Number(item.sr_no) : null,
+                period: periodClean,
+                dist_date: distDateClean,
                 pcs_qty: pcs,
                 rate: rate,
                 total_amount: total
@@ -3772,10 +4028,13 @@ class DatabaseService {
     const rate = Number(data.rate) || 0;
     const totalAmount = pcsQty * rate;
 
+    const cleanPeriod = formatDistDate(data.period || data.dist_date || new Date().toISOString().split("T")[0]);
+
     const newEntry = {
       id: nextId,
       sr_no: data.sr_no != null && Number(data.sr_no) > 0 ? Number(data.sr_no) : nextSr,
-      period: (data.period || "11-Oct-2026 TO 25-Oct-2026").trim(),
+      period: cleanPeriod,
+      dist_date: cleanPeriod,
       style_code: (data.style_code || "").trim().toUpperCase(),
       contractor_name: (data.contractor_name || "").trim().toUpperCase(),
       pcs_qty: pcsQty,
@@ -3861,10 +4120,14 @@ class DatabaseService {
     const rate = data.rate != null ? Number(data.rate) : list[idx].rate;
     const totalAmount = pcsQty * rate;
 
+    const cleanPeriod = formatDistDate(data.period || data.dist_date || list[idx].period || list[idx].dist_date || "");
+
     list[idx] = {
       ...list[idx],
       ...data,
       id: Number(id),
+      dist_date: cleanPeriod,
+      period: cleanPeriod,
       pcs_qty: pcsQty,
       rate: rate,
       total_amount: totalAmount,
@@ -4121,16 +4384,21 @@ class DatabaseService {
         try {
           const parsed = JSON.parse(raw);
           if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed.filter(p => p && (p.period_name || "").trim());
+            list = parsed.filter(p => p && (p.period_name || "").trim()).map(p => {
+              let pName = (p.period_name || "").trim();
+              if (/\s+to\s+/i.test(pName)) {
+                pName = pName.split(/\s+to\s+/i)[0].trim();
+              }
+              return {
+                ...p,
+                period_name: pName
+              };
+            });
           }
         } catch (e) {
           list = [];
         }
       }
-
-      // Filter out any tombstoned deleted distribution periods so deleted periods NEVER return
-      const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
-      list = list.filter(p => !deletedPeriods.has((p.period_name || "").trim().toLowerCase()));
 
       return list;
     });
@@ -4143,9 +4411,6 @@ class DatabaseService {
     });
     this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
-    if (Array.isArray(valid)) {
-      valid.forEach(p => this.pushDistributionPeriodToNeonAsync(p).catch(() => null));
-    }
   }
 
   async saveDistributionPeriod(periodData) {
@@ -4239,6 +4504,11 @@ class DatabaseService {
     const pName = (toDelete.period_name || "").trim();
     const pNameLower = pName.toLowerCase();
 
+    // Track tombstone so deleted periods NEVER return from any sync or second tab
+    this.trackDeletedRecord("distribution_period", toDelete.id);
+    this.trackDeletedRecord("distribution_period", pNameLower);
+    this.trackDeletedRecord("distribution_period", pName);
+
     const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
     if (!deletedPeriods.includes(pNameLower)) {
       deletedPeriods.push(pNameLower);
@@ -4247,6 +4517,12 @@ class DatabaseService {
 
     // Move to Trash (Soft Delete) with attached work distribution entries
     const linkedDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() === pNameLower);
+    linkedDist.forEach(w => {
+      this.trackDeletedRecord("distribution", w.id);
+      if (w.period && w.contractor_name && w.style_code) {
+        this.trackDeletedRecord("distribution", `${w.period}|${w.contractor_name}|${w.style_code}`);
+      }
+    });
     const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
 
     const remainingDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() !== pNameLower);
@@ -4260,6 +4536,9 @@ class DatabaseService {
     if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
       try {
         await this.executeNeonQuery("DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;", [toDelete.id, pNameLower]);
+        await this.executeNeonQuery("DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1;", [pNameLower]).catch(() => null);
+        await this.pushDeletedTombstoneToNeon("distribution_period", toDelete.id);
+        await this.pushDeletedTombstoneToNeon("distribution_period", pNameLower);
       } catch (err) {
         console.warn("Neon dist period delete notice:", err);
       }
@@ -4660,7 +4939,17 @@ class DatabaseService {
     const period = (p.period && String(p.period).trim()) ? String(p.period).trim() : "11-SEP-2026 TO 25-SEP-2026";
     const cutQty = parseInt(p.cut_qty != null ? p.cut_qty : p.total_pcs, 10) || 0;
     const prodPcs = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
+    let deductionPcs = parseInt(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs, 10) || 0;
     const remarks1 = (p.remarks_1 || p.remarks || "").trim();
+    if (deductionPcs === 0 && remarks1) {
+      const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+      if (match) {
+        deductionPcs = parseInt(match[1], 10) || 0;
+      }
+    }
+    const baseProdPcs = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
+      ? parseInt(p.base_prod_pcs, 10)
+      : (prodPcs + deductionPcs);
     const balStock = parseInt(p.balance_from_stock, 10) || 0;
     const balHemb = parseInt(p.balance_from_hemb, 10) || 0;
     const totalBal = parseInt(p.total_balance != null ? p.total_balance : p.balance_pcs, 10) || 0;
@@ -4673,15 +4962,15 @@ class DatabaseService {
     await this.executeNeonQuery(
       `INSERT INTO payment_sheet (
         id, period, sr_no, style_code, category, contractor_name,
-        cut_qty, prod_pcs_qty, remarks_1,
+        cut_qty, prod_pcs_qty, deduction_pcs, base_prod_pcs, remarks_1,
         balance_from_stock, balance_from_hemb, total_balance,
         is_flagged, payment_channel, target_floor, floor_challan_no, floor_received_by,
         updated_at
       ) VALUES (
         $1, $2, $3, $4, $5, $6,
-        $7, $8, $9,
-        $10, $11, $12,
-        $13, $14, $15, $16, $17,
+        $7, $8, $9, $10, $11,
+        $12, $13, $14,
+        $15, $16, $17, $18, $19,
         CURRENT_TIMESTAMP
       ) ON CONFLICT (id) DO UPDATE SET
         period = EXCLUDED.period,
@@ -4691,6 +4980,8 @@ class DatabaseService {
         contractor_name = EXCLUDED.contractor_name,
         cut_qty = EXCLUDED.cut_qty,
         prod_pcs_qty = EXCLUDED.prod_pcs_qty,
+        deduction_pcs = EXCLUDED.deduction_pcs,
+        base_prod_pcs = EXCLUDED.base_prod_pcs,
         remarks_1 = EXCLUDED.remarks_1,
         balance_from_stock = EXCLUDED.balance_from_stock,
         balance_from_hemb = EXCLUDED.balance_from_hemb,
@@ -4710,6 +5001,8 @@ class DatabaseService {
         (p.contractor_name || '').trim(),
         cutQty,
         prodPcs,
+        deductionPcs,
+        baseProdPcs,
         remarks1,
         balStock,
         balHemb,
@@ -5407,6 +5700,8 @@ class DatabaseService {
         contractor_name VARCHAR(100),
         cut_qty INT NOT NULL DEFAULT 0,
         prod_pcs_qty INT NOT NULL DEFAULT 0,
+        deduction_pcs INT NOT NULL DEFAULT 0,
+        base_prod_pcs INT,
         remarks_1 TEXT DEFAULT '',
         balance_from_stock INT NOT NULL DEFAULT 0,
         balance_from_hemb INT NOT NULL DEFAULT 0,
@@ -5469,6 +5764,13 @@ class DatabaseService {
         deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
+      `CREATE TABLE IF NOT EXISTS deleted_tombstones (
+        tombstone_key VARCHAR(255) PRIMARY KEY,
+        entity_type VARCHAR(50) NOT NULL,
+        identifier VARCHAR(255) NOT NULL,
+        deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );`,
+
       `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`
     ];
 
@@ -5494,6 +5796,8 @@ class DatabaseService {
           ADD COLUMN IF NOT EXISTS period VARCHAR(150) DEFAULT '11-SEP-2026 TO 25-SEP-2026',
           ADD COLUMN IF NOT EXISTS cut_qty INT DEFAULT 0,
           ADD COLUMN IF NOT EXISTS prod_pcs_qty INT DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS deduction_pcs INT DEFAULT 0,
+          ADD COLUMN IF NOT EXISTS base_prod_pcs INT,
           ADD COLUMN IF NOT EXISTS remarks_1 TEXT DEFAULT '',
           ADD COLUMN IF NOT EXISTS balance_from_stock INT DEFAULT 0,
           ADD COLUMN IF NOT EXISTS balance_from_hemb INT DEFAULT 0,
@@ -5533,8 +5837,6 @@ class DatabaseService {
           DROP COLUMN IF EXISTS submission_date,
           DROP COLUMN IF EXISTS cutoff_date,
           DROP COLUMN IF EXISTS delivered_in_time_pcs,
-          DROP COLUMN IF EXISTS deducted_pcs,
-          DROP COLUMN IF EXISTS deduction_amount,
           DROP COLUMN IF EXISTS paid_amount,
           DROP COLUMN IF EXISTS balance_amount,
           DROP COLUMN IF EXISTS total_amount,
@@ -5765,6 +6067,25 @@ class DatabaseService {
       // 10. Sync Daily Final Styles to Neon
       await this.pushFinalStylesToNeonAsync().catch(() => null);
 
+      // 11. Sync Deleted Tombstones to Neon Cloud
+      const localTombstones = this.getDeletedRecords();
+      for (const [eType, idList] of Object.entries(localTombstones)) {
+        if (Array.isArray(idList)) {
+          for (const idVal of idList) {
+            const cleanId = String(idVal).trim().toLowerCase();
+            if (cleanId) {
+              const tKey = `${eType}:::${cleanId}`;
+              await this.executeNeonQuery(
+                `INSERT INTO deleted_tombstones (tombstone_key, entity_type, identifier, deleted_at)
+                 VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+                 ON CONFLICT (tombstone_key) DO NOTHING;`,
+                [tKey, eType, cleanId]
+              ).catch(() => null);
+            }
+          }
+        }
+      }
+
       const cfg = this.getConfig();
       cfg.lastSyncTime = new Date().toISOString();
       this.saveConfig(cfg);
@@ -5803,7 +6124,8 @@ class DatabaseService {
         distRes,
         distPeriodRes,
         trashRes,
-        finalStyleRes
+        finalStyleRes,
+        tombstoneRes
       ] = await Promise.all([
         this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
         this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
@@ -5815,7 +6137,8 @@ class DatabaseService {
         this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null)
+        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null),
+        this.executeNeonQuery("SELECT * FROM deleted_tombstones;").catch(() => null)
       ]);
 
       const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
@@ -5829,6 +6152,27 @@ class DatabaseService {
       const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
       const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
       const rawFinalRows = finalStyleRes?.rows || (Array.isArray(finalStyleRes) ? finalStyleRes : []);
+      const rawTombstoneRows = tombstoneRes?.rows || (Array.isArray(tombstoneRes) ? tombstoneRes : []);
+
+      // Merge Cloud Tombstones into Local Tombstones
+      if (Array.isArray(rawTombstoneRows) && rawTombstoneRows.length > 0) {
+        const localRecords = this.getDeletedRecords();
+        let changed = false;
+        rawTombstoneRows.forEach(row => {
+          const eType = row.entity_type;
+          const ident = (row.identifier || "").trim().toLowerCase();
+          if (eType && ident) {
+            if (!localRecords[eType]) localRecords[eType] = [];
+            if (!localRecords[eType].includes(ident)) {
+              localRecords[eType].push(ident);
+              changed = true;
+            }
+          }
+        });
+        if (changed) {
+          localStorage.setItem("hand_emb_deleted_records_v1", JSON.stringify(localRecords));
+        }
+      }
 
       const deletedPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
       const deletedDistPeriodsSet = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
@@ -5935,6 +6279,17 @@ class DatabaseService {
           .map(p => {
             const cut = p.cut_qty != null ? Number(p.cut_qty) : (Number(p.total_pcs) || 0);
             const prod = p.prod_pcs_qty != null ? Number(p.prod_pcs_qty) : (Number(p.paid_pcs) || 0);
+            const remarks1 = p.remarks_1 || p.remarks || "";
+            let deduction = Number(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs) || 0;
+            if (deduction === 0 && remarks1) {
+              const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+              if (match) {
+                deduction = parseInt(match[1], 10) || 0;
+              }
+            }
+            const baseProd = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
+              ? Number(p.base_prod_pcs)
+              : (prod + deduction);
             const totalBal = p.total_balance != null ? Number(p.total_balance) : (Number(p.balance_pcs) || 0);
             const stockBal = p.balance_from_stock != null ? Number(p.balance_from_stock) : 0;
             const hembBal = p.balance_from_hemb != null ? Number(p.balance_from_hemb) : 0;
@@ -5952,14 +6307,17 @@ class DatabaseService {
               contractor_name: (p.contractor_name || "").trim(),
               cut_qty: cut,
               total_pcs: cut,
+              deduction_pcs: deduction,
+              deducted_pcs: deduction,
+              base_prod_pcs: baseProd,
               prod_pcs_qty: prod,
               paid_pcs: prod,
               rate_per_pc: Number(p.rate_per_pc) || 0,
               carigar_rate: Number(p.carigar_rate) || 0,
               commission: Number(p.commission) || 0,
               rate_total: Number(p.rate_total) || 0,
-              remarks_1: p.remarks_1 || p.remarks || "",
-              remarks: p.remarks_1 || p.remarks || "",
+              remarks_1: remarks1,
+              remarks: remarks1,
               remarks_2: p.remarks_2 || "",
               balance_from_stock: stockBal,
               balance_from_hemb: hembBal,
@@ -5980,13 +6338,20 @@ class DatabaseService {
         );
         const finalPayList = [...parsedPay];
         localPay.forEach(localItem => {
-          const existsInCloud = finalPayList.some(p =>
+          const cloudItem = finalPayList.find(p =>
             (Number(p.id) === Number(localItem.id)) ||
             ((p.style_code || '').trim().toLowerCase() === (localItem.style_code || '').trim().toLowerCase() &&
              (p.contractor_name || '').trim().toLowerCase() === (localItem.contractor_name || '').trim().toLowerCase() &&
              (p.period || '').trim().toLowerCase() === (localItem.period || '').trim().toLowerCase())
           );
-          if (!existsInCloud) {
+          if (cloudItem) {
+            if ((!cloudItem.deduction_pcs || cloudItem.deduction_pcs === 0) && localItem.deduction_pcs > 0) {
+              cloudItem.deduction_pcs = localItem.deduction_pcs;
+              cloudItem.deducted_pcs = localItem.deducted_pcs || localItem.deduction_pcs;
+              cloudItem.base_prod_pcs = localItem.base_prod_pcs;
+              this.syncPaymentSheetToNeon(cloudItem).catch(() => null);
+            }
+          } else {
             finalPayList.push(localItem);
             this.syncPaymentSheetToNeon(localItem).catch(() => null);
           }
@@ -6028,8 +6393,21 @@ class DatabaseService {
 
       if (Array.isArray(distRows)) {
         const localDist = (this.getWorkDistribution() || []).filter(w => !this.isRecordDeleted("distribution", w.id, `${w.period}|${w.contractor_name}|${w.style_code}`));
-        const finalDistList = [...distRows];
+        const finalDistList = distRows.map(w => {
+          let p = (w.period || "").trim();
+          if (p.includes(" TO ")) p = p.split(/\s+TO\s+/i)[0].trim();
+          let d = (w.dist_date || w.date || w.period || "").trim();
+          if (d.includes(" TO ")) d = d.split(/\s+TO\s+/i)[0].trim();
+          return { ...w, period: p, dist_date: d };
+        });
         localDist.forEach(localItem => {
+          let p = (localItem.period || "").trim();
+          if (p.includes(" TO ")) p = p.split(/\s+TO\s+/i)[0].trim();
+          let d = (localItem.dist_date || localItem.date || localItem.period || "").trim();
+          if (d.includes(" TO ")) d = d.split(/\s+TO\s+/i)[0].trim();
+          localItem.period = p;
+          localItem.dist_date = d;
+
           const existsInCloud = finalDistList.some(w =>
             (Number(w.id) === Number(localItem.id)) ||
             ((w.style_code || '').trim().toLowerCase() === (localItem.style_code || '').trim().toLowerCase() &&
@@ -6044,36 +6422,57 @@ class DatabaseService {
         this._setCached(DB_KEYS.WORK_DISTRIBUTION, finalDistList);
       }
 
-      // Sync Distribution Periods from Neon Cloud (Merge local periods to prevent data loss)
-      if (Array.isArray(rawDistPeriodRows)) {
-        const cloudDistPeriods = rawDistPeriodRows.map(p => ({
-          id: p.id,
-          period_name: (p.period_name || "").trim(),
-          start_date: p.start_date || "",
-          end_date: p.end_date || "",
-          department: p.department || "Hand Embroidery Department",
-          status: p.status || "Active",
-          notes: p.notes || "",
-          created_at: p.created_at
-        })).filter(p => !!p.period_name && !deletedDistPeriodsSet.has((p.period_name || "").trim().toLowerCase()) && !this.isRecordDeleted("distribution_period", p.id, p.period_name));
+      // Gather trashed distribution periods so they NEVER resurrect into active periods
+      const trashedPeriodIds = new Set();
+      const trashedPeriodNames = new Set();
+      const allTrashForCheck = [
+        ...(Array.isArray(rawTrashRows) ? rawTrashRows : []),
+        ...(this.getTrashItems() || [])
+      ];
+      allTrashForCheck.forEach(t => {
+        if (t && t.entity_type === "distribution_period") {
+          if (t.original_id) trashedPeriodIds.add(String(t.original_id).trim());
+          if (t.id) trashedPeriodIds.add(String(t.id).trim());
+          const d = typeof t.item_data === "string" ? JSON.parse(t.item_data || "{}") : (t.data || t.item_data || {});
+          let pName = (d.period_name || (t.title ? t.title.replace(/^Distribution Period:\s*/i, "") : "")).trim().toLowerCase();
+          if (pName.includes(" to ")) pName = pName.split(/\s+to\s+/i)[0].trim();
+          if (pName) trashedPeriodNames.add(pName);
+        }
+      });
 
-        const localDistPeriods = (this.getDistributionPeriods() || []).filter(p =>
-          p && p.period_name &&
-          !deletedDistPeriodsSet.has(p.period_name.trim().toLowerCase()) &&
-          !this.isRecordDeleted("distribution_period", p.id, p.period_name)
-        );
-        const finalDistPeriodList = [...cloudDistPeriods];
-        localDistPeriods.forEach(localItem => {
-          const existsInCloud = finalDistPeriodList.some(p =>
-            p.id === localItem.id ||
-            p.period_name.trim().toLowerCase() === localItem.period_name.trim().toLowerCase()
-          );
-          if (!existsInCloud) {
-            finalDistPeriodList.push(localItem);
-            this.pushDistributionPeriodToNeonAsync(localItem).catch(() => null);
+      // Sync Distribution Periods from Neon Cloud (Neon is authoritative source of truth)
+      if (Array.isArray(rawDistPeriodRows)) {
+        const cloudDistPeriods = rawDistPeriodRows.map(p => {
+          let pName = (p.period_name || "").trim();
+          if (/\s+to\s+/i.test(pName)) pName = pName.split(/\s+to\s+/i)[0].trim();
+          return {
+            id: p.id,
+            period_name: pName,
+            start_date: p.start_date || "",
+            end_date: p.end_date || "",
+            department: p.department || "Hand Embroidery Department",
+            status: p.status || "Active",
+            notes: p.notes || "",
+            created_at: p.created_at
+          };
+        }).filter(p => {
+          if (!p.period_name) return false;
+          const pLower = p.period_name.toLowerCase();
+          if (deletedDistPeriodsSet.has(pLower)) return false;
+          if (trashedPeriodIds.has(String(p.id).trim()) || trashedPeriodNames.has(pLower)) return false;
+          if (this.isRecordDeleted("distribution_period", p.id, pLower)) return false;
+          return true;
+        });
+
+        // Background cloud cleanup: if a period in Neon is tombstoned/deleted, prune it from Neon!
+        rawDistPeriodRows.forEach(p => {
+          const pLower = (p.period_name || "").trim().toLowerCase();
+          if (deletedDistPeriodsSet.has(pLower) || trashedPeriodIds.has(String(p.id).trim()) || trashedPeriodNames.has(pLower) || this.isRecordDeleted("distribution_period", p.id, pLower)) {
+            this.executeNeonQuery("DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;", [p.id, pLower]).catch(() => null);
           }
         });
-        this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, finalDistPeriodList);
+
+        this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, cloudDistPeriods);
       }
 
       if (userRows.length > 0) {
@@ -6086,20 +6485,13 @@ class DatabaseService {
 
       // Merge Cloud Trash Items with local Trash
       // Filter out any trash items that have been permanently destroyed (tombstoned)
-      if (Array.isArray(rawTrashRows) && rawTrashRows.length > 0) {
+      if (Array.isArray(rawTrashRows)) {
         const permanentlyDestroyed = new Set(JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]"));
-        const deletedDistPeriodsForTrash = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]"));
 
         const parsedTrash = rawTrashRows
           .filter(t => {
-            // Skip if this trash ID was permanently destroyed
-            if (permanentlyDestroyed.has(t.id)) return false;
-            // Skip distribution_period items whose period_name is in deleted list
-            if (t.entity_type === "distribution_period") {
-              const rawData = typeof t.item_data === "string" ? JSON.parse(t.item_data || "{}") : (t.item_data || {});
-              const pNameLower = (rawData.period_name || "").trim().toLowerCase();
-              if (pNameLower && deletedDistPeriodsForTrash.has(pNameLower)) return false;
-            }
+            // Skip if this trash ID or original_id was permanently destroyed
+            if (permanentlyDestroyed.has(t.id) || (t.original_id && permanentlyDestroyed.has(t.original_id))) return false;
             return true;
           })
           .map(t => ({
@@ -6117,13 +6509,13 @@ class DatabaseService {
         const mergedTrash = [...parsedTrash];
         for (const localItem of localTrash) {
           // Skip permanently destroyed items — never re-add them
-          if (permanentlyDestroyed.has(localItem.id)) continue;
+          if (permanentlyDestroyed.has(localItem.id) || (localItem.original_id && permanentlyDestroyed.has(localItem.original_id))) continue;
           if (!mergedTrash.some(mt => mt.id === localItem.id)) {
             mergedTrash.push(localItem);
             this.pushTrashItemToNeonAsync(localItem).catch(() => null);
           }
         }
-        localStorage.setItem(DB_KEYS.TRASH, JSON.stringify(mergedTrash));
+        this._setCached(DB_KEYS.TRASH, mergedTrash);
       }
 
       // Sync Daily Final Styles from Neon Cloud (Merge local styles to prevent data loss)
@@ -6149,26 +6541,8 @@ class DatabaseService {
           });
         }
 
-        const localFinal = (this.getFinalStyles() || []).filter(f =>
-          f && f.style_code &&
-          !this.isRecordDeleted("final_style", `${currentReportDate}|${f.style_code.trim().toLowerCase()}|${(f.category || 'Shirt').trim().toLowerCase()}`)
-        );
-        localFinal.forEach(localItem => {
-          const key = `${localItem.style_code.trim().toUpperCase()}:::${(localItem.category || 'Shirt').trim().toUpperCase()}`;
-          if (!seenFinal.has(key)) {
-            seenFinal.add(key);
-            mappedFinal.push({
-              ...localItem,
-              s_no: mappedFinal.length + 1
-            });
-          }
-        });
-
         localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mappedFinal));
         this.clearCache(DB_KEYS.FINAL_STYLES);
-        if (mappedFinal.length > rawFinalRows.length) {
-          this.pushFinalStylesToNeonAsync().catch(() => null);
-        }
       }
 
       // Rebuild master aggregations and clean any orphan styles that have 0 receiving and 0 dispatch logs
@@ -6260,31 +6634,9 @@ class DatabaseService {
         }
       }
 
-      // Background cleanup: Prune tombstoned payment_sheet rows from Neon
-      if (Array.isArray(rawPayRows) && rawPayRows.length > 0) {
-        const zombiePay = rawPayRows.filter(p =>
-          this.isRecordDeleted("payment", p.id, `${p.period}|${p.contractor_name}|${p.style_code}`)
-        );
-        if (zombiePay.length > 0) {
-          const ids = zombiePay.map(p => Number(p.id)).filter(Boolean);
-          if (ids.length > 0) {
-            this.executeNeonQuery(`DELETE FROM payment_sheet WHERE id IN (${ids.join(",")});`).catch(() => null);
-          }
-        }
-      }
+      // Safe sync: Never prune or delete payment_sheet rows in the background to ensure all records stay preserved
 
-      // Background cleanup: Prune tombstoned distribution_periods rows from Neon
-      if (Array.isArray(rawDistPeriodRows) && rawDistPeriodRows.length > 0) {
-        const zombiePeriods = rawDistPeriodRows.filter(p =>
-          this.isRecordDeleted("distribution_period", p.id, (p.period_name || p.name || '').trim())
-        );
-        if (zombiePeriods.length > 0) {
-          const ids = zombiePeriods.map(p => `'${p.id}'`).filter(Boolean);
-          if (ids.length > 0) {
-            this.executeNeonQuery(`DELETE FROM distribution_periods WHERE id IN (${ids.join(",")});`).catch(() => null);
-          }
-        }
-      }
+
 
       // Background cleanup: Prune tombstoned final_style_report rows from Neon
       if (Array.isArray(rawFinalRows) && rawFinalRows.length > 0) {

@@ -987,47 +987,20 @@
               <option value="due_soon">⏳ Due Soon (≤ 48h)</option>
               <option value="on_track">✅ On Track</option>
             </select>
+
+            <button class="btn btn-secondary btn-sm" id="btn-export-master-csv" title="Export current table to CSV file"
+              style="height: 38px; display: inline-flex; align-items: center; gap: 0.4rem; white-space: nowrap; font-weight: 700; padding: 0 0.85rem; border: 1.5px solid var(--border-color); background: var(--bg-card); color: var(--text-main); border-radius: var(--radius-sm); cursor: pointer; transition: all 0.2s ease;">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                <polyline points="7 10 12 15 17 10"></polyline>
+                <line x1="12" y1="15" x2="12" y2="3"></line>
+              </svg>
+              <span>Export Excel/CSV</span>
+            </button>
           </div>
 
           <!-- Live Work Distribution Preview Pill (Contractor, Pcs, Rate) -->
           <div id="master-search-dist-preview" class="search-dist-preview-wrap" style="display: none;"></div>
-        </div>
-
-        <div class="master-actions-grid">
-          <!-- <button class="btn btn-action-dock" id="btn-quick-receiving"
-            title="Quickly record incoming goods from cutting">
-            <span class="btn-dock-icon">📥</span>
-            <span>+ Receive Stock</span>
-          </button>
-          <button class="btn btn-action-dock" id="btn-quick-dispatch"
-            title="Quickly record finished embroidery dispatch">
-            <span class="btn-dock-icon">📤</span>
-            <span>+ Dispatch Entry</span>
-          </button>
-          <button class="btn btn-action-dock" id="btn-goto-receiving" title="View all receiving challan line entries">
-            <span class="btn-dock-icon">📋</span>
-            <span>View Receiving Log</span>
-          </button>
-          <button class="btn btn-action-dock" id="btn-goto-dispatch" title="View all dispatch challan line entries">
-            <span class="btn-dock-icon">🚚</span>
-            <span>View Dispatch Log</span>
-          </button> -->
-          <button class="btn btn-action-dock" id="btn-export-master-csv" title="Export current table to CSV file">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            <span>Export Excel/CSV</span>
-          </button>
-          <!-- <button class="btn btn-action-dock btn-action-danger" id="btn-clear-all"
-            title="Clear all local data and start fresh">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"></polyline>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-            </svg>
-            <span>Clear All Data</span>
-          </button> -->
         </div>
       </div>
 
@@ -1495,6 +1468,16 @@
             Export Sheet
           </button>
 
+          <button class="btn btn-secondary btn-sm" id="btn-clear-daily-sheet" onclick="clearDailySheetAction()"
+            title="Delete all styles from this sheet or Neon Cloud table"
+            style="height: 29px; font-weight: 700; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"></polyline>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+            </svg>
+            <span>Delete All Data</span>
+          </button>
+
           <button class="btn btn-success btn-sm btn-open-table-whatsapp-img" data-sheet="daily"
             title="Export table as high-resolution image for WhatsApp"
             style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff;">
@@ -1664,13 +1647,13 @@
               <datalist id="datalist-distribution-periods"></datalist>
 
               <button type="button" class="btn btn-secondary btn-xs" id="btn-toggle-dist-period-input"
-                title="Switch between dropdown and typing period name" style="padding: 4px 8px; font-size: 0.75rem;">
+                title="Switch between dropdown and typing period name" style="display: none;">
                 ✏️ Type Period
               </button>
             </div>
           </div>
         </div>
-        <div class="excel-dept-subtitle">Hand Embroidery Department • 6 Contractors Distribution Cycle</div>
+        <div class="excel-dept-subtitle">Hand Embroidery Department • Daily Contractor Work Distribution</div>
       </div>
 
       <!-- Action Toolbar -->
@@ -1678,12 +1661,10 @@
         <div>
           <h2 style="font-size: 1.2rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
             <span>Contractor Work Distribution</span>
-            <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Bi-Monthly Cycles</span>
+            <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Date-wise Sheet</span>
           </h2>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-            Distribute styles to 6 contractors. Auto-links contractor names across Master Inventory, Receiving,
-            Dispatch,
-            Daily & Payment sheets!
+            Distribute styles to contractors with distribution date. Auto-links contractor names across Master Inventory, Receiving, Dispatch & Payment sheets!
           </p>
         </div>
 
@@ -1697,14 +1678,14 @@
           </button>
 
           <button class="btn btn-secondary btn-sm" id="btn-open-dist-setup-toolbar"
-            title="Setup a new distribution time period sheet or manage existing sheets">
+            title="Nayi distribution date sheet banayein ya pehlay se bani hui sheets manage karein">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path
-                d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
-              </path>
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
             </svg>
-            <span>Sheet Setup</span>
+            <span>📅 Sheet Setup</span>
           </button>
 
           <button class="btn btn-secondary btn-sm" id="btn-print-dist-sheet"
@@ -1847,7 +1828,7 @@
               <th style="width: 80px; text-align: right; vertical-align: middle;">RATE</th>
               <th style="width: 70px; text-align: center; vertical-align: middle;">Floor</th>
               <th style="width: 110px; max-width: 120px; text-align: right; vertical-align: middle;">Total</th>
-              <th style="width: 160px; text-align: center; vertical-align: middle;">Time Period</th>
+              <th style="width: 140px; text-align: center; vertical-align: middle;">Distribution Date</th>
               <th style="width: 95px; text-align: center; vertical-align: middle;">Actions</th>
             </tr>
           </thead>
@@ -2149,6 +2130,7 @@
               <th style="width: 130px; min-width: 130px; text-align: center; vertical-align: middle;">Cont Name</th>
               <th style="min-width: 85px;">H-Emb P-O Fix Rate</th>
               <th style="min-width: 75px;">CUT QTY</th>
+              <th style="min-width: 85px; background: rgba(244, 63, 94, 0.12); color: #f43f5e; text-align: center;" title="Kaat / Deduction pieces - enter here to auto-minus from Prod Pcs Qty">Deduction (Kaat)</th>
               <th style="min-width: 75px;">Prod Pcs Qty</th>
               <th style="min-width: 85px;">Carigar Rate</th>
               <th style="min-width: 85px;">Commission</th>
@@ -2570,10 +2552,10 @@
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="trash-search-input" placeholder="Search by Style, Challan #, Contractor...">
+            <input type="text" id="trash-search-input" oninput="renderTrashView()" placeholder="Search by Style, Challan #, Contractor...">
           </div>
 
-          <select class="app-select" id="filter-trash-type" style="min-width: 170px;">
+          <select class="app-select" id="filter-trash-type" onchange="renderTrashView()" style="min-width: 170px;">
             <option value="all">📁 All Modules (Sub)</option>
             <option value="receiving">📥 Receiving Challans (Inward)</option>
             <option value="dispatch">📤 Dispatch Challans (Outward)</option>
@@ -2585,12 +2567,12 @@
             <option value="user">👤 User Accounts</option>
           </select>
 
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-restore-all"
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-restore-all" onclick="restoreAllTrashAction()"
             style="font-weight: 700; color: var(--primary); border-color: rgba(16, 185, 129, 0.4);">
             ↩️ Restore All
           </button>
 
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-empty"
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-empty" onclick="emptyTrashAction()"
             style="font-weight: 700; color: var(--accent-rose); border-color: rgba(244, 63, 94, 0.4);">
             🗑️ Empty Trash
           </button>
@@ -2817,21 +2799,11 @@
             </div>
           </div>
 
-          <!-- Row 4: 9. Target Delivery Date | 10. Remarks -->
-          <div class="form-grid-2" style="margin-top: 0.75rem;">
-            <div class="form-group">
-              <label for="entry-target-date" style="color: #f59e0b; font-weight: 700;">Target Delivery Date (Due Date):
-                🎯</label>
-              <input type="date" class="app-input" id="entry-target-date" tabindex="7"
-                onclick="this.showPicker && this.showPicker()"
-                title="Delivery deadline with contractor for overdue tracking">
-            </div>
-
-            <div class="form-group">
-              <label for="entry-remarks">Production Remarks / Status:</label>
-              <input type="text" class="app-input" id="entry-remarks" tabindex="8"
-                placeholder="e.g. MATERIAL NOT AVAILABLE, 810 inline hai, ALTER...">
-            </div>
+          <!-- Row 4: Production Remarks / Status -->
+          <div class="form-group" style="margin-top: 0.75rem;">
+            <label for="entry-remarks">Production Remarks / Status:</label>
+            <input type="text" class="app-input" id="entry-remarks" tabindex="7"
+              placeholder="e.g. MATERIAL NOT AVAILABLE, 810 inline hai, ALTER...">
           </div>
 
           <!-- WRAPPER FOR LIVE KPI SUMMARY (HIDDEN BY DEFAULT WHEN STYLE CODE IS EMPTY) -->
@@ -3605,7 +3577,12 @@
             </div>
 
             <div class="form-group">
-              <!-- Spacer: 3rd column empty on this row -->
+              <label for="payment-deduction-pcs" style="color: #f43f5e; font-weight: 700;">
+                Deduction<span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">(Optional)</span>:
+              </label>
+              <input type="number" class="app-input" id="payment-deduction-pcs" min="0" placeholder="0" tabindex="-1"
+                style="font-weight: 800; font-family: var(--font-mono); color: #f43f5e; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.05);"
+                oninput="if(window.handleModalDeductionInput) window.handleModalDeductionInput();">
             </div>
           </div>
 
@@ -3963,10 +3940,9 @@
         <div class="modal-body">
           <div class="form-grid-2">
             <div class="form-group">
-              <label for="dist-entry-period">Distribution Period *:</label>
-              <select class="app-select" id="dist-entry-period" required>
-                <!-- Populated dynamically -->
-              </select>
+              <label for="dist-entry-date" style="font-weight: 700; color: var(--primary);">Distribution Date 🗓️ *:</label>
+              <input type="date" class="app-input" id="dist-entry-date" required>
+              <input type="hidden" id="dist-entry-period" value="">
             </div>
             <div class="form-group">
               <label for="dist-entry-sr">SR NO:</label>
@@ -4061,10 +4037,8 @@
     <div class="modal-card" style="max-width: 620px;">
       <div class="modal-header">
         <div>
-          <h2>📅 Distribution Sheet Period Setup</h2>
-          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Configure bi-monthly distribution
-            periods
-            and production cycles</p>
+          <h2>📅 Distribution Sheet Setup</h2>
+          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Nayi distribution date sheet banayein ya pehlay se bani hui sheets select karein</p>
         </div>
         <button type="button" class="btn btn-secondary btn-icon"
           onclick="closeModal('modal-dist-period-setup')">✕</button>
@@ -4072,31 +4046,12 @@
 
       <form id="form-dist-period-setup">
         <input type="hidden" id="dist-setup-id" value="">
+        <input type="hidden" id="dist-setup-end-date" value="">
         <div class="modal-body">
           <div class="form-grid-2">
             <div class="form-group">
-              <label for="dist-setup-start-date">Period Start Date *:</label>
+              <label for="dist-setup-start-date">Distribution Date 🗓️ *:</label>
               <input type="date" class="app-input" id="dist-setup-start-date" required>
-            </div>
-            <div class="form-group">
-              <label for="dist-setup-end-date">Period End Date *:</label>
-              <input type="date" class="app-input" id="dist-setup-end-date" required>
-            </div>
-          </div>
-
-          <div class="form-group">
-            <label for="dist-setup-name">Period Title *:</label>
-            <input type="text" class="app-input" id="dist-setup-name" required
-              placeholder="e.g. 11-Oct-2026 TO 25-Oct-2026" style="font-weight: 700; font-family: var(--font-mono);">
-            <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
-              Automatically generated from Start & End Date, or customize freely.
-            </small>
-          </div>
-
-          <div class="form-grid-2">
-            <div class="form-group">
-              <label for="dist-setup-dept">Department:</label>
-              <input type="text" class="app-input" id="dist-setup-dept" value="Hand Embroidery Department">
             </div>
             <div class="form-group">
               <label for="dist-setup-status">Status:</label>
@@ -4109,16 +4064,30 @@
           </div>
 
           <div class="form-group">
-            <label for="dist-setup-notes">Notes / Cycle Info:</label>
-            <input type="text" class="app-input" id="dist-setup-notes" placeholder="e.g. Cycle 1 work distribution">
+            <label for="dist-setup-name">Sheet Name / Date 🏷️ *:</label>
+            <input type="text" class="app-input" id="dist-setup-name" required
+              placeholder="e.g. 21-Nov-2026" style="font-weight: 700; font-family: var(--font-mono);">
+            <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
+              Date select karnay par sheet ka naam khud ban jayega (maslan 21-Nov-2026), ya customize karein.
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="dist-setup-dept">Department:</label>
+            <input type="text" class="app-input" id="dist-setup-dept" value="Hand Embroidery Department">
+          </div>
+
+          <div class="form-group">
+            <label for="dist-setup-notes">Notes / Sheet Info:</label>
+            <input type="text" class="app-input" id="dist-setup-notes" placeholder="e.g. Aaj ki work distribution sheet">
           </div>
 
           <!-- Existing Distribution Periods List -->
           <div style="margin-top: 1.25rem;">
             <div
               style="font-size: 0.8rem; font-weight: 800; color: var(--text-main); margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-              <span>Existing Distribution Period Sheets</span>
-              <span id="dist-setup-count-badge" class="badge-tag inline">1 Period</span>
+              <span>Existing Distribution Sheets</span>
+              <span id="dist-setup-count-badge" class="badge-tag inline">0 Sheets</span>
             </div>
             <div id="dist-setup-list-box"
               style="max-height: 180px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 0.5rem;">
@@ -4130,7 +4099,7 @@
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary"
             onclick="closeModal('modal-dist-period-setup')">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="btn-save-dist-setup">✓ Save & Open Period</button>
+          <button type="submit" class="btn btn-primary" id="btn-save-dist-setup">✓ Save & Open Sheet</button>
         </div>
       </form>
     </div>
@@ -5278,13 +5247,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=38"></script>
-  <script src="db.js?v=38"></script>
-  <script src="app.js?v=38"></script>
+  <script src="data.js?v=46"></script>
+  <script src="db.js?v=46"></script>
+  <script src="app.js?v=46"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=38').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=46').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });
