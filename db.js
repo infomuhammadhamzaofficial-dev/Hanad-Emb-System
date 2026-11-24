@@ -57,10 +57,18 @@ function formatDistDate(val) {
 class DatabaseService {
   constructor() {
     this._memCache = {};
+    this._mutationVersion = 0;
     this.cleanLegacyLocalStorage();
     this.initLocalStorage();
     this.syncAllDistributionContractorsToLogsAndMaster();
     this._neonTablesReady = false;
+  }
+
+  _bumpMutationVersion() {
+    this._mutationVersion = (this._mutationVersion || 0) + 1;
+    if (typeof window !== "undefined") {
+      window.lastUserActionTime = Date.now();
+    }
   }
 
   // -------------------------------------------------------------
@@ -397,6 +405,7 @@ class DatabaseService {
   }
 
   saveMasterInventory(list) {
+    this._bumpMutationVersion();
     const computed = list.map(item => ({
       ...item,
       ...this.computeRecordBalances(item)
@@ -406,6 +415,7 @@ class DatabaseService {
   }
 
   addMasterInventory(item) {
+    this._bumpMutationVersion();
     const list = this.getMasterInventory();
     const newId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
@@ -444,6 +454,7 @@ class DatabaseService {
   }
 
   updateMasterInventory(id, updatedFields) {
+    this._bumpMutationVersion();
     const list = this.getMasterInventory();
     const index = list.findIndex(i => Number(i.id) === Number(id));
     if (index === -1) return null;
@@ -479,6 +490,7 @@ class DatabaseService {
   }
 
   saveContractorParcha(parcha) {
+    this._bumpMutationVersion();
     if (!parcha) return null;
     const list = this.getContractorParchas();
     const existingIndex = list.findIndex(p => p.id === parcha.id || (parcha.parcha_no && p.parcha_no === parcha.parcha_no));
@@ -517,6 +529,7 @@ class DatabaseService {
   }
 
   deleteContractorParcha(id) {
+    this._bumpMutationVersion();
     let list = this.getContractorParchas();
     const filtered = list.filter(p => p.id !== id && p.parcha_no !== id);
     try {
@@ -841,6 +854,7 @@ class DatabaseService {
   }
 
   saveTrashItems(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.TRASH, list || []);
     try {
       localStorage.setItem("craftflow_last_mutation", Date.now().toString());
@@ -849,6 +863,7 @@ class DatabaseService {
   }
 
   moveToTrash(entityType, item, meta = {}) {
+    this._bumpMutationVersion();
     if (!item) return null;
     const list = this.getTrashItems();
     const currentUser = (typeof this.getCurrentUser === "function") ? this.getCurrentUser() : null;
@@ -915,6 +930,7 @@ class DatabaseService {
   }
 
   async restoreFromTrash(trashId) {
+    this._bumpMutationVersion();
     let list = this.getTrashItems();
     const trashItem = list.find(t => t.id === trashId);
     if (!trashItem) throw new Error("Trash item not found.");
@@ -1223,10 +1239,23 @@ class DatabaseService {
         this.trackDeletedRecord("distribution", `${(data.period || '').trim()}|${(data.contractor_name || '').trim()}|${(data.style_code || '').trim()}`);
       }
       if (hasNeon && purgeFromNeonTable) {
+        const rawPeriod = (data.period || "").trim();
+        let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+        const cleanPeriodLower = cleanPeriod.toLowerCase();
+        const prefixMatch = `${cleanPeriodLower} to %`;
         neonOps.push(
           this.executeNeonQuery(
-            `DELETE FROM work_distribution WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));`,
-            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', data.period || '']
+            `DELETE FROM work_distribution 
+             WHERE id = $1 
+                OR (
+                  TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
+                  AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) 
+                  AND (
+                    TRIM(LOWER(period)) = $4 
+                    OR TRIM(LOWER(period)) LIKE $5
+                  )
+                );`,
+            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', cleanPeriodLower, prefixMatch]
           ).catch(() => null)
         );
       }
@@ -1239,45 +1268,64 @@ class DatabaseService {
         this.trackDeletedRecord("payment", `${(data.period || '').trim()}|${(data.style_code || '').trim()}|${(data.category || data.working || 'SHIRT').trim()}`);
       }
       if (hasNeon && purgeFromNeonTable) {
+        const rawPeriod = (data.period || "").trim();
+        let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+        const cleanPeriodLower = cleanPeriod.toLowerCase();
+        const prefixMatch = `${cleanPeriodLower} to %`;
         neonOps.push(
           this.executeNeonQuery(
-            `DELETE FROM payment_sheet WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));`,
-            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', data.period || '']
+            `DELETE FROM payment_sheet 
+             WHERE id = $1 
+                OR (
+                  TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
+                  AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) 
+                  AND (
+                    TRIM(LOWER(period)) = $4 
+                    OR TRIM(LOWER(period)) LIKE $5
+                  )
+                );`,
+            [Number(data.id) || 0, data.style_code || '', data.contractor_name || '', cleanPeriodLower, prefixMatch]
           ).catch(() => null)
         );
       }
     } else if (entityType === "period") {
-      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      const rawPeriod = (data.period_name || "").trim();
+      let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+      const pNameLower = cleanPeriod.toLowerCase();
+      const prefixMatch = `${pNameLower} to %`;
       if (hasNeon && purgeFromNeonTable) {
         neonOps.push(
           this.executeNeonQuery(
-            `DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
-            [String(data.id || ''), pNameLower]
+            `DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;`,
+            [Number(data.id) || 0, pNameLower, prefixMatch]
           ).catch(() => null)
         );
         if (pNameLower) {
           neonOps.push(
             this.executeNeonQuery(
-              `DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1;`,
-              [pNameLower]
+              `DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;`,
+              [pNameLower, prefixMatch]
             ).catch(() => null)
           );
         }
       }
     } else if (entityType === "distribution_period") {
-      const pNameLower = (data.period_name || "").trim().toLowerCase();
+      const rawPeriod = (data.period_name || "").trim();
+      let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+      const pNameLower = cleanPeriod.toLowerCase();
+      const prefixMatch = `${pNameLower} to %`;
       if (hasNeon && purgeFromNeonTable) {
         neonOps.push(
           this.executeNeonQuery(
-            `DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = TRIM(LOWER($2));`,
-            [String(data.id || ''), pNameLower]
+            `DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;`,
+            [Number(data.id) || 0, pNameLower, prefixMatch]
           ).catch(() => null)
         );
         if (pNameLower) {
           neonOps.push(
             this.executeNeonQuery(
-              `DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1;`,
-              [pNameLower]
+              `DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;`,
+              [pNameLower, prefixMatch]
             ).catch(() => null)
           );
         }
@@ -1304,6 +1352,7 @@ class DatabaseService {
   }
 
   async destroyFromTrash(trashId) {
+    this._bumpMutationVersion();
     let list = this.getTrashItems();
     const trashItem = list.find(t => t.id === trashId);
     if (!trashItem) return false;
@@ -1319,6 +1368,7 @@ class DatabaseService {
   }
 
   async emptyTrash() {
+    this._bumpMutationVersion();
     const list = this.getTrashItems();
     for (const trashItem of list) {
       await this._tombstoneAndPurgeTrashItemFromNeon(trashItem, true);
@@ -1338,6 +1388,7 @@ class DatabaseService {
   }
 
   async restoreAllTrash(filterType = "all") {
+    this._bumpMutationVersion();
     const list = this.getTrashItems();
     const targetItems = (filterType && filterType !== "all")
       ? list.filter(t => t.entity_type === filterType)
@@ -1475,12 +1526,30 @@ class DatabaseService {
   }
 
   async deleteMasterInventory(id) {
+    this._bumpMutationVersion();
     let list = this.getMasterInventory();
     const numId = Number(id);
-    const item = list.find(i => Number(i.id) === numId);
+    const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
     if (!item) return false;
 
-    // Track linked receiving and dispatch logs for complete restoration capability
+    // 1. Await Neon DELETE queries first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        "DELETE FROM master_inventory WHERE id = $1 OR (LOWER(TRIM(style_code)) = LOWER(TRIM($2)) AND LOWER(TRIM(category)) = LOWER(TRIM($3)));",
+        [Number(item.id) || 0, item.style_code || '', item.category || '']
+      );
+      await this.executeNeonQuery(
+        "DELETE FROM receiving_log WHERE LOWER(TRIM(style_code)) = LOWER(TRIM($1)) AND LOWER(TRIM(category)) = LOWER(TRIM($2));",
+        [item.style_code || '', item.category || '']
+      );
+      await this.executeNeonQuery(
+        "DELETE FROM dispatch_log WHERE LOWER(TRIM(style_code)) = LOWER(TRIM($1)) AND LOWER(TRIM(category)) = LOWER(TRIM($2));",
+        [item.style_code || '', item.category || '']
+      );
+    }
+
+    // 2. Track linked receiving and dispatch logs for complete restoration capability
     const recMatching = this.getReceivingLogs().filter(r =>
       (r.style_code.toLowerCase() === item.style_code.toLowerCase() && r.category.toLowerCase() === item.category.toLowerCase())
     );
@@ -1488,7 +1557,7 @@ class DatabaseService {
       (d.style_code.toLowerCase() === item.style_code.toLowerCase() && d.category.toLowerCase() === item.category.toLowerCase())
     );
 
-    // Safely move to Trash (Soft Delete)
+    // 3. Safely move to Trash (Soft Delete)
     const trashItem = this.moveToTrash("master", item, {
       linkedReceiving: recMatching,
       linkedDispatch: disMatching
@@ -1497,7 +1566,7 @@ class DatabaseService {
     this.trackDeletedRecord("master", item.id);
     this.trackDeletedRecord("master", `${item.style_code}|${item.category}`);
 
-    list = list.filter(i => Number(i.id) !== numId);
+    list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
     this.saveMasterInventory(list);
 
     // Also remove any receiving and dispatch logs matching this style locally
@@ -1511,25 +1580,6 @@ class DatabaseService {
     );
     this.saveDispatchLogs(disList);
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM master_inventory WHERE id = $1 OR (LOWER(style_code) = LOWER($2) AND LOWER(category) = LOWER($3));",
-          [item.id, item.style_code, item.category]
-        );
-        await this.executeNeonQuery(
-          "DELETE FROM receiving_log WHERE LOWER(style_code) = LOWER($1) AND LOWER(category) = LOWER($2);",
-          [item.style_code, item.category]
-        );
-        await this.executeNeonQuery(
-          "DELETE FROM dispatch_log WHERE LOWER(style_code) = LOWER($1) AND LOWER(category) = LOWER($2);",
-          [item.style_code, item.category]
-        );
-      } catch (err) {
-        console.warn("Neon delete error:", err);
-      }
-    }
     return trashItem;
   }
 
@@ -1568,11 +1618,13 @@ class DatabaseService {
   }
 
   saveReceivingLogs(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.RECEIVING_LOG, list);
     this.triggerAutoSyncIfEnabled();
   }
 
   async addReceivingLog(entry) {
+    this._bumpMutationVersion();
     const list = this.getReceivingLogs();
     const newId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
@@ -1696,12 +1748,22 @@ class DatabaseService {
   }
 
   async deleteReceivingLog(id) {
+    this._bumpMutationVersion();
     let list = this.getReceivingLogs();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || (i.challan_rec && String(i.challan_rec).trim() === String(id).trim()));
     if (!item) return false;
 
-    // Safely move to Trash (Soft Delete)
+    // 1. Await Neon DELETE query first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        "DELETE FROM receiving_log WHERE id = $1 OR (TRIM(LOWER(challan_rec)) = TRIM(LOWER($2)) AND LOWER(TRIM(style_code)) = LOWER(TRIM($3)) AND LOWER(TRIM(category)) = LOWER(TRIM($4)));",
+        [Number(item.id) || 0, item.challan_rec || '', item.style_code || '', item.category || '']
+      );
+    }
+
+    // 2. Safely move to Trash (Soft Delete)
     const trashItem = this.moveToTrash("receiving", item);
 
     // Track deletion so cloud polling NEVER brings it back while in trash
@@ -1720,19 +1782,11 @@ class DatabaseService {
       window.dispatchEvent(new CustomEvent("craftflow-local-change"));
     } catch (e) { }
 
-    // Remove from Neon in background
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      this.executeNeonQuery(
-        "DELETE FROM receiving_log WHERE id = $1 OR (challan_rec = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
-        [item.id, item.challan_rec || '', item.style_code, item.category]
-      ).catch(err => console.warn("Neon delete receiving_log error:", err));
-    }
-
     return trashItem;
   }
 
   async updateReceivingLog(id, updatedData) {
+    this._bumpMutationVersion();
     let list = this.getReceivingLogs();
     const item = list.find(i => i.id === id);
     if (!item) throw new Error(`Receiving challan #${id} not found.`);
@@ -1817,11 +1871,13 @@ class DatabaseService {
   }
 
   saveDispatchLogs(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.DISPATCH_LOG, list);
     this.triggerAutoSyncIfEnabled();
   }
 
   async addDispatchLog(entry) {
+    this._bumpMutationVersion();
     const list = this.getDispatchLogs();
     const newId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
@@ -1941,12 +1997,22 @@ class DatabaseService {
   }
 
   async deleteDispatchLog(id) {
+    this._bumpMutationVersion();
     let list = this.getDispatchLogs();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
     if (!item) return false;
 
-    // Safely move to Trash (Soft Delete)
+    // 1. Await Neon DELETE query first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        "DELETE FROM dispatch_log WHERE id = $1 OR (TRIM(LOWER(challan_dis)) = TRIM(LOWER($2)) AND LOWER(TRIM(style_code)) = LOWER(TRIM($3)) AND LOWER(TRIM(category)) = LOWER(TRIM($4)));",
+        [Number(item.id) || 0, item.challan_dis || '', item.style_code || '', item.category || '']
+      );
+    }
+
+    // 2. Safely move to Trash (Soft Delete)
     const trashItem = this.moveToTrash("dispatch", item);
 
     // Track tombstone so polling NEVER resurrects it while in trash
@@ -1965,19 +2031,11 @@ class DatabaseService {
       window.dispatchEvent(new CustomEvent("craftflow-local-change"));
     } catch (e) { }
 
-    // Remove from Neon in background
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      this.executeNeonQuery(
-        "DELETE FROM dispatch_log WHERE id = $1 OR (challan_dis = $2 AND LOWER(style_code) = LOWER($3) AND LOWER(category) = LOWER($4));",
-        [item.id, item.challan_dis || '', item.style_code, item.category]
-      ).catch(err => console.warn("Neon delete dispatch_log error:", err));
-    }
-
     return trashItem;
   }
 
   async updateDispatchLog(id, updatedData) {
+    this._bumpMutationVersion();
     let list = this.getDispatchLogs();
     const item = list.find(i => i.id === id);
     if (!item) throw new Error(`Dispatch challan #${id} not found.`);
@@ -2436,6 +2494,7 @@ class DatabaseService {
   }
 
   saveFinalStyles(list) {
+    this._bumpMutationVersion();
     if (!Array.isArray(list)) list = [];
     const seen = new Set();
     const minimal = [];
@@ -2556,6 +2615,7 @@ class DatabaseService {
   }
 
   addFinalStyle(styleCode, category, timeRemarks = "") {
+    this._bumpMutationVersion();
     const cleanCode = (styleCode || "").trim().toUpperCase();
     const cleanCat = (category || "Shirt").trim();
     if (!cleanCode) return { success: false, isNew: false, list: this.getFinalStyles() };
@@ -2597,6 +2657,7 @@ class DatabaseService {
   }
 
   updateFinalStyleRemarks(sNo, newRemarks) {
+    this._bumpMutationVersion();
     const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
     const item = raw.find(i => i.s_no === sNo);
     if (item) {
@@ -2607,6 +2668,7 @@ class DatabaseService {
   }
 
   removeFinalStyle(sNo) {
+    this._bumpMutationVersion();
     const currentList = this.getFinalStyles();
     const item = currentList.find(i => i.s_no === sNo);
     const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
@@ -2645,6 +2707,7 @@ class DatabaseService {
   }
 
   async clearFinalStylesForDate(dateStr) {
+    this._bumpMutationVersion();
     const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
     const currentList = this.getFinalStyles();
 
@@ -2676,6 +2739,7 @@ class DatabaseService {
   }
 
   async clearAllFinalStylesFromNeon() {
+    this._bumpMutationVersion();
     this.saveFinalStyles([]);
     this.clearCache(DB_KEYS.FINAL_STYLES);
 
@@ -2907,6 +2971,7 @@ class DatabaseService {
   }
 
   saveContractors(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.CONTRACTORS, list);
   }
 
@@ -3066,6 +3131,7 @@ class DatabaseService {
   }
 
   async addContractorWithNeon(contractorData) {
+    this._bumpMutationVersion();
     if (!contractorData || !contractorData.name) {
       throw new Error("Contractor name is required.");
     }
@@ -3131,6 +3197,7 @@ class DatabaseService {
   }
 
   async deleteContractor(id, name) {
+    this._bumpMutationVersion();
     this.clearCache();
     let list = this.getContractors();
     const cleanName = (name || "").trim();
@@ -3145,18 +3212,35 @@ class DatabaseService {
       return { success: false, error: "Contractor not found" };
     }
 
-    // 1. Move to Trash
+    // 1. Await Neon DELETE query first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.initNeonTables();
+      if (targetId) {
+        await this.executeNeonQuery(
+          `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
+          [Number(targetId) || 0, targetName.trim().toLowerCase()]
+        );
+      } else {
+        await this.executeNeonQuery(
+          `DELETE FROM contractors WHERE LOWER(TRIM(name)) = $1;`,
+          [targetName.trim().toLowerCase()]
+        );
+      }
+    }
+
+    // 2. Move to Trash
     if (toDelete) {
       this.moveToTrash("contractor", toDelete);
     }
 
-    // 2. Track deletion tombstones so sync NEVER resurrects it
+    // 3. Track deletion tombstones so sync NEVER resurrects it
     if (targetId) this.trackDeletedRecord("contractor", targetId);
     if (targetName) {
       this.trackDeletedRecord("contractor", targetName.trim().toLowerCase());
     }
 
-    // 3. Remove from local list
+    // 4. Remove from local list
     list = list.filter(c => {
       if (targetId && Number(c.id) === Number(targetId)) return false;
       if (targetName && (c.name || "").trim().toLowerCase() === targetName.trim().toLowerCase()) return false;
@@ -3165,29 +3249,7 @@ class DatabaseService {
     this.saveContractors(list);
     this.clearCache();
 
-    // 4. Delete from Neon cloud database
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.initNeonTables();
-        if (targetId) {
-          await this.executeNeonQuery(
-            `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
-            [targetId, targetName.trim().toLowerCase()]
-          );
-        } else {
-          await this.executeNeonQuery(
-            `DELETE FROM contractors WHERE LOWER(TRIM(name)) = $1;`,
-            [targetName.trim().toLowerCase()]
-          );
-        }
-        return { success: true, neonSynced: true };
-      } catch (err) {
-        console.warn("Neon contractor delete error:", err);
-        return { success: true, neonSynced: false, error: err.message };
-      }
-    }
-    return { success: true, neonSynced: false };
+    return { success: true, neonSynced: true };
   }
 
   getContractorSummaries() {
@@ -3347,6 +3409,7 @@ class DatabaseService {
   }
 
   savePaymentSheets(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.PAYMENT_SHEET, list || []);
     this.triggerAutoSyncIfEnabled();
   }
@@ -3376,12 +3439,14 @@ class DatabaseService {
   }
 
   saveRateApprovalPeriods(list) {
+    this._bumpMutationVersion();
     const valid = (list || []).filter(p => p && (p.period_name || "").trim());
     this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
   }
 
   async addRateApprovalPeriod(periodData) {
+    this._bumpMutationVersion();
     const list = this.getRateApprovalPeriods();
     const periodName = (periodData.period_name || "").trim();
     if (!periodName) throw new Error("Period name is required");
@@ -3446,6 +3511,7 @@ class DatabaseService {
   }
 
   async deleteRateApprovalPeriod(periodId) {
+    this._bumpMutationVersion();
     let list = this.getRateApprovalPeriods();
     let toDelete = list.find(p => p.id === periodId);
     if (!toDelete) {
@@ -3454,12 +3520,33 @@ class DatabaseService {
     if (!toDelete) return false;
 
     const pName = (toDelete.period_name || "").trim();
-    const pNameLower = pName.toLowerCase();
+    let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
+    const cleanPeriodLower = cleanPeriod.toLowerCase();
+    const prefixMatch = `${cleanPeriodLower} to %`;
+    const numId = Number(toDelete.id);
 
-    // Remove any entries belonging to this deleted sheet locally, saving to Trash with period
+    // 1. Await Neon DELETE queries first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        "DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
+        [numId || 0, cleanPeriodLower, prefixMatch]
+      );
+      await this.executeNeonQuery(
+        "DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
+        [cleanPeriodLower, prefixMatch]
+      );
+    }
+
+    const isMatch = (val) => {
+      const v = (val || '').trim().toLowerCase();
+      return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
+    };
+
+    // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
     const allPaySheets = this.getPaymentSheets();
-    const sheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
-    const linkedSheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
+    const sheets = allPaySheets.filter(p => !isMatch(p.period));
+    const linkedSheets = allPaySheets.filter(p => isMatch(p.period));
     linkedSheets.forEach(p => {
       this.trackDeletedRecord("payment", p.id);
       if (p.period && p.contractor_name && p.style_code) {
@@ -3471,24 +3558,12 @@ class DatabaseService {
     });
     this._setCached(DB_KEYS.PAYMENT_SHEET, sheets);
 
-    // Move to Trash (Soft Delete) with attached payment entries
+    // 3. Move to Trash (Soft Delete) with attached payment entries
     const trashItem = this.moveToTrash("period", toDelete, { linkedEntries: linkedSheets });
 
-    // 3. Filter rate approval periods locally
-    list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
+    // 4. Filter rate approval periods locally
+    list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
     this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, list);
-    this.clearCache(DB_KEYS.RATE_APPROVAL_PERIODS);
-
-    // 4. Delete from Neon PostgreSQL cloud database so polling timer doesn't bring it back!
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery("DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;", [toDelete.id, pNameLower]);
-        await this.executeNeonQuery("DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1;", [pNameLower]);
-      } catch (err) {
-        console.warn("Neon period delete notice:", err);
-      }
-    }
 
     return trashItem;
   }
@@ -3530,11 +3605,13 @@ class DatabaseService {
   }
 
   saveWorkDistribution(list) {
+    this._bumpMutationVersion();
     this._setCached(DB_KEYS.WORK_DISTRIBUTION, list || []);
     this.triggerAutoSyncIfEnabled();
   }
 
   async addWorkDistributionEntry(data) {
+    this._bumpMutationVersion();
     const list = this.getWorkDistribution();
     const nextId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
     const nextSr = list.length > 0 ? Math.max(...list.map(i => Number(i.sr_no) || 0)) + 1 : 1;
@@ -3626,6 +3703,7 @@ class DatabaseService {
   }
 
   async updateWorkDistributionEntry(id, data) {
+    this._bumpMutationVersion();
     const list = this.getWorkDistribution();
     const idx = list.findIndex(i => Number(i.id) === Number(id));
     if (idx === -1) return false;
@@ -3674,12 +3752,39 @@ class DatabaseService {
   }
 
   async deleteWorkDistributionEntry(id) {
+    this._bumpMutationVersion();
     let list = this.getWorkDistribution();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
     if (!item) return false;
 
-    // Safely move to Trash (Soft Delete)
+    const rawPeriod = (item.period || item.dist_date || "").trim();
+    let cleanPeriod = rawPeriod;
+    if (cleanPeriod.includes(" TO ")) {
+      cleanPeriod = cleanPeriod.split(/\s+TO\s+/i)[0].trim();
+    }
+    const cleanPeriodLower = cleanPeriod.toLowerCase();
+    const prefixMatch = `${cleanPeriodLower} to %`;
+
+    // 1. Await Neon DELETE query first before modifying memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        `DELETE FROM work_distribution 
+         WHERE id = $1 
+            OR (
+              TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
+              AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) 
+              AND (
+                TRIM(LOWER(period)) = $4 
+                OR TRIM(LOWER(period)) LIKE $5
+              )
+            );`,
+        [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
+      );
+    }
+
+    // 2. Safely move to Trash (Soft Delete)
     const trashItem = this.moveToTrash("distribution", item);
 
     this.trackDeletedRecord("distribution", id);
@@ -3690,17 +3795,6 @@ class DatabaseService {
     list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
     this.saveWorkDistribution(list);
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM work_distribution WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));",
-          [id, item.style_code || '', item.contractor_name || '', item.period || '']
-        );
-      } catch (err) {
-        console.warn("Neon distribution delete notice:", err);
-      }
-    }
     return trashItem;
   }
 
@@ -3908,6 +4002,7 @@ class DatabaseService {
   }
 
   saveDistributionPeriods(list) {
+    this._bumpMutationVersion();
     const valid = (list || []).filter(p => p && (p.period_name || "").trim()).map(p => {
       if (!p.id) p.id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
       return p;
@@ -3917,6 +4012,7 @@ class DatabaseService {
   }
 
   async saveDistributionPeriod(periodData) {
+    this._bumpMutationVersion();
     const list = this.getDistributionPeriods();
     const periodName = (periodData.period_name || "").trim();
     if (!periodName) throw new Error("Period name is required");
@@ -3989,6 +4085,7 @@ class DatabaseService {
   }
 
   async deleteDistributionPeriod(periodId) {
+    this._bumpMutationVersion();
     let list = this.getDistributionPeriods();
     let toDelete = list.find(p => p.id === periodId);
     if (!toDelete) {
@@ -3997,10 +4094,31 @@ class DatabaseService {
     if (!toDelete) return false;
 
     const pName = (toDelete.period_name || "").trim();
-    const pNameLower = pName.toLowerCase();
+    let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
+    const cleanPeriodLower = cleanPeriod.toLowerCase();
+    const prefixMatch = `${cleanPeriodLower} to %`;
+    const numId = Number(toDelete.id);
 
-    // Move to Trash (Soft Delete) with attached work distribution entries
-    const linkedDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() === pNameLower);
+    // 1. Await Neon DELETE queries first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        "DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
+        [numId || 0, cleanPeriodLower, prefixMatch]
+      );
+      await this.executeNeonQuery(
+        "DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
+        [cleanPeriodLower, prefixMatch]
+      );
+    }
+
+    const isMatch = (val) => {
+      const v = (val || '').trim().toLowerCase();
+      return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
+    };
+
+    // 2. Move to Trash (Soft Delete) with attached work distribution entries
+    const linkedDist = this.getWorkDistribution().filter(w => isMatch(w.period));
     linkedDist.forEach(w => {
       this.trackDeletedRecord("distribution", w.id);
       if (w.period && w.contractor_name && w.style_code) {
@@ -4009,24 +4127,12 @@ class DatabaseService {
     });
     const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
 
-    const remainingDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() !== pNameLower);
+    const remainingDist = this.getWorkDistribution().filter(w => !isMatch(w.period));
     this._setCached(DB_KEYS.WORK_DISTRIBUTION, remainingDist);
 
-    list = list.filter(p => p.id !== toDelete.id && (p.period_name || "").trim().toLowerCase() !== pNameLower);
+    list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
     this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, list);
-    this.clearCache(DB_KEYS.DISTRIBUTION_PERIODS);
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery("DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2;", [toDelete.id, pNameLower]);
-        await this.executeNeonQuery("DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1;", [pNameLower]).catch(() => null);
-        
-        
-      } catch (err) {
-        console.warn("Neon dist period delete notice:", err);
-      }
-    }
     return trashItem;
   }
 
@@ -4270,6 +4376,7 @@ class DatabaseService {
   }
 
   async addPaymentSheet(item) {
+    this._bumpMutationVersion();
     const list = this.getPaymentSheets();
     const newId = list.length > 0 ? Math.max(...list.map(i => i.id || 0)) + 1 : 1;
     const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
@@ -4322,6 +4429,7 @@ class DatabaseService {
   }
 
   async updatePaymentSheet(id, updatedFields) {
+    this._bumpMutationVersion();
     const list = this.getPaymentSheets();
     const index = list.findIndex(i => i.id === id);
     if (index === -1) return null;
@@ -4359,12 +4467,36 @@ class DatabaseService {
   }
 
   async deletePaymentSheet(id) {
+    this._bumpMutationVersion();
     let list = this.getPaymentSheets();
     const numId = Number(id);
     const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
     if (!item) return false;
 
-    // Safely move to Trash (Soft Delete)
+    const rawPeriod = (item.period || "").trim();
+    let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+    const cleanPeriodLower = cleanPeriod.toLowerCase();
+    const prefixMatch = `${cleanPeriodLower} to %`;
+
+    // 1. Await Neon DELETE query first before modifying local memory
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.executeNeonQuery(
+        `DELETE FROM payment_sheet 
+         WHERE id = $1 
+            OR (
+              TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
+              AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) 
+              AND (
+                TRIM(LOWER(period)) = $4 
+                OR TRIM(LOWER(period)) LIKE $5
+              )
+            );`,
+        [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
+      );
+    }
+
+    // 2. Safely move to Trash (Soft Delete)
     const trashItem = this.moveToTrash("payment", item);
 
     this.trackDeletedRecord("payment", id);
@@ -4375,17 +4507,6 @@ class DatabaseService {
     list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
     this.savePaymentSheets(list);
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM payment_sheet WHERE id = $1 OR (TRIM(LOWER(style_code)) = TRIM(LOWER($2)) AND TRIM(LOWER(contractor_name)) = TRIM(LOWER($3)) AND TRIM(LOWER(period)) = TRIM(LOWER($4)));",
-          [id, item.style_code || '', item.contractor_name || '', item.period || '']
-        );
-      } catch (err) {
-        console.warn("Neon delete payment_sheet error:", err);
-      }
-    }
     return trashItem;
   }
 
@@ -5570,6 +5691,7 @@ class DatabaseService {
 
   async fetchFromNeon() {
     try {
+      const startVersion = this._mutationVersion || 0;
       const currentReportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
 
       // Execute all table queries simultaneously with Promise.all (~300ms)
@@ -5598,6 +5720,12 @@ class DatabaseService {
         this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null)
       ]);
+
+      // Sync race condition protection: if user deleted or edited records locally while query was in-flight, abort write
+      if (startVersion !== (this._mutationVersion || 0)) {
+        console.log("⚡ [Race Condition Protected] fetchFromNeon aborted: user performed a local mutation while cloud poll was in-flight.");
+        return { success: true, hasChanged: false };
+      }
 
       const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
       const contRows = contRes?.rows || (Array.isArray(contRes) ? contRes : []);

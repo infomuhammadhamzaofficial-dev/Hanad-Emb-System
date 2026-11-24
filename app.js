@@ -2055,19 +2055,23 @@ async function deleteReceivingLogEntry(id) {
   const item = window.db.getReceivingLogs().find(r => Number(r.id) === Number(id));
   const desc = item ? `Challan #${item.challan_rec || item.id} (Style ${item.style_code})` : "this receiving challan";
   if (confirm(`Move ${desc} to Trash?\nMaster inventory balance will update automatically, and you can restore it anytime from the Trash tab.`)) {
-    window.lastUserActionTime = Date.now();
-    const trashed = await window.db.deleteReceivingLog(id);
-    renderAll();
-    showToast("Receiving challan moved to Trash.", "info", {
-      text: "Undo",
-      onClick: async () => {
-        if (trashed && trashed.id) {
-          await window.db.restoreFromTrash(trashed.id);
-          renderAll();
-          showToast("Receiving challan restored!", "success");
+    try {
+      window.lastUserActionTime = Date.now();
+      const trashed = await window.db.deleteReceivingLog(id);
+      renderAll();
+      showToast("Receiving challan moved to Trash.", "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast("Receiving challan restored!", "success");
+          }
         }
-      }
-    });
+      });
+    } catch (err) {
+      showToast(`Error deleting receiving challan: ${err.message}`, "error");
+    }
   }
 }
 
@@ -2319,19 +2323,23 @@ async function deleteDispatchLogEntry(id) {
   const item = window.db.getDispatchLogs().find(d => Number(d.id) === Number(id));
   const desc = item ? `Challan #${item.challan_dis || item.id} (Style ${item.style_code})` : "this dispatch challan";
   if (confirm(`Move ${desc} to Trash?\nMaster inventory balance will update automatically, and you can restore it anytime from the Trash tab.`)) {
-    window.lastUserActionTime = Date.now();
-    const trashed = await window.db.deleteDispatchLog(id);
-    renderAll();
-    showToast("Dispatch challan moved to Trash.", "info", {
-      text: "Undo",
-      onClick: async () => {
-        if (trashed && trashed.id) {
-          await window.db.restoreFromTrash(trashed.id);
-          renderAll();
-          showToast("Dispatch challan restored!", "success");
+    try {
+      window.lastUserActionTime = Date.now();
+      const trashed = await window.db.deleteDispatchLog(id);
+      renderAll();
+      showToast("Dispatch challan moved to Trash.", "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast("Dispatch challan restored!", "success");
+          }
         }
-      }
-    });
+      });
+    } catch (err) {
+      showToast(`Error deleting dispatch challan: ${err.message}`, "error");
+    }
   }
 }
 
@@ -5281,19 +5289,23 @@ async function deleteMasterEntry(id) {
   if (!item) return;
 
   if (confirm(`Move Style "${item.style_code}" [${item.category}] to Trash?\nYou can restore it anytime from the Trash tab.`)) {
-    window.lastUserActionTime = Date.now();
-    const trashed = await window.db.deleteMasterInventory(id);
-    renderAll();
-    showToast(`Style ${item.style_code} [${item.category}] moved to Trash.`, "info", {
-      text: "Undo",
-      onClick: async () => {
-        if (trashed && trashed.id) {
-          await window.db.restoreFromTrash(trashed.id);
-          renderAll();
-          showToast(`Style ${item.style_code} restored!`, "success");
+    try {
+      window.lastUserActionTime = Date.now();
+      const trashed = await window.db.deleteMasterInventory(id);
+      renderAll();
+      showToast(`Style ${item.style_code} [${item.category}] moved to Trash.`, "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast(`Style ${item.style_code} restored!`, "success");
+          }
         }
-      }
-    });
+      });
+    } catch (err) {
+      showToast(`Error deleting style: ${err.message}`, "error");
+    }
   }
 }
 
@@ -6994,41 +7006,45 @@ function selectSheetPeriodFromSetup(periodName) {
 
 async function deleteSheetPeriodAction(periodId) {
   if (confirm("Are you sure you want to delete this sheet period? Any entries recorded for this period will also be removed permanently.")) {
-    const success = await window.db.deleteRateApprovalPeriod(periodId);
-    if (success) {
-      // Clear form inputs in sheet setup modal so the deleted period is wiped from the form!
-      const nameInput = document.getElementById("sheet-setup-name");
-      const currentFormName = (nameInput?.value || "").trim().toLowerCase();
-      const deletedObj = success.data || {};
-      const deletedName = (deletedObj.period_name || "").trim().toLowerCase();
+    try {
+      const success = await window.db.deleteRateApprovalPeriod(periodId);
+      if (success) {
+        // Clear form inputs in sheet setup modal so the deleted period is wiped from the form!
+        const nameInput = document.getElementById("sheet-setup-name");
+        const currentFormName = (nameInput?.value || "").trim().toLowerCase();
+        const deletedObj = success.data || {};
+        const deletedName = (deletedObj.period_name || "").trim().toLowerCase();
 
-      if (currentFormName === deletedName || currentFormName === String(periodId).trim().toLowerCase()) {
-        if (nameInput) nameInput.value = "";
-        const sDate = document.getElementById("sheet-setup-start-date");
-        const eDate = document.getElementById("sheet-setup-end-date");
-        const notes = document.getElementById("sheet-setup-notes");
-        if (sDate) sDate.value = "";
-        if (eDate) eDate.value = "";
-        if (notes) notes.value = "";
+        if (currentFormName === deletedName || currentFormName === String(periodId).trim().toLowerCase()) {
+          if (nameInput) nameInput.value = "";
+          const sDate = document.getElementById("sheet-setup-start-date");
+          const eDate = document.getElementById("sheet-setup-end-date");
+          const notes = document.getElementById("sheet-setup-notes");
+          if (sDate) sDate.value = "";
+          if (eDate) eDate.value = "";
+          if (notes) notes.value = "";
+        }
+
+        // If the currently active sheet was deleted, switch to the first remaining sheet or "all"
+        const remaining = window.db.getRateApprovalPeriods();
+        const currentActive = getActiveRateApprovalPeriod();
+        if (!remaining.some(r => r.period_name.toLowerCase() === currentActive.toLowerCase())) {
+          const nextPeriod = remaining.length > 0 ? remaining[0].period_name : "all";
+          const periodSelect = document.getElementById("select-rate-approval-period");
+          const periodInput = document.getElementById("input-rate-approval-period");
+          if (periodSelect) periodSelect.value = nextPeriod;
+          if (periodInput) periodInput.value = nextPeriod;
+        }
+
+        populateRateApprovalPeriods();
+        renderSheetSetupExistingList();
+        renderPaymentSheet();
+        showToast("✓ Sheet period deleted permanently from local cache & Neon Cloud database", "success");
+      } else {
+        showToast("Could not delete sheet period", "error");
       }
-
-      // If the currently active sheet was deleted, switch to the first remaining sheet or "all"
-      const remaining = window.db.getRateApprovalPeriods();
-      const currentActive = getActiveRateApprovalPeriod();
-      if (!remaining.some(r => r.period_name.toLowerCase() === currentActive.toLowerCase())) {
-        const nextPeriod = remaining.length > 0 ? remaining[0].period_name : "all";
-        const periodSelect = document.getElementById("select-rate-approval-period");
-        const periodInput = document.getElementById("input-rate-approval-period");
-        if (periodSelect) periodSelect.value = nextPeriod;
-        if (periodInput) periodInput.value = nextPeriod;
-      }
-
-      populateRateApprovalPeriods();
-      renderSheetSetupExistingList();
-      renderPaymentSheet();
-      showToast("✓ Sheet period deleted permanently from local cache & Neon Cloud database", "success");
-    } else {
-      showToast("Could not delete sheet period", "error");
+    } catch (err) {
+      showToast(`Error deleting sheet period: ${err.message}`, "error");
     }
   }
 }
