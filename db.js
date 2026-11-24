@@ -70,36 +70,25 @@ class DatabaseService {
   // Business data is never saved to or read from browser localStorage
   // -------------------------------------------------------------
   cleanLegacyLocalStorage() {
-    const keysToRemove = [
-      "hand_emb_master_inventory_v1",
-      "hand_emb_final_styles_v1",
-      "hand_emb_contractors_v1",
-      "hand_emb_report_date_v1",
-      "hand_emb_config_v1",
-      DB_KEYS.MASTER_INVENTORY,
-      DB_KEYS.RECEIVING_LOG,
-      DB_KEYS.DISPATCH_LOG,
-      DB_KEYS.FINAL_STYLES,
-      DB_KEYS.CONTRACTORS,
-      DB_KEYS.PAYMENT_SHEET,
-      DB_KEYS.RATE_APPROVAL_PERIODS,
-      DB_KEYS.WORK_DISTRIBUTION,
-      DB_KEYS.DISTRIBUTION_PERIODS,
-      DB_KEYS.TRASH,
-      DB_KEYS.CONTRACTOR_PARCHAS,
-      "hand_emb_deleted_records_v1",
-      "hand_emb_deleted_periods_v1",
-      "hand_emb_deleted_dist_periods_v1",
-      "hand_emb_permanently_destroyed_trash_v1",
-      "hand_emb_phantom_tombstone_v36",
-      "hand_emb_payment_wipe_complete_v10",
-      "hand_emb_excel_seeded_v3",
-      "hand_emb_contractors_neon_v2",
-      "hand_emb_neon_schema_v12"
-    ];
-    keysToRemove.forEach(k => {
-      try { localStorage.removeItem(k); } catch (e) {}
-    });
+    const allowedKeys = new Set([
+      "hand_emb_theme_key",
+      "hand_emb_users_v2",
+      "hand_emb_current_user_v2",
+      "hand_emb_config_v2",
+      "craftflow_current_tab",
+      "craftflow_active_tab",
+      "craftflow_active_dist_period"
+    ]);
+    try {
+      if (typeof localStorage !== "undefined") {
+        for (let i = localStorage.length - 1; i >= 0; i--) {
+          const k = localStorage.key(i);
+          if (k && !allowedKeys.has(k)) {
+            localStorage.removeItem(k);
+          }
+        }
+      }
+    } catch (e) {}
   }
 
   // Deduplicate Daily Sheet Final Styles (Strict: Style Code + Category)
@@ -195,9 +184,7 @@ class DatabaseService {
     // Self-healing: Deduplicate and ensure sequential unique sr_no for all Master Inventory styles
   deduplicateMasterInventorySerialNumbers() {
     try {
-      const raw = localStorage.getItem(DB_KEYS.MASTER_INVENTORY);
-      if (!raw) return;
-      let list = JSON.parse(raw);
+      let list = this._memCache[DB_KEYS.MASTER_INVENTORY] || [];
       if (!Array.isArray(list) || list.length <= 1) return;
 
       const seenSrs = new Set();
@@ -398,7 +385,7 @@ class DatabaseService {
   // -------------------------------------------------------------
   getMasterInventory() {
     return this._getCached(DB_KEYS.MASTER_INVENTORY, () => {
-      const data = JSON.parse(localStorage.getItem(DB_KEYS.MASTER_INVENTORY) || "[]");
+      const data = this._memCache[DB_KEYS.MASTER_INVENTORY] || [];
       const mapped = data.map(item => ({
         ...item,
         sr_no: parseInt(item.sr_no, 10) || Number(item.id) || 1,
@@ -487,13 +474,8 @@ class DatabaseService {
   // CONTRACTOR PARCHA & BILLING SHEET MANAGEMENT
   // -------------------------------------------------------------
   getContractorParchas() {
-    try {
-      const data = JSON.parse(localStorage.getItem(DB_KEYS.CONTRACTOR_PARCHAS) || "[]");
-      return Array.isArray(data) ? data : [];
-    } catch (e) {
-      console.warn("Failed reading contractor parchas:", e);
-      return [];
-    }
+    const data = this._memCache[DB_KEYS.CONTRACTOR_PARCHAS] || [];
+    return Array.isArray(data) ? data : [];
   }
 
   saveContractorParcha(parcha) {
@@ -848,11 +830,8 @@ class DatabaseService {
   // -------------------------------------------------------------
   getTrashItems() {
     return this._getCached(DB_KEYS.TRASH, () => {
-      try {
-        return JSON.parse(localStorage.getItem(DB_KEYS.TRASH) || "[]");
-      } catch (e) {
-        return [];
-      }
+      const data = this._memCache[DB_KEYS.TRASH] || [];
+      return Array.isArray(data) ? data : [];
     });
   }
 
@@ -1111,12 +1090,6 @@ class DatabaseService {
 
     } else if (entityType === "period") {
       const pNameLower = (data.period_name || "").trim().toLowerCase();
-      const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
-      const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
-      localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(filteredPeriods));
-      if (data.id) this.untrackDeletedRecord("period", data.id);
-      if (pNameLower) this.untrackDeletedRecord("period", pNameLower);
-
       const periods = this.getRateApprovalPeriods();
       if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
         periods.unshift(data);
@@ -1126,13 +1099,6 @@ class DatabaseService {
       if (Array.isArray(meta.linkedEntries) && meta.linkedEntries.length > 0) {
         const payList = this.getPaymentSheets();
         meta.linkedEntries.forEach(p => {
-          this.untrackDeletedRecord("payment", p.id);
-          if (p.period && p.contractor_name && p.style_code) {
-            this.untrackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.contractor_name || '').trim()}|${(p.style_code || '').trim()}`);
-          }
-          if (p.period && p.style_code) {
-            this.untrackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.style_code || '').trim()}|${(p.category || p.working || 'SHIRT').trim()}`);
-          }
           if (!payList.some(item => Number(item.id) === Number(p.id))) {
             payList.push(p);
           }
@@ -1142,12 +1108,6 @@ class DatabaseService {
 
     } else if (entityType === "distribution_period") {
       const pNameLower = (data.period_name || "").trim().toLowerCase();
-      const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-      const filteredPeriods = deletedPeriods.filter(p => p !== pNameLower);
-      localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(filteredPeriods));
-      if (data.id) this.untrackDeletedRecord("distribution_period", data.id);
-      if (pNameLower) this.untrackDeletedRecord("distribution_period", pNameLower);
-
       const periods = this.getDistributionPeriods();
       if (!periods.some(p => p.id === data.id || (p.period_name || "").toLowerCase() === pNameLower)) {
         periods.unshift(data);
@@ -1288,15 +1248,6 @@ class DatabaseService {
       }
     } else if (entityType === "period") {
       const pNameLower = (data.period_name || "").trim().toLowerCase();
-      if (pNameLower) {
-        const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
-        if (!deletedPeriods.includes(pNameLower)) {
-          deletedPeriods.push(pNameLower);
-          localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(deletedPeriods));
-        }
-        this.trackDeletedRecord("period", pNameLower);
-      }
-      if (data.id) this.trackDeletedRecord("period", data.id);
       if (hasNeon && purgeFromNeonTable) {
         neonOps.push(
           this.executeNeonQuery(
@@ -1315,15 +1266,6 @@ class DatabaseService {
       }
     } else if (entityType === "distribution_period") {
       const pNameLower = (data.period_name || "").trim().toLowerCase();
-      if (pNameLower) {
-        const deletedDPs = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-        if (!deletedDPs.includes(pNameLower)) {
-          deletedDPs.push(pNameLower);
-          localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedDPs));
-        }
-        this.trackDeletedRecord("distribution_period", pNameLower);
-      }
-      if (data.id) this.trackDeletedRecord("distribution_period", data.id);
       if (hasNeon && purgeFromNeonTable) {
         neonOps.push(
           this.executeNeonQuery(
@@ -1520,12 +1462,6 @@ class DatabaseService {
         CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);
       `).catch(() => null);
 
-      // Purge any locally-known permanently destroyed trash IDs from Neon (never re-push stale local trash on startup)
-      const destroyedIds = JSON.parse(localStorage.getItem("hand_emb_permanently_destroyed_trash_v1") || "[]");
-      const allPurgeIds = Array.from(new Set(["dist_period_1793775690007_7dn1b", ...(Array.isArray(destroyedIds) ? destroyedIds : [])])).filter(Boolean);
-      for (const pid of allPurgeIds) {
-        await this.deleteTrashItemFromNeonAsync(pid, pid).catch(() => null);
-      }
       await this.executeNeonQuery(
         "DELETE FROM distribution_periods WHERE id = $1;",
         ["dist_period_1793775690007_7dn1b"]
@@ -1627,7 +1563,7 @@ class DatabaseService {
   // -------------------------------------------------------------
   getReceivingLogs() {
     return this._getCached(DB_KEYS.RECEIVING_LOG, () => {
-      return JSON.parse(localStorage.getItem(DB_KEYS.RECEIVING_LOG) || "[]");
+      return this._memCache[DB_KEYS.RECEIVING_LOG] || [];
     });
   }
 
@@ -1876,7 +1812,7 @@ class DatabaseService {
   // -------------------------------------------------------------
   getDispatchLogs() {
     return this._getCached(DB_KEYS.DISPATCH_LOG, () => {
-      return JSON.parse(localStorage.getItem(DB_KEYS.DISPATCH_LOG) || "[]");
+      return this._memCache[DB_KEYS.DISPATCH_LOG] || [];
     });
   }
 
@@ -2337,17 +2273,9 @@ class DatabaseService {
       this.recalculateMasterForStyleAndCategory(styleCode, category, { skipSave: true });
     });
 
-    // Save once to localStorage and memory cache at the end of the batch
+    // Save once to memory cache at the end of the batch
     const currentMaster = this.getMasterInventory();
     this.saveMasterInventory(currentMaster);
-
-    // Keep Neon's master_inventory table 100% synchronized with the active software records
-    const cfg = this.getConfig();
-    if (cfg.autoSync !== false && (cfg.neonConnectionString || cfg.neonEndpointUrl)) {
-      currentMaster.forEach(m => {
-        this.syncMasterRecordToNeon(m).catch(() => null);
-      });
-    }
 
     return currentMaster;
   }
@@ -2455,7 +2383,7 @@ class DatabaseService {
   // -------------------------------------------------------------
   getFinalStyles() {
     return this._getCached(DB_KEYS.FINAL_STYLES, () => {
-      const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+      const raw = this._memCache[DB_KEYS.FINAL_STYLES] || [];
       const seen = new Set();
       const result = [];
 
@@ -2618,14 +2546,13 @@ class DatabaseService {
             time_remarks: (r.time_remarks || "").trim()
           });
         }
-        localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(mapped));
-        this.clearCache(DB_KEYS.FINAL_STYLES);
+        this._setCached(DB_KEYS.FINAL_STYLES, mapped);
         return mapped;
       } catch (err) {
         console.warn("loadFinalStylesForDate error:", err);
       }
     }
-    return JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    return this._memCache[DB_KEYS.FINAL_STYLES] || [];
   }
 
   addFinalStyle(styleCode, category, timeRemarks = "") {
@@ -2637,7 +2564,7 @@ class DatabaseService {
     this.untrackDeletedRecord("final_style", `${reportDate}|${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
     this.untrackDeletedRecord("final_style", `${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
 
-    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
     
     // Strict match on BOTH style_code AND category
     const existingIndex = raw.findIndex(i =>
@@ -2670,7 +2597,7 @@ class DatabaseService {
   }
 
   updateFinalStyleRemarks(sNo, newRemarks) {
-    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
     const item = raw.find(i => i.s_no === sNo);
     if (item) {
       item.time_remarks = (newRemarks || "").trim();
@@ -2692,7 +2619,7 @@ class DatabaseService {
         this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
       }
     }
-    const raw = JSON.parse(localStorage.getItem(DB_KEYS.FINAL_STYLES) || "[]");
+    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
     const itemCodeUpper = item && item.style_code ? item.style_code.trim().toUpperCase() : "";
     const itemCatUpper = item ? (item.category || "Shirt").trim().toUpperCase() : "";
     const updated = raw.filter(i => {
@@ -2936,26 +2863,9 @@ class DatabaseService {
   // -------------------------------------------------------------
   getContractors() {
     return this._getCached(DB_KEYS.CONTRACTORS, () => {
-      const raw = localStorage.getItem(DB_KEYS.CONTRACTORS);
-      let list = [];
-      try {
-        list = raw ? JSON.parse(raw) : [];
-      } catch (e) {
-        list = [];
-      }
-
-      const defaultNeon = [
-        { id: 8, name: "Imtiaz", phone: "0347022819", status: "Active" },
-        { id: 9, name: "Asif", phone: "03122385341", status: "Active" },
-        { id: 10, name: "Shoaib", phone: "03132356230", status: "Active" },
-        { id: 11, name: "Touseef", phone: "03228399197", status: "Active" },
-        { id: 12, name: "Asim", phone: "03190039428", status: "Active" },
-        { id: 13, name: "Naveed", phone: "03122232112", status: "Active" }
-      ];
-
+      let list = this._memCache[DB_KEYS.CONTRACTORS] || [];
       if (!Array.isArray(list)) list = [];
 
-      let needsSave = false;
       const cleanMap = new Map();
 
       // 1. Process and sanitize existing entries
@@ -2966,27 +2876,14 @@ class DatabaseService {
         if (!cName) return;
 
         // Strictly reject double/joint contractor combinations and filter placeholders
-        if (/[\/\\,+&]/.test(cName)) {
-          needsSave = true;
-          return;
-        }
-        if (/^all\b/i.test(cName)) {
-          needsSave = true;
-          return;
-        }
+        if (/[\/\\,+&]/.test(cName)) return;
+        if (/^all\b/i.test(cName)) return;
 
-        const cId = (typeof item === "object" && item.id) ? Number(item.id) : (idx + 14);
+        const cId = (typeof item === "object" && item.id) ? Number(item.id) : (idx + 1);
         const lower = cName.toLowerCase();
-
-        // Check if contractor has been deleted
-        if (this.isRecordDeleted("contractor", cId, lower)) {
-          needsSave = true;
-          return;
-        }
 
         // Deduplicate case-insensitively
         if (cleanMap.has(lower)) {
-          needsSave = true;
           const existing = cleanMap.get(lower);
           if (!existing.phone && item.phone) existing.phone = item.phone;
           if ((!existing.id || existing.id > cId) && cId) existing.id = cId;
@@ -3004,27 +2901,7 @@ class DatabaseService {
         });
       });
 
-      // 2. Add base Neon contractors only if NOT deleted and NOT already present
-      defaultNeon.forEach(def => {
-        const defLower = def.name.toLowerCase();
-        if (this.isRecordDeleted("contractor", def.id, defLower)) return;
-        if (!cleanMap.has(defLower)) {
-          cleanMap.set(defLower, { ...def });
-          needsSave = true;
-        } else {
-          const existing = cleanMap.get(defLower);
-          if (!existing.phone && def.phone) {
-            existing.phone = def.phone;
-            needsSave = true;
-          }
-        }
-      });
-
       const normalized = Array.from(cleanMap.values()).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-
-      if (needsSave || raw !== JSON.stringify(normalized)) {
-        this.saveContractors(normalized);
-      }
       return normalized;
     });
   }
@@ -3460,7 +3337,7 @@ class DatabaseService {
 
   getPaymentSheets() {
     return this._getCached(DB_KEYS.PAYMENT_SHEET, () => {
-      const data = JSON.parse(localStorage.getItem(DB_KEYS.PAYMENT_SHEET) || "[]");
+      const data = this._memCache[DB_KEYS.PAYMENT_SHEET] || [];
       return data.map(item => ({
         ...item,
         ...this.computePaymentBalances(item),
@@ -3493,24 +3370,8 @@ class DatabaseService {
   // -------------------------------------------------------------
   getRateApprovalPeriods() {
     return this._getCached(DB_KEYS.RATE_APPROVAL_PERIODS, () => {
-      const raw = localStorage.getItem(DB_KEYS.RATE_APPROVAL_PERIODS);
-      let list = [];
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed.filter(p => p && (p.period_name || "").trim());
-          }
-        } catch (e) {
-          list = [];
-        }
-      }
-
-      // Filter out any tombstoned deleted periods so deleted periods NEVER return
-      const deletedPeriods = new Set(JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]"));
-      list = list.filter(p => !deletedPeriods.has((p.period_name || "").trim().toLowerCase()));
-
-      return list;
+      const list = this._memCache[DB_KEYS.RATE_APPROVAL_PERIODS] || [];
+      return (Array.isArray(list) ? list : []).filter(p => p && (p.period_name || "").trim());
     });
   }
 
@@ -3518,22 +3379,12 @@ class DatabaseService {
     const valid = (list || []).filter(p => p && (p.period_name || "").trim());
     this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, valid);
     this.triggerAutoSyncIfEnabled();
-    if (Array.isArray(valid)) {
-      valid.forEach(p => this.pushRateApprovalPeriodToNeonAsync(p).catch(() => null));
-    }
   }
 
   async addRateApprovalPeriod(periodData) {
     const list = this.getRateApprovalPeriods();
     const periodName = (periodData.period_name || "").trim();
     if (!periodName) throw new Error("Period name is required");
-
-    // If previously marked deleted, un-delete it since user is explicitly creating/saving it
-    const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
-    const updatedDeleted = deletedPeriods.filter(d => d !== periodName.toLowerCase());
-    localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(updatedDeleted));
-    this.untrackDeletedRecord("period", periodName.toLowerCase());
-    if (periodData.id) this.untrackDeletedRecord("period", periodData.id);
 
     const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
     let savedPeriod;
@@ -3605,16 +3456,7 @@ class DatabaseService {
     const pName = (toDelete.period_name || "").trim();
     const pNameLower = pName.toLowerCase();
 
-    // 1. Record in persistent deleted list so defaultPeriods or auto-discover NEVER resurrects it!
-    const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_periods_v1") || "[]");
-    if (!deletedPeriods.includes(pNameLower)) {
-      deletedPeriods.push(pNameLower);
-      localStorage.setItem("hand_emb_deleted_periods_v1", JSON.stringify(deletedPeriods));
-    }
-    this.trackDeletedRecord("period", toDelete.id);
-    this.trackDeletedRecord("period", pNameLower);
-
-    // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
+    // Remove any entries belonging to this deleted sheet locally, saving to Trash with period
     const allPaySheets = this.getPaymentSheets();
     const sheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() !== pNameLower);
     const linkedSheets = allPaySheets.filter(p => (p.period || "").trim().toLowerCase() === pNameLower);
@@ -3657,47 +3499,33 @@ class DatabaseService {
   // -------------------------------------------------------------
   getWorkDistribution() {
     return this._getCached(DB_KEYS.WORK_DISTRIBUTION, () => {
-      const raw = localStorage.getItem(DB_KEYS.WORK_DISTRIBUTION);
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed)) {
-            return parsed.map(item => {
-              const pcs = Number(item.pcs_qty) || 0;
-              const rate = Number(item.rate) || 0;
-              const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
-                ? Number(item.total_amount)
-                : (pcs * rate);
-              let periodClean = (item.period || "").trim();
-              if (periodClean.includes(" TO ")) {
-                periodClean = periodClean.split(/\s+TO\s+/i)[0].trim();
-              }
-              let distDateClean = (item.dist_date || item.date || item.period || (item.created_at ? item.created_at.split("T")[0] : "")).trim();
-              if (distDateClean.includes(" TO ")) {
-                distDateClean = distDateClean.split(/\s+TO\s+/i)[0].trim();
-              }
-              return {
-                ...item,
-                id: Number(item.id),
-                sr_no: item.sr_no != null ? Number(item.sr_no) : null,
-                period: periodClean,
-                dist_date: distDateClean,
-                pcs_qty: pcs,
-                rate: rate,
-                total_amount: total
-              };
-            });
-          }
-          return [];
-        } catch (e) {
-          return [];
+      const list = this._memCache[DB_KEYS.WORK_DISTRIBUTION] || [];
+      if (!Array.isArray(list)) return [];
+      return list.map(item => {
+        const pcs = Number(item.pcs_qty) || 0;
+        const rate = Number(item.rate) || 0;
+        const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
+          ? Number(item.total_amount)
+          : (pcs * rate);
+        let periodClean = (item.period || "").trim();
+        if (periodClean.includes(" TO ")) {
+          periodClean = periodClean.split(/\s+TO\s+/i)[0].trim();
         }
-      }
-      if (typeof INITIAL_WORK_DISTRIBUTION !== "undefined") {
-        localStorage.setItem(DB_KEYS.WORK_DISTRIBUTION, JSON.stringify(INITIAL_WORK_DISTRIBUTION));
-        return INITIAL_WORK_DISTRIBUTION;
-      }
-      return [];
+        let distDateClean = (item.dist_date || item.date || item.period || (item.created_at ? item.created_at.split("T")[0] : "")).trim();
+        if (distDateClean.includes(" TO ")) {
+          distDateClean = distDateClean.split(/\s+TO\s+/i)[0].trim();
+        }
+        return {
+          ...item,
+          id: Number(item.id),
+          sr_no: item.sr_no != null ? Number(item.sr_no) : null,
+          period: periodClean,
+          dist_date: distDateClean,
+          pcs_qty: pcs,
+          rate: rate,
+          total_amount: total
+        };
+      });
     });
   }
 
@@ -4064,29 +3892,18 @@ class DatabaseService {
   // -------------------------------------------------------------
   getDistributionPeriods() {
     return this._getCached(DB_KEYS.DISTRIBUTION_PERIODS, () => {
-      const raw = localStorage.getItem(DB_KEYS.DISTRIBUTION_PERIODS);
-      let list = [];
-      if (raw) {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            list = parsed.filter(p => p && (p.period_name || "").trim()).map(p => {
-              let pName = (p.period_name || "").trim();
-              if (/\s+to\s+/i.test(pName)) {
-                pName = pName.split(/\s+to\s+/i)[0].trim();
-              }
-              return {
-                ...p,
-                period_name: pName
-              };
-            });
-          }
-        } catch (e) {
-          list = [];
+      const list = this._memCache[DB_KEYS.DISTRIBUTION_PERIODS] || [];
+      if (!Array.isArray(list)) return [];
+      return list.filter(p => p && (p.period_name || "").trim()).map(p => {
+        let pName = (p.period_name || "").trim();
+        if (/\s+to\s+/i.test(pName)) {
+          pName = pName.split(/\s+to\s+/i)[0].trim();
         }
-      }
-
-      return list;
+        return {
+          ...p,
+          period_name: pName
+        };
+      });
     });
   }
 
@@ -4103,14 +3920,6 @@ class DatabaseService {
     const list = this.getDistributionPeriods();
     const periodName = (periodData.period_name || "").trim();
     if (!periodName) throw new Error("Period name is required");
-
-    const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-    const updatedDeleted = deletedPeriods.filter(d => d !== periodName.toLowerCase());
-    localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(updatedDeleted));
-
-    // Untrack from tombstoned deleted records
-    this.untrackDeletedRecord("distribution_period", periodName.toLowerCase());
-    this.untrackDeletedRecord("distribution_period", periodName);
 
     const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
     let savedPeriod;
@@ -4189,17 +3998,6 @@ class DatabaseService {
 
     const pName = (toDelete.period_name || "").trim();
     const pNameLower = pName.toLowerCase();
-
-    // Track tombstone so deleted periods NEVER return from any sync or second tab
-    this.trackDeletedRecord("distribution_period", toDelete.id);
-    this.trackDeletedRecord("distribution_period", pNameLower);
-    this.trackDeletedRecord("distribution_period", pName);
-
-    const deletedPeriods = JSON.parse(localStorage.getItem("hand_emb_deleted_dist_periods_v1") || "[]");
-    if (!deletedPeriods.includes(pNameLower)) {
-      deletedPeriods.push(pNameLower);
-      localStorage.setItem("hand_emb_deleted_dist_periods_v1", JSON.stringify(deletedPeriods));
-    }
 
     // Move to Trash (Soft Delete) with attached work distribution entries
     const linkedDist = this.getWorkDistribution().filter(w => (w.period || "").trim().toLowerCase() === pNameLower);
