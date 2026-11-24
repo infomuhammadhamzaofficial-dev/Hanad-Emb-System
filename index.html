@@ -1664,7 +1664,8 @@
             <span class="badge-tag inline" style="font-size: 0.725rem; text-transform: none;">Date-wise Sheet</span>
           </h2>
           <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 2px;">
-            Distribute styles to contractors with distribution date. Auto-links contractor names across Master Inventory, Receiving, Dispatch & Payment sheets!
+            Distribute styles to contractors with distribution date. Auto-links contractor names across Master
+            Inventory, Receiving, Dispatch & Payment sheets!
           </p>
         </div>
 
@@ -2130,7 +2131,8 @@
               <th style="width: 130px; min-width: 130px; text-align: center; vertical-align: middle;">Cont Name</th>
               <th style="min-width: 85px;">H-Emb P-O Fix Rate</th>
               <th style="min-width: 75px;">CUT QTY</th>
-              <th style="min-width: 85px; background: rgba(244, 63, 94, 0.12); color: #f43f5e; text-align: center;" title="Kaat / Deduction pieces - enter here to auto-minus from Prod Pcs Qty">Deduction (Kaat)</th>
+              <th style="min-width: 85px; background: rgba(244, 63, 94, 0.12); color: #f43f5e; text-align: center;"
+                title="Kaat / Deduction pieces - enter here to auto-minus from Prod Pcs Qty">Deduction (Kaat)</th>
               <th style="min-width: 75px;">Prod Pcs Qty</th>
               <th style="min-width: 85px;">Carigar Rate</th>
               <th style="min-width: 85px;">Commission</th>
@@ -2552,7 +2554,8 @@
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="trash-search-input" oninput="renderTrashView()" placeholder="Search by Style, Challan #, Contractor...">
+            <input type="text" id="trash-search-input" oninput="renderTrashView()"
+              placeholder="Search by Style, Challan #, Contractor...">
           </div>
 
           <select class="app-select" id="filter-trash-type" onchange="renderTrashView()" style="min-width: 170px;">
@@ -2567,7 +2570,8 @@
             <option value="user">👤 User Accounts</option>
           </select>
 
-          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-restore-all" onclick="restoreAllTrashAction()"
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-trash-restore-all"
+            onclick="restoreAllTrashAction()"
             style="font-weight: 700; color: var(--primary); border-color: rgba(16, 185, 129, 0.4);">
             ↩️ Restore All
           </button>
@@ -3578,7 +3582,8 @@
 
             <div class="form-group">
               <label for="payment-deduction-pcs" style="color: #f43f5e; font-weight: 700;">
-                Deduction<span style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">(Optional)</span>:
+                Deduction<span
+                  style="font-size: 0.75rem; font-weight: 500; color: var(--text-muted);">(Optional)</span>:
               </label>
               <input type="number" class="app-input" id="payment-deduction-pcs" min="0" placeholder="0" tabindex="-1"
                 style="font-weight: 800; font-family: var(--font-mono); color: #f43f5e; border-color: rgba(244, 63, 94, 0.4); background: rgba(244, 63, 94, 0.05);"
@@ -3940,7 +3945,8 @@
         <div class="modal-body">
           <div class="form-grid-2">
             <div class="form-group">
-              <label for="dist-entry-date" style="font-weight: 700; color: var(--primary);">Distribution Date 🗓️ *:</label>
+              <label for="dist-entry-date" style="font-weight: 700; color: var(--primary);">Distribution Date 🗓️
+                *:</label>
               <input type="date" class="app-input" id="dist-entry-date" required>
               <input type="hidden" id="dist-entry-period" value="">
             </div>
@@ -4038,7 +4044,8 @@
       <div class="modal-header">
         <div>
           <h2>📅 Distribution Sheet Setup</h2>
-          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Nayi distribution date sheet banayein ya pehlay se bani hui sheets select karein</p>
+          <p style="font-size: 0.775rem; color: var(--text-muted); margin: 0;">Nayi distribution date sheet banayein ya
+            pehlay se bani hui sheets select karein</p>
         </div>
         <button type="button" class="btn btn-secondary btn-icon"
           onclick="closeModal('modal-dist-period-setup')">✕</button>
@@ -4065,8 +4072,8 @@
 
           <div class="form-group">
             <label for="dist-setup-name">Sheet Name / Date 🏷️ *:</label>
-            <input type="text" class="app-input" id="dist-setup-name" required
-              placeholder="e.g. 21-Nov-2026" style="font-weight: 700; font-family: var(--font-mono);">
+            <input type="text" class="app-input" id="dist-setup-name" required placeholder="e.g. 21-Nov-2026"
+              style="font-weight: 700; font-family: var(--font-mono);">
             <small style="font-size: 0.725rem; color: var(--text-muted); margin-top: 2px;">
               Date select karnay par sheet ka naam khud ban jayega (maslan 21-Nov-2026), ya customize karein.
             </small>
@@ -4079,7 +4086,8 @@
 
           <div class="form-group">
             <label for="dist-setup-notes">Notes / Sheet Info:</label>
-            <input type="text" class="app-input" id="dist-setup-notes" placeholder="e.g. Aaj ki work distribution sheet">
+            <input type="text" class="app-input" id="dist-setup-notes"
+              placeholder="e.g. Aaj ki work distribution sheet">
           </div>
 
           <!-- Existing Distribution Periods List -->
@@ -5247,13 +5255,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=48"></script>
-  <script src="db.js?v=48"></script>
-  <script src="app.js?v=48"></script>
+  <script src="data.js?v=49"></script>
+  <script src="db.js?v=49"></script>
+  <script src="app.js?v=49"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=48').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=49').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

@@ -52,7 +52,14 @@ function initApp() {
       // Restore active tab from before refresh
       const savedTab = sessionStorage.getItem("craftflow_current_tab") || localStorage.getItem("craftflow_current_tab");
       const canAccessSavedTab = savedTab && (typeof window.db.canUserAccessTab === "function") && window.db.canUserAccessTab(savedTab.replace(/-/g, '_'), currentUser);
-      const targetInitialTab = canAccessSavedTab ? savedTab : "dashboard";
+      let targetInitialTab = "dashboard";
+      if (canAccessSavedTab) {
+        targetInitialTab = savedTab;
+      } else if (!window.db.canUserAccessTab("dashboard", currentUser)) {
+        const tabs = ["master-inventory", "receiving-log", "dispatch-log", "final-style", "work-distribution", "payment-sheet", "contractors"];
+        const allowed = tabs.find(t => window.db.canUserAccessTab(t.replace(/-/g, '_'), currentUser));
+        targetInitialTab = allowed || "master-inventory";
+      }
 
       switchTab(targetInitialTab);
       renderAll();
@@ -6339,6 +6346,15 @@ function applyUserPermissions(user) {
   });
 
   mobileNavItems.forEach(item => {
+    const dataTab = item.getAttribute("data-tab");
+    if (dataTab) {
+      const permKey = dataTab.replace(/-/g, "_");
+      const isAllowed = window.db.canUserAccessTab(permKey, user);
+      item.style.display = isAllowed ? "" : "none";
+    }
+  });
+
+  document.querySelectorAll(".mobile-bottom-nav-item").forEach(item => {
     const dataTab = item.getAttribute("data-tab");
     if (dataTab) {
       const permKey = dataTab.replace(/-/g, "_");

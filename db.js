@@ -5004,6 +5004,12 @@ class DatabaseService {
     const cur = user || this.getCurrentUser();
     if (!cur) return false;
     if (cur.role === "admin") return true;
+
+    // Check explicitly configured tab permission in user permissions object
+    if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs[tabKey] !== undefined) {
+      return Boolean(cur.permissions.tabs[tabKey]);
+    }
+
     if (tabKey === "dashboard") return true;
     if (tabKey === "trash") {
       if (cur.role === "admin" || cur.role === "manager") return true;
@@ -5990,6 +5996,18 @@ class DatabaseService {
         }));
         this._setCached(DB_KEYS.USERS, parsedUsers);
         try { localStorage.setItem(DB_KEYS.USERS, JSON.stringify(parsedUsers)); } catch (e) {}
+
+        // Keep current active session permissions in sync with latest Neon database permissions
+        try {
+          const cur = this.getCurrentUser();
+          if (cur && cur.username) {
+            const matched = parsedUsers.find(u => u.username.toLowerCase() === cur.username.toLowerCase());
+            if (matched) {
+              const updatedCur = { ...cur, ...matched };
+              localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(updatedCur));
+            }
+          }
+        } catch (e) {}
       }
 
       // 10. Trash Items
