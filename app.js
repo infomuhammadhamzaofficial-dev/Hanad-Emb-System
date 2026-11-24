@@ -48,6 +48,13 @@ function initApp() {
         window.db.rebuildAllMastersFromLogs();
       }
       applyUserPermissions(currentUser);
+
+      // Restore active tab from before refresh
+      const savedTab = sessionStorage.getItem("craftflow_current_tab") || localStorage.getItem("craftflow_current_tab");
+      const canAccessSavedTab = savedTab && (typeof window.db.canUserAccessTab === "function") && window.db.canUserAccessTab(savedTab.replace(/-/g, '_'), currentUser);
+      const targetInitialTab = canAccessSavedTab ? savedTab : "dashboard";
+
+      switchTab(targetInitialTab);
       renderAll();
       checkNeonStatus();
       startLiveNeonConnection();
@@ -523,11 +530,18 @@ function renderTargetView(tabId) {
 }
 
 function switchTab(tabId) {
+  if (!tabId) return;
   const permKey = tabId.replace(/-/g, '_');
   if (!window.db.canUserAccessTab(permKey)) {
     showToast("Access Restricted: You do not have permission to view this tab.", "error");
     return;
   }
+
+  // Persist current active tab across page refreshes
+  try {
+    sessionStorage.setItem("craftflow_current_tab", tabId);
+    localStorage.setItem("craftflow_current_tab", tabId);
+  } catch (e) { }
 
   document.querySelectorAll(".nav-tab-btn").forEach(b => {
     b.classList.toggle("active", b.getAttribute("data-tab") === tabId);
@@ -3835,22 +3849,19 @@ window.lastUserActionTime = 0;
 
 function getDataSignature() {
   try {
-    const rawR = localStorage.getItem("hand_emb_receiving_log_v2") || "";
-    const rawD = localStorage.getItem("hand_emb_dispatch_log_v2") || "";
-    const rawM = localStorage.getItem("hand_emb_master_inventory_v2") || "";
-    const rawP = localStorage.getItem("hand_emb_payment_sheet_v2") || "";
-    const rawW = localStorage.getItem("hand_emb_work_distribution_v1") || "";
-    const rawC = localStorage.getItem("hand_emb_contractors_v2") || "";
-    const rawRap = localStorage.getItem("hand_emb_rate_approval_periods_v1") || "";
-    const rawDp = localStorage.getItem("hand_emb_distribution_periods_v1") || "";
+    if (!window.db) return Date.now().toString();
+    const r = (typeof window.db.getReceivingLogs === "function") ? window.db.getReceivingLogs().length : 0;
+    const d = (typeof window.db.getDispatchLogs === "function") ? window.db.getDispatchLogs().length : 0;
+    const m = (typeof window.db.getMasterInventory === "function") ? window.db.getMasterInventory().length : 0;
+    const p = (typeof window.db.getPaymentSheets === "function") ? window.db.getPaymentSheets().length : 0;
+    const w = (typeof window.db.getWorkDistribution === "function") ? window.db.getWorkDistribution().length : 0;
+    const c = (typeof window.db.getContractors === "function") ? window.db.getContractors().length : 0;
+    const rap = (typeof window.db.getRateApprovalPeriods === "function") ? window.db.getRateApprovalPeriods().length : 0;
+    const dp = (typeof window.db.getDistributionPeriods === "function") ? window.db.getDistributionPeriods().length : 0;
+    const t = (typeof window.db.getTrashItems === "function") ? window.db.getTrashItems().length : 0;
+    const fs = (typeof window.db.getFinalStyles === "function") ? window.db.getFinalStyles().length : 0;
 
-    const str = `${rawR}#${rawD}#${rawM}#${rawP.length}#${rawW.length}#${rawC.length}#${rawRap}#${rawDp}`;
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < str.length; i += 7) {
-      hash ^= str.charCodeAt(i);
-      hash = Math.imul(hash, 0x01000193);
-    }
-    return `${str.length}:${hash >>> 0}`;
+    return `${r}:${d}:${m}:${p}:${w}:${c}:${rap}:${dp}:${t}:${fs}`;
   } catch (e) {
     return Date.now().toString();
   }
@@ -6184,9 +6195,13 @@ function initAuthSystem() {
         startLiveNeonConnection();
         initInactivityTimer(); // Start 5-minute inactivity tracker on login
 
-        // Auto-navigate to Dashboard if permitted, else first accessible tab
+        // Auto-navigate to saved tab if permitted, else Dashboard, else first accessible tab
+        const savedTab = sessionStorage.getItem("craftflow_current_tab") || localStorage.getItem("craftflow_current_tab");
+        const canViewSaved = savedTab && window.db.canUserAccessTab(savedTab.replace(/-/g, '_'), result.user);
         const canViewDash = window.db.canUserAccessTab("dashboard", result.user);
-        if (canViewDash && typeof switchTab === "function") {
+        if (canViewSaved && typeof switchTab === "function") {
+          switchTab(savedTab);
+        } else if (canViewDash && typeof switchTab === "function") {
           switchTab("dashboard");
         } else if (typeof switchTab === "function") {
           const tabs = ["master-inventory", "receiving-log", "dispatch-log", "final-style", "work-distribution", "payment-sheet", "contractors"];
@@ -6214,7 +6229,9 @@ function initAuthSystem() {
       if (confirm("Are you sure you want to sign out of CraftFlow?")) {
         stopInactivityTimer();
         sessionStorage.removeItem("craftflow_session_active");
+        sessionStorage.removeItem("craftflow_current_tab");
         localStorage.removeItem("craftflow_last_activity");
+        localStorage.removeItem("craftflow_current_tab");
         window.db.logoutUser();
         if (overlay) overlay.style.display = "flex";
         if (passInput) {
