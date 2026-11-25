@@ -361,6 +361,16 @@
             <span class="tab-label">Dispatch Log</span>
           </button>
 
+          <button class="nav-tab-btn" data-tab="designer-samples" id="nav-btn-designer-samples">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
+              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
+              <path d="M2 2l7.586 7.586"></path>
+              <circle cx="11" cy="11" r="2"></circle>
+            </svg>
+            <span class="tab-label">Designer Pcs</span>
+          </button>
+
           <button class="nav-tab-btn" data-tab="final-style">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polygon
@@ -503,6 +513,11 @@
       <button type="button" class="mobile-nav-item" data-tab="dispatch-log">
         <span class="nav-item-icon">📤</span>
         <span class="nav-item-text">Dispatch Log</span>
+      </button>
+
+      <button type="button" class="mobile-nav-item" data-tab="designer-samples" id="mobile-nav-btn-designer-samples">
+        <span class="nav-item-icon">🎨</span>
+        <span class="nav-item-text">Designer Pcs</span>
       </button>
 
       <button type="button" class="mobile-nav-item" data-tab="final-style">
@@ -1399,6 +1414,161 @@
               <!-- Dynamically populated -->
             </tbody>
             <tfoot id="tfoot-dispatch-log" style="font-weight: 800; background: var(--bg-card-hover);">
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================== -->
+    <!-- TAB 3B: DESIGNER PCS / SAMPLES & STOCK TRANSFER LOG            -->
+    <!-- ============================================================== -->
+    <section id="designer-samples-view" class="tab-view" role="region" aria-label="Designer Pcs" aria-hidden="true">
+      <div class="view-toolbar">
+        <div>
+          <h2 style="font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 0.5rem;">
+            <span>🎨 Designer Pcs &amp; Stock Transfer</span>
+            <span class="badge-tag inline" id="ds-kpi-count-badge">0 Entries</span>
+          </h2>
+          <p style="font-size: 0.8rem; color: var(--text-muted);">Track designer sample pieces (Shirt, Dupatta, Trouser)
+            &amp; whether moved to Stock.</p>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+          <div class="search-box">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              style="color: var(--text-muted)">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="ds-search-input" placeholder="Search Style No, Challan #, Remarks...">
+          </div>
+
+          <select class="app-select" id="filter-ds-item">
+            <option value="">All Items</option>
+            <option value="Shirt">Shirt</option>
+            <option value="Dupatta">Dupatta</option>
+            <option value="Trouser">Trouser</option>
+          </select>
+
+          <select class="app-select" id="filter-ds-status">
+            <option value="">All Stock Status</option>
+            <option value="pending">⏳ Pending (Not Moved)</option>
+            <option value="moved">✅ Moved to Stock</option>
+          </select>
+
+          <!-- Date Filter Controls -->
+          <div class="log-date-filter-group" id="ds-date-filter-wrap">
+            <span
+              style="font-size: 0.8rem; color: var(--text-muted); display: inline-flex; align-items: center; gap: 0.25rem;">
+              📅
+            </span>
+            <select class="app-select" id="filter-ds-date-preset"
+              style="padding: 0.35rem 0.5rem; font-size: 0.8rem; height: 32px; border: none; background: transparent; font-weight: 600; cursor: pointer;">
+              <option value="all">All Dates</option>
+              <option value="today">Today</option>
+              <option value="yesterday">Yesterday</option>
+              <option value="this_week">This Week</option>
+              <option value="custom">Custom Range...</option>
+            </select>
+            <input type="date" class="app-input log-date-input" id="filter-ds-date-from"
+              title="Filter From Date (or single date)"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; display: none;">
+            <span id="filter-ds-date-sep" style="font-size: 0.75rem; color: var(--text-muted); display: none;">to</span>
+            <input type="date" class="app-input log-date-input" id="filter-ds-date-to" title="Filter To Date"
+              style="padding: 0.25rem 0.45rem; font-size: 0.8rem; height: 30px; display: none;">
+            <button type="button" class="btn btn-secondary btn-xs btn-clear-date" id="btn-clear-ds-date"
+              title="Clear Date Filter"
+              style="padding: 2px 6px; font-size: 0.75rem; display: none; margin-left: 2px;">✕</button>
+          </div>
+
+          <button class="btn btn-primary btn-sm" id="btn-open-ds-modal">
+            🎨 + New Designer Entry
+          </button>
+
+          <button class="btn btn-secondary btn-sm" id="btn-export-ds-csv">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Designer CSV
+          </button>
+        </div>
+      </div>
+
+      <!-- Designer Pcs Mini KPI Banner -->
+      <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); margin-bottom: 1rem;">
+        <div class="kpi-card indigo">
+          <span class="kpi-label">Total Designer Entries</span>
+          <div class="kpi-value" id="ds-kpi-entries">0</div>
+          <span class="kpi-sub">Total sample line items</span>
+        </div>
+        <div class="kpi-card cyan">
+          <span class="kpi-label">Total Designer Pcs</span>
+          <div class="kpi-value" id="ds-kpi-pieces">0</div>
+          <span class="kpi-sub">Sum of sample pieces</span>
+        </div>
+        <div class="kpi-card emerald">
+          <span class="kpi-label">Moved to Stock</span>
+          <div class="kpi-value" id="ds-kpi-moved">0</div>
+          <span class="kpi-sub">Confirmed moved to stock</span>
+        </div>
+        <div class="kpi-card rose">
+          <span class="kpi-label">Pending Move to Stock</span>
+          <div class="kpi-value" id="ds-kpi-pending">0</div>
+          <span class="kpi-sub">Not yet moved to stock</span>
+        </div>
+      </div>
+
+      <!-- Table Quick Navigation & Horizontal Scroll Controls -->
+      <div class="table-scroll-toolbar">
+        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+          <span
+            style="font-size: 0.775rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.45rem;">
+            <span style="color: var(--primary); font-size: 1rem;">↔️</span>
+            <span><strong>Horizontal Scroll:</strong> Use horizontal scrollbar below or side buttons to view
+              columns</span>
+          </span>
+          <span id="ds-records-badge" class="table-records-badge">Showing all 0 records</span>
+        </div>
+        <div style="display: flex; gap: 0.4rem; align-items: center;">
+          <button type="button" class="btn btn-success btn-xs btn-open-table-whatsapp-img" data-sheet="designer"
+            title="Export as WhatsApp Image"
+            style="font-weight: 700; background: #10b981; border-color: #059669; color: #fff; display: inline-flex; align-items: center; gap: 0.35rem;">
+            <span>📸</span> <span>WhatsApp Image</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll"
+            data-target="#container-designer-table" data-dir="-1" title="Scroll Left">
+            ◀ Scroll Left
+          </button>
+          <button type="button" class="btn btn-secondary btn-xs btn-table-scroll"
+            data-target="#container-designer-table" data-dir="1" title="Scroll Right">
+            Scroll Right ▶
+          </button>
+        </div>
+      </div>
+
+      <div class="table-card">
+        <div class="table-responsive" id="container-designer-table">
+          <table class="master-table" id="table-designer-samples">
+            <thead>
+              <tr class="column-header">
+                <th style="width: 50px; text-align: center;">SR</th>
+                <th>DATE</th>
+                <th>CHALLAN / S.N#</th>
+                <th>STYLE NUMBER</th>
+                <th>ITEM</th>
+                <th style="text-align: right; background: rgba(14, 165, 233, 0.1);">QTY</th>
+                <th style="text-align: center;">STOCK STATUS</th>
+                <th>REMARKS</th>
+                <th style="width: 110px; text-align: center;">ACTION</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-designer-samples">
+              <!-- Dynamically populated -->
+            </tbody>
+            <tfoot id="tfoot-designer-samples" style="font-weight: 800; background: var(--bg-card-hover);">
             </tfoot>
           </table>
         </div>
@@ -2562,6 +2732,7 @@
             <option value="all">📁 All Modules (Sub)</option>
             <option value="receiving">📥 Receiving Challans (Inward)</option>
             <option value="dispatch">📤 Dispatch Challans (Outward)</option>
+            <option value="designer_sample">🎨 Designer Pcs / Samples</option>
             <option value="master">📦 Master Inventory Styles</option>
             <option value="final_style">📋 Daily Final Sheet Rows</option>
             <option value="distribution">📑 Work Distribution</option>
@@ -2876,6 +3047,106 @@
             </svg>
             Save Entry & Next
           </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================== -->
+  <!-- MODAL: ADD / EDIT DESIGNER PCS / SAMPLE ENTRY                  -->
+  <!-- ============================================================== -->
+  <div class="modal-backdrop" id="modal-designer-sample">
+    <div class="modal-card" style="max-width: 660px;">
+      <div class="modal-header">
+        <div>
+          <div style="display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap;">
+            <h2 id="modal-ds-title" style="margin: 0;">🎨 Designer Pcs &amp; Stock Transfer Entry</h2>
+            <span id="ds-modal-saved-badge" style="display: none;"></span>
+          </div>
+          <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">
+            Record Designer Sample pieces (Shirt, Dupatta, Trouser) &amp; track if moved to Stock.
+          </p>
+        </div>
+        <button class="btn btn-secondary btn-icon" onclick="closeModal('modal-designer-sample')">✕</button>
+      </div>
+
+      <form id="form-designer-sample">
+        <input type="hidden" id="ds-entry-id" value="">
+
+        <div class="modal-body">
+          <div id="ds-modal-alert"
+            style="display: none; padding: 0.75rem 1rem; border-radius: var(--radius-md); margin-bottom: 1rem; font-size: 0.85rem; font-weight: 600;">
+          </div>
+
+          <!-- Row 1: Date | Style Number | Item -->
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="ds-entry-date">Date *:</label>
+              <input type="date" class="app-input" id="ds-entry-date" required
+                onclick="this.showPicker && this.showPicker()">
+            </div>
+
+            <div class="form-group">
+              <label for="ds-entry-style" style="color: var(--primary); font-weight: 700;">Style Number *:</label>
+              <input type="text" class="app-input" id="ds-entry-style" required placeholder="e.g. JLS-26-1008"
+                list="styles-master-datalist" autocomplete="off">
+            </div>
+
+            <div class="form-group">
+              <label for="ds-entry-item">Item *:</label>
+              <select class="app-select" id="ds-entry-item" required>
+                <option value="Shirt">Shirt</option>
+                <option value="Dupatta">Dupatta</option>
+                <option value="Trouser">Trouser</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 2: Qty | Challan / Note # | Stock Move Status -->
+          <div class="form-grid-3">
+            <div class="form-group">
+              <label for="ds-entry-qty" style="color: #38bdf8; font-weight: 700;">Qty (Pcs) *:</label>
+              <input type="number" class="app-input" id="ds-entry-qty" min="1" value="1" required>
+            </div>
+
+            <div class="form-group">
+              <label for="ds-entry-challan">Challan / Note #: <span
+                  style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500;">(Optional)</span></label>
+              <input type="text" class="app-input" id="ds-entry-challan" placeholder="e.g. E-182386">
+            </div>
+
+            <div class="form-group">
+              <label for="ds-entry-moved" style="font-weight: 700;">Moved to Stock? *:</label>
+              <select class="app-select" id="ds-entry-moved" required>
+                <option value="true" selected>✅ Yes — Moved to Stock</option>
+                <option value="false">⏳ Pending (Not Moved Yet)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Row 3: Remarks + Quick Chip -->
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <div
+              style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem; flex-wrap: wrap; gap: 0.4rem;">
+              <label for="ds-entry-remarks" style="margin-bottom: 0;">Remarks:</label>
+              <div style="display: flex; gap: 0.35rem; flex-wrap: wrap;">
+                <button type="button" class="btn btn-secondary btn-xs"
+                  onclick="document.getElementById('ds-entry-remarks').value = 'Designer Sample - Moved to Stock'">
+                  + Moved to Stock
+                </button>
+              </div>
+            </div>
+            <input type="text" class="app-input" id="ds-entry-remarks" value="Designer Sample"
+              placeholder="e.g. Designer Sample, Hand Emb Stock Transfer...">
+          </div>
+        </div>
+
+        <div class="modal-footer"
+          style="justify-content: space-between; flex-direction: row-reverse; flex-wrap: wrap; gap: 0.5rem;">
+          <button type="submit" class="btn btn-primary" id="btn-ds-save-next" style="font-weight: 700;">
+            ✓ Save &amp; Add Next
+          </button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-designer-sample')">Close</button>
         </div>
       </form>
     </div>
@@ -3262,6 +3533,10 @@
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-tab-dis" checked>
                 <span>📤 Outward Dispatch Log</span>
+              </label>
+              <label class="perm-checkbox-card">
+                <input type="checkbox" id="perm-tab-designer" checked>
+                <span>🎨 Designer Pcs / Samples</span>
               </label>
               <label class="perm-checkbox-card">
                 <input type="checkbox" id="perm-tab-final" checked>
@@ -5255,13 +5530,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=52"></script>
-  <script src="db.js?v=52"></script>
-  <script src="app.js?v=52"></script>
+  <script src="data.js?v=60"></script>
+  <script src="db.js?v=60"></script>
+  <script src="app.js?v=60"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=52').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=60').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

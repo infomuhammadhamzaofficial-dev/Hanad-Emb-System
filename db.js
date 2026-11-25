@@ -18,7 +18,8 @@ const DB_KEYS = {
   WORK_DISTRIBUTION: "hand_emb_work_distribution_v1",
   DISTRIBUTION_PERIODS: "hand_emb_distribution_periods_v1",
   TRASH: "hand_emb_trash_v1",
-  CONTRACTOR_PARCHAS: "hand_emb_contractor_parchas_v1"
+  CONTRACTOR_PARCHAS: "hand_emb_contractor_parchas_v1",
+  DESIGNER_SAMPLES: "hand_emb_designer_samples_v1"
 };
 
 // ====================================================================
@@ -60,8 +61,27 @@ class DatabaseService {
     this._mutationVersion = 0;
     this.cleanLegacyLocalStorage();
     this.initLocalStorage();
-    this.syncAllDistributionContractorsToLogsAndMaster();
     this._neonTablesReady = false;
+    this._preloadNeonDriver();
+  }
+
+  _preloadNeonDriver() {
+    try {
+      const cfg = this.getConfig();
+      if (cfg && cfg.neonConnectionString && typeof window !== "undefined") {
+        if (!window._neonDriverImportPromise) {
+          window._neonDriverImportPromise = import('https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.10.4/+esm')
+            .then(mod => {
+              if (mod && mod.neon && !window._neonDriverSql) {
+                window._neonDriverSql = mod.neon(cfg.neonConnectionString);
+                window._neonDriverConn = cfg.neonConnectionString;
+              }
+              return mod;
+            })
+            .catch(() => null);
+        }
+      }
+    } catch (e) { }
   }
 
   _bumpMutationVersion() {
@@ -80,18 +100,29 @@ class DatabaseService {
   cleanLegacyLocalStorage() {
     const allowedKeys = new Set([
       "hand_emb_theme_key",
+      "hand_emb_theme",
+      "hand_emb_palette",
       "hand_emb_users_v2",
       "hand_emb_current_user_v2",
       "hand_emb_config_v2",
+      "hand_emb_report_date_v2",
+      "craftflow_last_activity",
+      "craftflow_last_mutation",
       "craftflow_current_tab",
       "craftflow_active_tab",
-      "craftflow_active_dist_period"
+      "craftflow_active_dist_period",
+      "craftflow_active_payment_period",
+      "craftflow_schema_version"
     ]);
+    const allowedPrefixes = [
+      "craftflow_print_presets_",
+      "craftflow_whatsapp_cols_"
+    ];
     try {
       if (typeof localStorage !== "undefined") {
         for (let i = localStorage.length - 1; i >= 0; i--) {
           const k = localStorage.key(i);
-          if (k && !allowedKeys.has(k)) {
+          if (k && !allowedKeys.has(k) && !allowedPrefixes.some(p => k.startsWith(p))) {
             localStorage.removeItem(k);
           }
         }
@@ -905,6 +936,9 @@ class DatabaseService {
     } else if (entityType === "contractor") {
       title = `Contractor: ${item.name || 'Unnamed'}`;
       subtitle = `Phone: ${item.phone || 'Not Set'} | Status: ${item.status || 'Active'} | ID: #${item.id || '-'}`;
+    } else if (entityType === "designer_sample") {
+      title = `Designer Sample — Style: ${item.style_code} [${item.item_type || 'Shirt'}]`;
+      subtitle = `${item.challan_no ? `Challan #${item.challan_no} | ` : ''}Date: ${item.entry_date || 'N/A'} | Qty: ${item.qty || 1} pcs | Stock: ${item.moved_to_stock ? 'Moved OK' : 'Pending'}`;
     } else {
       title = `${entityType} Item #${item.id || item.s_no || ''}`;
       subtitle = JSON.stringify(item).substring(0, 80);
@@ -1161,6 +1195,16 @@ class DatabaseService {
         this.saveContractors(contractors);
       }
       this.addContractorWithNeon(data).catch(() => null);
+    } else if (entityType === "designer_sample") {
+      const dsList = this.getDesignerSamples();
+      this.untrackDeletedRecord("designer_sample", data.id);
+      const existingId = dsList.some(d => Number(d.id) === Number(data.id));
+      if (existingId) {
+        data.id = dsList.length > 0 ? Math.max(...dsList.map(d => Number(d.id) || 0)) + 1 : 1;
+      }
+      dsList.unshift(data);
+      this.saveDesignerSamples(dsList);
+      this.pushDesignerSampleToNeonAsync(data).catch(() => null);
     }
 
     // Remove from Trash
@@ -1338,6 +1382,16 @@ class DatabaseService {
           this.executeNeonQuery(
             `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
             [Number(data.id) || 0, (data.name || '').trim().toLowerCase()]
+          ).catch(() => null)
+        );
+      }
+    } else if (entityType === "designer_sample") {
+      this.trackDeletedRecord("designer_sample", data.id);
+      if (hasNeon && purgeFromNeonTable) {
+        neonOps.push(
+          this.executeNeonQuery(
+            `DELETE FROM designer_samples WHERE id = $1;`,
+            [Number(data.id) || 0]
           ).catch(() => null)
         );
       }
@@ -2108,6 +2162,195 @@ class DatabaseService {
   }
 
   // -------------------------------------------------------------
+  // DESIGNER SAMPLES / PCS STOCK TRANSFER LOG CRUD
+  // -------------------------------------------------------------
+  getDesignerSamples() {
+    return this._getCached(DB_KEYS.DESIGNER_SAMPLES, () => {
+      return this._memCache[DB_KEYS.DESIGNER_SAMPLES] || [];
+    });
+  }
+
+  saveDesignerSamples(list) {
+    this._bumpMutationVersion();
+    this._setCached(DB_KEYS.DESIGNER_SAMPLES, list || []);
+    this.triggerAutoSyncIfEnabled();
+  }
+
+  async ensureNeonDesignerSamplesTable() {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    await this.executeNeonQuery(
+      `CREATE TABLE IF NOT EXISTS designer_samples (
+        id SERIAL PRIMARY KEY,
+        sr_no INT,
+        entry_date TEXT NOT NULL,
+        challan_no TEXT DEFAULT '',
+        style_code VARCHAR(100) NOT NULL,
+        item_type VARCHAR(50) NOT NULL DEFAULT 'Shirt',
+        qty INT NOT NULL DEFAULT 1,
+        moved_to_stock BOOLEAN NOT NULL DEFAULT FALSE,
+        moved_date TEXT DEFAULT '',
+        remarks TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );`
+    );
+  }
+
+  async pushDesignerSampleToNeonAsync(record) {
+    const cfg = this.getConfig();
+    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+    try {
+      await this.ensureNeonDesignerSamplesTable();
+      await this.executeNeonQuery(
+        `INSERT INTO designer_samples
+         (id, sr_no, entry_date, challan_no, style_code, item_type, qty, moved_to_stock, moved_date, remarks)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (id) DO UPDATE SET
+           sr_no = EXCLUDED.sr_no,
+           entry_date = EXCLUDED.entry_date,
+           challan_no = EXCLUDED.challan_no,
+           style_code = EXCLUDED.style_code,
+           item_type = EXCLUDED.item_type,
+           qty = EXCLUDED.qty,
+           moved_to_stock = EXCLUDED.moved_to_stock,
+           moved_date = EXCLUDED.moved_date,
+           remarks = EXCLUDED.remarks;`,
+        [
+          Number(record.id),
+          Number(record.sr_no) || Number(record.id) || 1,
+          record.entry_date || '',
+          record.challan_no || '',
+          record.style_code || '',
+          record.item_type || 'Shirt',
+          parseInt(record.qty, 10) || 1,
+          Boolean(record.moved_to_stock),
+          record.moved_date || '',
+          record.remarks || ''
+        ]
+      );
+    } catch (err) {
+      console.error("Neon pushDesignerSample error:", err);
+      throw err;
+    }
+  }
+
+  async addDesignerSample(entry) {
+    this._bumpMutationVersion();
+    const list = this.getDesignerSamples();
+    const newId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
+    const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
+    const moved = Boolean(entry.moved_to_stock);
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const record = {
+      id: newId,
+      sr_no: entry.sr_no ? parseInt(entry.sr_no, 10) : maxSr + 1,
+      entry_date: (entry.entry_date || todayStr).trim(),
+      challan_no: (entry.challan_no || "").trim().toUpperCase(),
+      style_code: (entry.style_code || "").trim().toUpperCase(),
+      item_type: (entry.item_type || "Shirt").trim(),
+      qty: Math.max(1, parseInt(entry.qty, 10) || 1),
+      moved_to_stock: moved,
+      moved_date: moved ? (entry.moved_date || todayStr) : "",
+      remarks: (entry.remarks || "").trim() || "Designer Sample",
+      created_at: new Date().toISOString()
+    };
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.pushDesignerSampleToNeonAsync(record);
+    }
+
+    this.untrackDeletedRecord("designer_sample", record.id);
+    list.unshift(record);
+    this.saveDesignerSamples(list);
+    return record;
+  }
+
+  async updateDesignerSample(id, updatedData) {
+    this._bumpMutationVersion();
+    const list = this.getDesignerSamples();
+    const numId = Number(id);
+    const idx = list.findIndex(i => Number(i.id) === numId);
+    if (idx === -1) throw new Error(`Designer entry #${id} not found.`);
+
+    const current = list[idx];
+    const moved = updatedData.moved_to_stock !== undefined ? Boolean(updatedData.moved_to_stock) : Boolean(current.moved_to_stock);
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    const updated = {
+      ...current,
+      sr_no: updatedData.sr_no !== undefined ? (parseInt(updatedData.sr_no, 10) || current.sr_no) : current.sr_no,
+      entry_date: updatedData.entry_date !== undefined ? updatedData.entry_date.trim() : current.entry_date,
+      challan_no: updatedData.challan_no !== undefined ? updatedData.challan_no.trim().toUpperCase() : (current.challan_no || ""),
+      style_code: updatedData.style_code !== undefined ? updatedData.style_code.trim().toUpperCase() : current.style_code,
+      item_type: updatedData.item_type !== undefined ? updatedData.item_type.trim() : current.item_type,
+      qty: updatedData.qty !== undefined ? Math.max(1, parseInt(updatedData.qty, 10) || 1) : current.qty,
+      moved_to_stock: moved,
+      moved_date: moved ? (current.moved_date || todayStr) : "",
+      remarks: updatedData.remarks !== undefined ? (updatedData.remarks.trim() || "Designer Sample") : current.remarks
+    };
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.pushDesignerSampleToNeonAsync(updated);
+    }
+
+    list[idx] = updated;
+    this.saveDesignerSamples(list);
+    return updated;
+  }
+
+  async toggleDesignerSampleStockStatus(id) {
+    this._bumpMutationVersion();
+    const list = this.getDesignerSamples();
+    const numId = Number(id);
+    const idx = list.findIndex(i => Number(i.id) === numId);
+    if (idx === -1) throw new Error(`Designer entry #${id} not found.`);
+
+    const current = list[idx];
+    const nextMoved = !Boolean(current.moved_to_stock);
+    const todayStr = new Date().toISOString().split("T")[0];
+    const updated = {
+      ...current,
+      moved_to_stock: nextMoved,
+      moved_date: nextMoved ? todayStr : ""
+    };
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.pushDesignerSampleToNeonAsync(updated);
+    }
+
+    list[idx] = updated;
+    this.saveDesignerSamples(list);
+    return updated;
+  }
+
+  async deleteDesignerSample(id) {
+    this._bumpMutationVersion();
+    let list = this.getDesignerSamples();
+    const numId = Number(id);
+    const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
+    if (!item) return false;
+
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      await this.ensureNeonDesignerSamplesTable();
+      await this.executeNeonQuery(
+        `DELETE FROM designer_samples WHERE id = $1;`,
+        [Number(item.id) || 0]
+      );
+    }
+
+    const trashItem = this.moveToTrash("designer_sample", item);
+    this.trackDeletedRecord("designer_sample", item.id);
+    list = list.filter(i => Number(i.id) !== Number(item.id));
+    this.saveDesignerSamples(list);
+    return trashItem;
+  }
+
+  // -------------------------------------------------------------
   // HELPER: Robust Date Parser for Multi-Challan Chronology
   // Supports DD-MM-YYYY, DD-MM-YY, DD/MM/YYYY, DD/MM/YY, YYYY-MM-DD
   // -------------------------------------------------------------
@@ -2310,7 +2553,7 @@ class DatabaseService {
   }
 
   // Rebuild and aggregate all Master Inventory items from Receiving and Dispatch logs
-  rebuildAllMastersFromLogs() {
+  rebuildAllMastersFromLogs({ skipBump = false } = {}) {
     // 1. Purge any orphan master records that have 0 receiving logs AND 0 dispatch logs
     this.cleanOrphanMasterRecords();
 
@@ -2333,7 +2576,15 @@ class DatabaseService {
 
     // Save once to memory cache at the end of the batch
     const currentMaster = this.getMasterInventory();
-    this.saveMasterInventory(currentMaster);
+    if (skipBump) {
+      const computed = currentMaster.map(item => ({
+        ...item,
+        ...this.computeRecordBalances(item)
+      }));
+      this._setCached(DB_KEYS.MASTER_INVENTORY, computed, currentMaster);
+    } else {
+      this.saveMasterInventory(currentMaster);
+    }
 
     return currentMaster;
   }
@@ -3920,7 +4171,7 @@ class DatabaseService {
   // Scans work_distribution and enforces contractor consistency
   // on master_inventory, receiving_log, and dispatch_log
   // -------------------------------------------------------------
-  syncAllDistributionContractorsToLogsAndMaster() {
+  syncAllDistributionContractorsToLogsAndMaster({ skipBump = false } = {}) {
     try {
       const distList = this.getWorkDistribution();
       if (!Array.isArray(distList) || distList.length === 0) return;
@@ -3965,13 +4216,16 @@ class DatabaseService {
       });
 
       if (masterModified) {
-        this.saveMasterInventory(masterList);
+        if (skipBump) this._setCached(DB_KEYS.MASTER_INVENTORY, masterList);
+        else this.saveMasterInventory(masterList);
       }
       if (recModified) {
-        this.saveReceivingLogs(recList);
+        if (skipBump) this._setCached(DB_KEYS.RECEIVING_LOG, recList);
+        else this.saveReceivingLogs(recList);
       }
       if (disModified) {
-        this.saveDispatchLogs(disList);
+        if (skipBump) this._setCached(DB_KEYS.DISPATCH_LOG, disList);
+        else this.saveDispatchLogs(disList);
       }
       if (masterModified || recModified || disModified) {
         this.clearCache();
@@ -4887,6 +5141,7 @@ class DatabaseService {
           master_inventory: true,
           receiving_log: true,
           dispatch_log: true,
+          designer_samples: true,
           final_style: true,
           work_distribution: true,
           payment_sheet: true,
@@ -4940,6 +5195,9 @@ class DatabaseService {
     if (!cur.permissions || !cur.permissions.tabs) return false;
     if (tabKey === "payment_sheet" && cur.permissions.tabs.payment_sheet === undefined) {
       return cur.role === "manager" || cur.role === "operator" || cur.role === "admin";
+    }
+    if (tabKey === "designer_samples" && cur.permissions.tabs.designer_samples === undefined) {
+      return Boolean(cur.permissions.tabs.receiving_log || cur.permissions.tabs.dispatch_log || cur.role === "manager" || cur.role === "admin");
     }
     return !!cur.permissions.tabs[tabKey];
   }
@@ -5025,32 +5283,38 @@ class DatabaseService {
       throw new Error("Your connection string has hidden asterisks (****). In Neon Console, click 'Show password' (bottom left) to reveal your real password before copying!");
     }
 
-    // Attempt 1: Official Neon Serverless Driver over CDN
-    try {
-      if (connectionString) {
-        if (!window._neonDriverSql || window._neonDriverConn !== connectionString) {
-          const neonModule = await import('https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.10.4/+esm');
+    // Attempt 1: Official Neon Serverless Driver over CDN (single deduplicated import)
+    if (connectionString) {
+      let driverReady = Boolean(window._neonDriverSql && window._neonDriverConn === connectionString);
+      if (!driverReady) {
+        try {
+          if (!window._neonDriverImportPromise) {
+            window._neonDriverImportPromise = import('https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.10.4/+esm');
+          }
+          const neonModule = await window._neonDriverImportPromise;
           if (neonModule && neonModule.neon) {
             window._neonDriverSql = neonModule.neon(connectionString);
             window._neonDriverConn = connectionString;
+            driverReady = true;
           }
-        }
-
-        if (window._neonDriverSql) {
-          let result;
-          if (typeof window._neonDriverSql.query === "function") {
-            result = await window._neonDriverSql.query(sqlQuery, params || []);
-          } else if (typeof window._neonDriverSql === "function") {
-            result = await window._neonDriverSql(sqlQuery, params || []);
-          }
-          return { rows: Array.isArray(result) ? result : (result?.rows || [result]) };
+        } catch (importErr) {
+          console.warn("Neon CDN module load fallback:", importErr.message);
         }
       }
-    } catch (driverErr) {
-      console.warn("Neon CDN driver notice:", driverErr.message);
+
+      if (driverReady && window._neonDriverSql) {
+        // Run query directly via CDN driver; propagate real SQL errors instead of triggering a CORS fallback
+        let result;
+        if (typeof window._neonDriverSql.query === "function") {
+          result = await window._neonDriverSql.query(sqlQuery, params || []);
+        } else if (typeof window._neonDriverSql === "function") {
+          result = await window._neonDriverSql(sqlQuery, params || []);
+        }
+        return { rows: Array.isArray(result) ? result : (result?.rows || [result]) };
+      }
     }
 
-    // Attempt 2: Direct HTTP POST to Neon's /sql endpoint
+    // Attempt 2: Direct HTTP POST to Neon's /sql endpoint (only when no connectionString or CDN unavailable)
     const targetUrl = endpoint || (host ? `https://${host}/sql` : "");
     if (!targetUrl) {
       throw new Error("Unable to determine Neon HTTP SQL endpoint. Please verify connection string.");
@@ -5375,7 +5639,19 @@ class DatabaseService {
         deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      
+      `CREATE TABLE IF NOT EXISTS designer_samples (
+        id SERIAL PRIMARY KEY,
+        sr_no INT,
+        entry_date TEXT NOT NULL,
+        challan_no TEXT DEFAULT '',
+        style_code VARCHAR(100) NOT NULL,
+        item_type VARCHAR(50) NOT NULL DEFAULT 'Shirt',
+        qty INT NOT NULL DEFAULT 1,
+        moved_to_stock BOOLEAN NOT NULL DEFAULT FALSE,
+        moved_date TEXT DEFAULT '',
+        remarks TEXT DEFAULT '',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      );`,
 
       `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`
     ];
@@ -5391,11 +5667,21 @@ class DatabaseService {
     return { success: true };
   }
 
-  async migrateNeonPaymentSchema() {
+  async migrateNeonPaymentSchema(force = false) {
     const cfg = this.getConfig();
     if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return { success: false, error: "No connection string" };
 
+    const TARGET_SCHEMA_VER = "55";
     try {
+      if (!force && typeof localStorage !== "undefined" && localStorage.getItem("craftflow_schema_version") === TARGET_SCHEMA_VER) {
+        return { success: true, skipped: true };
+      }
+    } catch (e) { }
+
+    try {
+      // Guarantee designer_samples table exists
+      await this.ensureNeonDesignerSamplesTable().catch(e => console.warn("Designer samples table notice:", e.message));
+
       // Guarantee deleted_tombstones table is permanently dropped from Neon
       await this.executeNeonQuery("DROP TABLE IF EXISTS deleted_tombstones;").catch(() => null);
 
@@ -5483,7 +5769,13 @@ class DatabaseService {
       // 6. Drop ship column from master_inventory if it exists on Neon
       await this.executeNeonQuery("ALTER TABLE master_inventory DROP COLUMN IF EXISTS ship;").catch(e => console.warn("Drop ship notice:", e.message));
 
-      console.log("✓ Neon payment_sheet and master_inventory schemas upgraded successfully!");
+      try {
+        if (typeof localStorage !== "undefined") {
+          localStorage.setItem("craftflow_schema_version", TARGET_SCHEMA_VER);
+        }
+      } catch (e) { }
+
+      console.log("✓ Neon payment_sheet, master_inventory, and designer_samples schemas upgraded successfully!");
       return { success: true };
     } catch (err) {
       console.warn("Neon schema migration warning:", err.message);
@@ -5676,6 +5968,12 @@ class DatabaseService {
       // 10. Sync Daily Final Styles to Neon
       await this.pushFinalStylesToNeonAsync().catch(() => null);
 
+      // 11. Sync Designer Samples to Neon
+      const designerSamples = this.getDesignerSamples();
+      for (const ds of designerSamples) {
+        await this.pushDesignerSampleToNeonAsync(ds).catch(() => null);
+      }
+
       const cfg = this.getConfig();
       cfg.lastSyncTime = new Date().toISOString();
       this.saveConfig(cfg);
@@ -5706,7 +6004,8 @@ class DatabaseService {
         distRes,
         distPeriodRes,
         trashRes,
-        finalStyleRes
+        finalStyleRes,
+        dsRes
       ] = await Promise.all([
         this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
         this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
@@ -5718,7 +6017,8 @@ class DatabaseService {
         this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
         this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null)
+        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null),
+        this.executeNeonQuery("SELECT * FROM designer_samples ORDER BY id DESC;").catch(() => null)
       ]);
 
       // Sync race condition protection: if user deleted or edited records locally while query was in-flight, abort write
@@ -5738,6 +6038,7 @@ class DatabaseService {
       const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
       const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
       const rawFinalRows = finalStyleRes?.rows || (Array.isArray(finalStyleRes) ? finalStyleRes : []);
+      const rawDsRows = dsRes?.rows || (Array.isArray(dsRes) ? dsRes : null);
 
       // 1. Contractors
       let cleanContRows = [];
@@ -5976,9 +6277,27 @@ class DatabaseService {
         this._setCached(DB_KEYS.FINAL_STYLES, mappedFinal);
       }
 
-      // Rebuild master aggregations
-      this.rebuildAllMastersFromLogs();
-      this.syncAllDistributionContractorsToLogsAndMaster();
+      // 12. Designer Samples / Pcs Stock Transfer
+      if (Array.isArray(rawDsRows)) {
+        const dsRows = rawDsRows.map(d => ({
+          ...d,
+          id: Number(d.id),
+          sr_no: parseInt(d.sr_no, 10) || Number(d.id) || 1,
+          entry_date: d.entry_date || '',
+          challan_no: (d.challan_no || '').trim(),
+          style_code: (d.style_code || '').trim(),
+          item_type: (d.item_type || 'Shirt').trim(),
+          qty: parseInt(d.qty, 10) || 1,
+          moved_to_stock: Boolean(d.moved_to_stock),
+          moved_date: d.moved_date || '',
+          remarks: d.remarks || ''
+        }));
+        this._setCached(DB_KEYS.DESIGNER_SAMPLES, dsRows);
+      }
+
+      // Rebuild master aggregations silently without falsely bumping local mutation counters
+      this.rebuildAllMastersFromLogs({ skipBump: true });
+      this.syncAllDistributionContractorsToLogsAndMaster({ skipBump: true });
 
       const cfg = this.getConfig();
       cfg.lastSyncTime = new Date().toISOString();

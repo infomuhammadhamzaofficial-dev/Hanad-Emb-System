@@ -2,7 +2,7 @@
 // CraftFlow - Service Worker for PWA (Offline-First & Resilient)
 // ====================================================================
 
-const CACHE_NAME = 'craftflow-cache-v52';
+const CACHE_NAME = 'craftflow-cache-v60';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -102,9 +102,9 @@ self.addEventListener('fetch', (event) => {
       return fetch(event.request).then((networkResponse) => {
         if (networkResponse && networkResponse.status === 200) {
           const path = url.pathname.toLowerCase();
-          if (path.endsWith('.html') || path.endsWith('.css') || path.endsWith('.js') || 
-              path.endsWith('.json') || path.endsWith('.svg') || path.endsWith('.png') || 
-              path === '/' || path.endsWith('/')) {
+          if (path.endsWith('.html') || path.endsWith('.css') || path.endsWith('.js') ||
+            path.endsWith('.json') || path.endsWith('.svg') || path.endsWith('.png') ||
+            path === '/' || path.endsWith('/')) {
             const resClone = networkResponse.clone();
             caches.open(CACHE_NAME).then((cache) => {
               const cleanRequest = new Request(url.origin + url.pathname, { method: 'GET' });

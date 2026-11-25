@@ -21,6 +21,8 @@ function initApp() {
   try { initMasterInventoryView(); } catch (e) { console.error("Master Inventory init error:", e); }
   try { initReceivingLogView(); } catch (e) { console.error("Receiving Log init error:", e); }
   try { initDispatchLogView(); } catch (e) { console.error("Dispatch Log init error:", e); }
+  try { initDesignerSamplesView(); } catch (e) { console.error("Designer Samples init error:", e); }
+  try { initDesignerSampleModal(); } catch (e) { console.error("Designer Modal init error:", e); }
   try { initFinalStyleView(); } catch (e) { console.error("Final Style init error:", e); }
   try { initContractorsView(); } catch (e) { console.error("Contractors init error:", e); }
   try { initPaymentSheetView(); } catch (e) { console.error("Payment Sheet init error:", e); }
@@ -44,24 +46,23 @@ function initApp() {
     const isExpired = !lastActivity || (Date.now() - lastActivity >= 5 * 60 * 1000);
 
     if (currentUser && sessionActive && !isExpired) {
-      if (typeof window.db.rebuildAllMastersFromLogs === "function") {
-        window.db.rebuildAllMastersFromLogs();
-      }
-      applyUserPermissions(currentUser);
-
-      // Restore active tab from before refresh
+      // Restore active tab from before refresh BEFORE applying permission auto-fallback
       const savedTab = sessionStorage.getItem("craftflow_current_tab") || localStorage.getItem("craftflow_current_tab");
       const canAccessSavedTab = savedTab && (typeof window.db.canUserAccessTab === "function") && window.db.canUserAccessTab(savedTab.replace(/-/g, '_'), currentUser);
       let targetInitialTab = "dashboard";
       if (canAccessSavedTab) {
         targetInitialTab = savedTab;
       } else if (!window.db.canUserAccessTab("dashboard", currentUser)) {
-        const tabs = ["master-inventory", "receiving-log", "dispatch-log", "final-style", "work-distribution", "payment-sheet", "contractors"];
+        const tabs = ["master-inventory", "receiving-log", "dispatch-log", "designer-samples", "final-style", "work-distribution", "payment-sheet", "contractors"];
         const allowed = tabs.find(t => window.db.canUserAccessTab(t.replace(/-/g, '_'), currentUser));
         targetInitialTab = allowed || "master-inventory";
       }
 
+      const startupCfg = window.db.getConfig();
+      window._initialNeonSyncDone = !(startupCfg && (startupCfg.neonConnectionString || startupCfg.neonEndpointUrl));
+
       switchTab(targetInitialTab);
+      applyUserPermissions(currentUser);
       renderAll();
       checkNeonStatus();
       startLiveNeonConnection();
@@ -479,6 +480,7 @@ const dirtyViews = new Set([
   "master-inventory",
   "receiving-log",
   "dispatch-log",
+  "designer-samples",
   "final-style",
   "contractors",
   "work-distribution",
@@ -490,7 +492,7 @@ function markViewsDirty(tabId = null) {
   if (tabId) {
     dirtyViews.add(tabId);
   } else {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => dirtyViews.add(t));
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "designer-samples", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => dirtyViews.add(t));
   }
 }
 
@@ -508,6 +510,7 @@ function renderTargetView(tabId) {
     else if (tabId === "master-inventory") renderMasterInventory();
     else if (tabId === "receiving-log") renderReceivingLog();
     else if (tabId === "dispatch-log") renderDispatchLog();
+    else if (tabId === "designer-samples") renderDesignerSamples();
     else if (tabId === "final-style") {
       const curDate = window.db.getReportDate();
       if (typeof window.db.loadFinalStylesForDate === "function") {
@@ -567,6 +570,7 @@ function switchTab(tabId) {
     "master-inventory": "📦 Master Inventory",
     "receiving-log": "📥 Receiving Log",
     "dispatch-log": "📤 Dispatch Log",
+    "designer-samples": "🎨 Designer Pcs",
     "final-style": "📋 Daily Sheet",
     "work-distribution": "📑 Work Distribution",
     "payment-sheet": "💰 Payment Sheet",
@@ -631,7 +635,7 @@ function renderAll(forceAll = false) {
   const currentTab = getActiveTabId();
 
   if (forceAll) {
-    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => {
+    ["dashboard", "master-inventory", "receiving-log", "dispatch-log", "designer-samples", "final-style", "contractors", "work-distribution", "payment-sheet", "trash"].forEach(t => {
       renderTargetView(t);
     });
   } else {
@@ -1511,16 +1515,17 @@ function renderMasterInventory() {
 
   if (list.length === 0) {
     const isFiltered = !!(searchQuery || selectedContractor || selectedCategory || selectedBalance);
+    const isSyncLoading = !isFiltered && window._initialNeonSyncDone === false;
     tbody.innerHTML = `
       <tr>
         <td colspan="15" style="text-align: center; padding: 3rem 1.5rem; color: var(--text-muted);">
           <div style="font-size: 1.05rem; font-weight: 700; color: var(--text-main); margin-bottom: 0.35rem;">
-            ${isFiltered ? "No matching styles or categories found" : "No styles in Master Inventory yet"}
+            ${isSyncLoading ? "⏳ Loading live data from Neon Cloud..." : (isFiltered ? "No matching styles or categories found" : "No styles in Master Inventory yet")}
           </div>
           <p style="font-size: 0.85rem; margin-bottom: 1rem;">
-            ${isFiltered ? "Try clearing search or filter selections." : "Ready for fresh entries! Click '+ New Style Entry' to record your styles, cut pieces & challans."}
+            ${isSyncLoading ? "Fetching styles, receiving challans & dispatch logs directly from cloud database." : (isFiltered ? "Try clearing search or filter selections." : "Ready for fresh entries! Click '+ New Style Entry' to record your styles, cut pieces & challans.")}
           </p>
-          ${!isFiltered && canCreate ? `<button class="btn btn-primary btn-sm" onclick="openMasterEntryModal(null, 'receiving')">📥 + Record Receiving</button>` : ""}
+          ${!isSyncLoading && !isFiltered && canCreate ? `<button class="btn btn-primary btn-sm" onclick="openMasterEntryModal(null, 'receiving')">📥 + Record Receiving</button>` : ""}
         </td>
       </tr>
     `;
@@ -2341,6 +2346,464 @@ async function deleteDispatchLogEntry(id) {
       showToast(`Error deleting dispatch challan: ${err.message}`, "error");
     }
   }
+}
+
+// -------------------------------------------------------------
+// TAB 3B: DESIGNER PCS / SAMPLES & STOCK TRANSFER VIEW
+// -------------------------------------------------------------
+function initDesignerSamplesView() {
+  const searchInput = document.getElementById("ds-search-input");
+  const itemFilter = document.getElementById("filter-ds-item");
+  const statusFilter = document.getElementById("filter-ds-status");
+  const datePreset = document.getElementById("filter-ds-date-preset");
+  const dateFrom = document.getElementById("filter-ds-date-from");
+  const dateTo = document.getElementById("filter-ds-date-to");
+  const dateClear = document.getElementById("btn-clear-ds-date");
+  const dateSep = document.getElementById("filter-ds-date-sep");
+
+  const debouncedRenderDs = debounce(() => renderDesignerSamples(), 120);
+
+  if (searchInput) {
+    searchInput.addEventListener("input", () => debouncedRenderDs());
+  }
+  [itemFilter, statusFilter].forEach(el => {
+    if (el) el.addEventListener("change", () => renderDesignerSamples());
+  });
+
+  if (datePreset) {
+    datePreset.addEventListener("change", (e) => {
+      const val = e.target.value;
+      const wrap = document.getElementById("ds-date-filter-wrap");
+      if (val === "all") {
+        if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+        if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+        if (dateSep) dateSep.style.display = "none";
+        if (dateClear) dateClear.style.display = "none";
+        if (wrap) wrap.classList.remove("has-active-range");
+      } else if (val === "custom") {
+        if (dateFrom) dateFrom.style.display = "inline-block";
+        if (dateTo) dateTo.style.display = "inline-block";
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
+      } else {
+        const range = getLogDatePresetRange(val);
+        if (dateFrom) { dateFrom.value = range.from; dateFrom.style.display = "inline-block"; }
+        if (dateTo) { dateTo.value = range.to; dateTo.style.display = "inline-block"; }
+        if (dateSep) dateSep.style.display = "inline";
+        if (dateClear) dateClear.style.display = "inline-flex";
+        if (wrap) wrap.classList.add("has-active-range");
+      }
+      renderDesignerSamples();
+    });
+  }
+
+  [dateFrom, dateTo].forEach(el => {
+    if (el) {
+      el.addEventListener("change", () => {
+        if (datePreset && datePreset.value !== "custom" && datePreset.value !== "all") {
+          datePreset.value = "custom";
+        }
+        const hasDates = Boolean(dateFrom?.value || dateTo?.value);
+        if (dateClear) dateClear.style.display = hasDates ? "inline-flex" : "none";
+        const wrap = document.getElementById("ds-date-filter-wrap");
+        if (wrap) {
+          if (hasDates || (datePreset && datePreset.value !== "all")) wrap.classList.add("has-active-range");
+          else wrap.classList.remove("has-active-range");
+        }
+        renderDesignerSamples();
+      });
+    }
+  });
+
+  if (dateClear) {
+    dateClear.addEventListener("click", () => {
+      if (datePreset) datePreset.value = "all";
+      if (dateFrom) { dateFrom.value = ""; dateFrom.style.display = "none"; }
+      if (dateTo) { dateTo.value = ""; dateTo.style.display = "none"; }
+      if (dateSep) dateSep.style.display = "none";
+      dateClear.style.display = "none";
+      document.getElementById("ds-date-filter-wrap")?.classList.remove("has-active-range");
+      renderDesignerSamples();
+    });
+  }
+
+  document.getElementById("btn-open-ds-modal")?.addEventListener("click", () => {
+    openDesignerSampleModal(null);
+  });
+
+  document.getElementById("btn-export-ds-csv")?.addEventListener("click", exportDesignerSamplesToCSV);
+}
+
+function getFilteredDesignerSamples() {
+  const searchQuery = (document.getElementById("ds-search-input")?.value || "").toLowerCase().trim();
+  const selectedItem = document.getElementById("filter-ds-item")?.value || "";
+  const selectedStatus = document.getElementById("filter-ds-status")?.value || "";
+  const dateFromVal = document.getElementById("filter-ds-date-from")?.value || "";
+  const dateToVal = document.getElementById("filter-ds-date-to")?.value || "";
+  const isFilterActive = Boolean(searchQuery || selectedItem || selectedStatus || dateFromVal || dateToVal);
+
+  let list = window.db.getDesignerSamples();
+  list = list.filter(item => {
+    const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+    const itemMatch = (item.item_type || "").toLowerCase().includes(searchQuery);
+    const challanMatch = (item.challan_no || "").toLowerCase().includes(searchQuery);
+    const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+    const dateTextMatch = (item.entry_date || "").toLowerCase().includes(searchQuery);
+    const queryPassed = !searchQuery || codeMatch || itemMatch || challanMatch || remarksMatch || dateTextMatch;
+
+    const itemPassed = !selectedItem || (item.item_type || "").toLowerCase() === selectedItem.toLowerCase();
+    const statusPassed = !selectedStatus || (selectedStatus === "moved" ? Boolean(item.moved_to_stock) : !Boolean(item.moved_to_stock));
+    const datePassed = matchesLogDateFilter(item.entry_date, dateFromVal, dateToVal);
+
+    return queryPassed && itemPassed && statusPassed && datePassed;
+  });
+
+  list.sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+  return { list, isFilterActive };
+}
+
+function renderDesignerSamples() {
+  const tbody = document.getElementById("tbody-designer-samples");
+  const tfoot = document.getElementById("tfoot-designer-samples");
+  if (!tbody) return;
+
+  const canEdit = window.db.canUserPerformAction("can_edit");
+  const canDelete = window.db.canUserPerformAction("can_delete");
+
+  const { list, isFilterActive } = getFilteredDesignerSamples();
+  const totalFilteredCount = list.length;
+  const displayLimit = 100;
+  const displayList = list.slice(0, displayLimit);
+
+  const badgeEl = document.getElementById("ds-records-badge");
+  if (badgeEl) {
+    if (isFilterActive) {
+      badgeEl.textContent = `Filtered: ${displayList.length < totalFilteredCount ? `showing ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} records`;
+    } else if (totalFilteredCount > displayLimit) {
+      badgeEl.textContent = `Showing latest ${displayLimit} of ${totalFilteredCount} records`;
+    } else {
+      badgeEl.textContent = `Showing all ${totalFilteredCount} records`;
+    }
+  }
+
+  // Update KPI Cards across all records
+  const allEntries = window.db.getDesignerSamples();
+  const totalQty = allEntries.reduce((acc, r) => acc + (parseInt(r.qty, 10) || 0), 0);
+  const movedQty = allEntries.filter(r => Boolean(r.moved_to_stock)).reduce((acc, r) => acc + (parseInt(r.qty, 10) || 0), 0);
+  const pendingQty = totalQty - movedQty;
+
+  const setTxt = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  setTxt("ds-kpi-entries", allEntries.length.toLocaleString());
+  setTxt("ds-kpi-pieces", totalQty.toLocaleString());
+  setTxt("ds-kpi-moved", movedQty.toLocaleString());
+  setTxt("ds-kpi-pending", pendingQty.toLocaleString());
+  setTxt("ds-kpi-count-badge", `${allEntries.length} Entries`);
+
+  if (list.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" style="text-align: center; padding: 2.5rem; color: var(--text-muted);">
+          No designer sample entries found${isFilterActive ? " matching your filter criteria" : ""}. Click <strong>"🎨 + New Designer Entry"</strong> to record designer pcs &amp; track stock transfers.
+        </td>
+      </tr>
+    `;
+    if (tfoot) tfoot.innerHTML = "";
+    return;
+  }
+
+  const sumQty = list.reduce((acc, item) => acc + (parseInt(item.qty, 10) || 0), 0);
+  const sumMoved = list.filter(i => i.moved_to_stock).reduce((acc, i) => acc + (parseInt(i.qty, 10) || 0), 0);
+  const sumPending = sumQty - sumMoved;
+
+  tbody.innerHTML = displayList.map((item) => {
+    const moved = Boolean(item.moved_to_stock);
+    const statusBadgeHtml = moved
+      ? `<button type="button" class="badge-tag inline" ${canEdit ? `onclick="toggleDesignerSampleStockAction(${item.id})"` : 'disabled'} title="${canEdit ? 'Click to mark as Pending' : 'Moved to Stock'}" style="background: rgba(16, 185, 129, 0.16); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.4); cursor: ${canEdit ? 'pointer' : 'default'}; font-weight: 700; padding: 4px 10px;">✅ Moved to Stock${item.moved_date ? ` (${escapeHtml(item.moved_date)})` : ''}</button>`
+      : `<button type="button" class="badge-tag alter" ${canEdit ? `onclick="toggleDesignerSampleStockAction(${item.id})"` : 'disabled'} title="${canEdit ? 'Click to mark as Moved to Stock' : 'Pending move to Stock'}" style="background: rgba(245, 158, 11, 0.16); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.45); cursor: ${canEdit ? 'pointer' : 'default'}; font-weight: 700; padding: 4px 10px;">⏳ Pending Move</button>`;
+
+    const itemCat = (item.item_type || "Shirt").trim();
+    const itemColor = itemCat.toLowerCase() === "dupatta"
+      ? "background: rgba(168, 85, 247, 0.14); color: #c084fc;"
+      : (itemCat.toLowerCase() === "trouser"
+        ? "background: rgba(14, 165, 233, 0.14); color: #38bdf8;"
+        : "background: rgba(16, 185, 129, 0.14); color: #34d399;");
+
+    return `
+      <tr>
+        <td style="text-align: center; font-weight: 700; color: var(--text-muted); font-family: var(--font-mono);">${item.sr_no || item.id}</td>
+        <td style="font-size: 0.8rem; color: var(--text-muted); white-space: nowrap;">${escapeHtml(item.entry_date || '-')}</td>
+        <td class="cell-challan-rec" style="font-family: var(--font-mono); font-weight: 600;">${escapeHtml(item.challan_no || '-')}</td>
+        <td><span class="style-code-badge">${escapeHtml(item.style_code)}</span></td>
+        <td><span class="badge-tag inline" style="${itemColor}">${escapeHtml(itemCat)}</span></td>
+        <td class="cell-rec-qty" style="text-align: right; font-family: var(--font-mono); font-weight: 800;">${(parseInt(item.qty, 10) || 1).toLocaleString()}</td>
+        <td style="text-align: center;">${statusBadgeHtml}</td>
+        <td style="font-size: 0.8rem; color: var(--text-muted);">${escapeHtml(item.remarks || 'Designer Sample')}</td>
+        <td style="text-align: center; white-space: nowrap;">
+          ${canEdit ? `<button class="btn btn-secondary btn-sm" style="color: var(--primary); padding: 2px 8px; margin-right: 4px;" onclick="openDesignerSampleModal(${item.id})" title="Edit designer entry">✏️ Edit</button>` : ''}
+          ${canDelete ? `<button class="btn btn-secondary btn-sm" style="color: var(--accent-rose); padding: 2px 7px;" onclick="deleteDesignerSampleAction(${item.id})" title="Delete designer entry">✕</button>` : ''}
+          ${!canEdit && !canDelete ? `<span style="color: var(--text-faint); font-size: 0.75rem;">View Only</span>` : ''}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  if (tfoot) {
+    tfoot.innerHTML = `
+      <tr>
+        <td colspan="5" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.8rem; padding: 0.85rem 1rem;">
+          Filtered Totals (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Entries):
+        </td>
+        <td class="cell-rec-qty" style="text-align: right; font-family: var(--font-mono); font-weight: 800;">${sumQty.toLocaleString()}</td>
+        <td style="text-align: center; font-size: 0.75rem;">
+          <span style="color: #10b981;">Moved: ${sumMoved}</span> • <span style="color: #f59e0b;">Pending: ${sumPending}</span>
+        </td>
+        <td colspan="2"></td>
+      </tr>
+    `;
+  }
+}
+
+function showDesignerModalAlert(msg, type = "error") {
+  const box = document.getElementById("ds-modal-alert");
+  if (!box) return;
+  box.style.display = "block";
+  if (type === "error") {
+    box.style.background = "rgba(244, 63, 94, 0.15)";
+    box.style.border = "1px solid #f43f5e";
+    box.style.color = "#fda4af";
+  } else {
+    box.style.background = "rgba(16, 185, 129, 0.15)";
+    box.style.border = "1px solid #10b981";
+    box.style.color = "#34d399";
+  }
+  box.textContent = msg;
+}
+
+function openDesignerSampleModal(id = null) {
+  const permAction = id ? "can_edit" : "can_create";
+  if (!window.db.canUserPerformAction(permAction)) {
+    showToast(`Permission Denied: You do not have permission to ${id ? "edit" : "create"} designer entries.`, "error");
+    return;
+  }
+
+  const alertBox = document.getElementById("ds-modal-alert");
+  if (alertBox) alertBox.style.display = "none";
+  const badge = document.getElementById("ds-modal-saved-badge");
+  if (badge) badge.style.display = "none";
+
+  const idInput = document.getElementById("ds-entry-id");
+  const dateInput = document.getElementById("ds-entry-date");
+  const challanInput = document.getElementById("ds-entry-challan");
+  const styleInput = document.getElementById("ds-entry-style");
+  const itemSelect = document.getElementById("ds-entry-item");
+  const qtyInput = document.getElementById("ds-entry-qty");
+  const movedSelect = document.getElementById("ds-entry-moved");
+  const remarksInput = document.getElementById("ds-entry-remarks");
+  const titleEl = document.getElementById("modal-ds-title");
+  const saveNextBtn = document.getElementById("btn-ds-save-next");
+
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  if (id) {
+    const item = window.db.getDesignerSamples().find(d => Number(d.id) === Number(id));
+    if (!item) return;
+    if (titleEl) titleEl.textContent = `✏️ Edit Designer Pcs Entry (#${item.sr_no || item.id})`;
+    if (idInput) idInput.value = item.id;
+    if (dateInput) dateInput.value = item.entry_date || todayStr;
+    if (challanInput) challanInput.value = item.challan_no || "";
+    if (styleInput) styleInput.value = (item.style_code || "").toUpperCase();
+    if (itemSelect) itemSelect.value = item.item_type || "Shirt";
+    if (qtyInput) qtyInput.value = parseInt(item.qty, 10) || 1;
+    if (movedSelect) movedSelect.value = item.moved_to_stock ? "true" : "false";
+    if (remarksInput) remarksInput.value = item.remarks || "Designer Sample";
+    if (saveNextBtn) {
+      saveNextBtn.style.display = "inline-flex";
+      saveNextBtn.textContent = "✓ Update Entry";
+    }
+  } else {
+    if (titleEl) titleEl.textContent = "🎨 New Designer Pcs & Stock Transfer Entry";
+    if (idInput) idInput.value = "";
+    if (dateInput) dateInput.value = todayStr;
+    if (challanInput) challanInput.value = "";
+    if (styleInput) styleInput.value = "";
+    if (itemSelect) itemSelect.value = "Shirt";
+    if (qtyInput) qtyInput.value = 1;
+    if (movedSelect) movedSelect.value = "true";
+    if (remarksInput) remarksInput.value = "Designer Sample";
+    if (saveNextBtn) {
+      saveNextBtn.style.display = "inline-flex";
+      saveNextBtn.textContent = "✓ Save & Add Next";
+    }
+  }
+
+  openModal("modal-designer-sample");
+  setTimeout(() => {
+    if (styleInput) {
+      styleInput.focus();
+      styleInput.select();
+    }
+  }, 80);
+}
+window.openDesignerSampleModal = openDesignerSampleModal;
+
+async function handleSaveDesignerSample(keepOpenForNext = false) {
+  const idVal = (document.getElementById("ds-entry-id")?.value || "").trim();
+  const entryDate = (document.getElementById("ds-entry-date")?.value || "").trim();
+  const challanNo = (document.getElementById("ds-entry-challan")?.value || "").trim().toUpperCase();
+  const styleCode = (document.getElementById("ds-entry-style")?.value || "").trim().toUpperCase();
+  const itemType = (document.getElementById("ds-entry-item")?.value || "Shirt").trim();
+  const qty = parseInt(document.getElementById("ds-entry-qty")?.value || "1", 10) || 1;
+  const movedToStock = document.getElementById("ds-entry-moved")?.value === "true";
+  const remarks = (document.getElementById("ds-entry-remarks")?.value || "").trim() || "Designer Sample";
+
+  if (!entryDate) {
+    showDesignerModalAlert("Please select a valid Date.");
+    return;
+  }
+  if (!styleCode) {
+    showDesignerModalAlert("Please enter Style Number (e.g. JLS-26-1008).");
+    document.getElementById("ds-entry-style")?.focus();
+    return;
+  }
+
+  const closeBtn = document.getElementById("btn-ds-save-close");
+  const nextBtn = document.getElementById("btn-ds-save-next");
+  if (closeBtn) closeBtn.disabled = true;
+  if (nextBtn) nextBtn.disabled = true;
+
+  try {
+    window.lastUserActionTime = Date.now();
+    const payload = {
+      entry_date: entryDate,
+      challan_no: challanNo,
+      style_code: styleCode,
+      item_type: itemType,
+      qty: qty,
+      moved_to_stock: movedToStock,
+      remarks: remarks
+    };
+
+    if (idVal) {
+      await window.db.updateDesignerSample(Number(idVal), payload);
+      showToast(`✓ Updated Designer Entry (${styleCode} - ${itemType})`, "success");
+    } else {
+      await window.db.addDesignerSample(payload);
+      showToast(`✓ Saved Designer Entry (${styleCode} - ${itemType})`, "success");
+    }
+
+    renderAll();
+
+    if (keepOpenForNext && !idVal) {
+      const styleInp = document.getElementById("ds-entry-style");
+      const qtyInp = document.getElementById("ds-entry-qty");
+      if (styleInp) {
+        styleInp.value = "";
+        styleInp.focus();
+      }
+      if (qtyInp) qtyInp.value = 1;
+      const alertBox = document.getElementById("ds-modal-alert");
+      if (alertBox) alertBox.style.display = "none";
+      const badge = document.getElementById("ds-modal-saved-badge");
+      if (badge) {
+        badge.style.display = "inline-flex";
+        badge.className = "badge-tag inline";
+        badge.textContent = `✓ Saved: ${styleCode} (${itemType})`;
+      }
+    } else {
+      closeModal("modal-designer-sample");
+    }
+  } catch (err) {
+    showDesignerModalAlert(`Error saving entry: ${err.message}`);
+  } finally {
+    if (closeBtn) closeBtn.disabled = false;
+    if (nextBtn) nextBtn.disabled = false;
+  }
+}
+
+function initDesignerSampleModal() {
+  const form = document.getElementById("form-designer-sample");
+
+  if (form) {
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const idVal = (document.getElementById("ds-entry-id")?.value || "").trim();
+      await handleSaveDesignerSample(!idVal);
+    });
+  }
+}
+
+async function toggleDesignerSampleStockAction(id) {
+  if (!window.db.canUserPerformAction("can_edit")) {
+    showToast("Permission Denied: You do not have permission to update stock status.", "error");
+    return;
+  }
+  try {
+    window.lastUserActionTime = Date.now();
+    const updated = await window.db.toggleDesignerSampleStockStatus(id);
+    renderDesignerSamples();
+    showToast(
+      updated.moved_to_stock
+        ? `✅ Marked "${updated.style_code} (${updated.item_type})" as Moved to Stock`
+        : `⏳ Marked "${updated.style_code} (${updated.item_type})" as Pending Move`,
+      updated.moved_to_stock ? "success" : "info"
+    );
+  } catch (err) {
+    showToast(`Error updating stock status: ${err.message}`, "error");
+  }
+}
+window.toggleDesignerSampleStockAction = toggleDesignerSampleStockAction;
+
+async function deleteDesignerSampleAction(id) {
+  if (!window.db.canUserPerformAction("can_delete")) {
+    showToast("Permission Denied: You do not have permission to delete designer entries.", "error");
+    return;
+  }
+  const item = window.db.getDesignerSamples().find(d => Number(d.id) === Number(id));
+  const desc = item ? `Style ${item.style_code} [${item.item_type}]` : "this designer entry";
+  if (confirm(`Move ${desc} to Trash?\nYou can restore it anytime from the Trash tab.`)) {
+    try {
+      window.lastUserActionTime = Date.now();
+      const trashed = await window.db.deleteDesignerSample(id);
+      renderAll();
+      showToast("Designer entry moved to Trash.", "info", {
+        text: "Undo",
+        onClick: async () => {
+          if (trashed && trashed.id) {
+            await window.db.restoreFromTrash(trashed.id);
+            renderAll();
+            showToast("Designer entry restored!", "success");
+          }
+        }
+      });
+    } catch (err) {
+      showToast(`Error deleting designer entry: ${err.message}`, "error");
+    }
+  }
+}
+window.deleteDesignerSampleAction = deleteDesignerSampleAction;
+
+function exportDesignerSamplesToCSV() {
+  const { list, isFilterActive } = getFilteredDesignerSamples();
+  if (list.length === 0) {
+    showToast("No designer sample entries to export", "info");
+    return;
+  }
+  const headers = ["SR", "DATE", "CHALLAN / S.N#", "STYLE NUMBER", "ITEM", "QTY", "STOCK STATUS", "MOVED DATE", "REMARKS"];
+  const rows = list.map(item => [
+    item.sr_no || item.id,
+    `"${item.entry_date || ''}"`,
+    `"${item.challan_no || ''}"`,
+    `"${item.style_code || ''}"`,
+    `"${item.item_type || 'Shirt'}"`,
+    parseInt(item.qty, 10) || 1,
+    item.moved_to_stock ? `"Moved to Stock"` : `"Pending"`,
+    `"${item.moved_date || ''}"`,
+    `"${(item.remarks || '').replace(/"/g, '""')}"`
+  ]);
+  const fileName = isFilterActive ? "Designer_Samples_Stock_Filtered.csv" : "Designer_Samples_Stock.csv";
+  downloadCSV(fileName, [headers, ...rows]);
+  showToast(`Exported ${rows.length} designer entries to CSV`, "success");
 }
 
 // -------------------------------------------------------------
@@ -3875,8 +4338,10 @@ function getDataSignature() {
     const dp = (typeof window.db.getDistributionPeriods === "function") ? window.db.getDistributionPeriods().length : 0;
     const t = (typeof window.db.getTrashItems === "function") ? window.db.getTrashItems().length : 0;
     const fs = (typeof window.db.getFinalStyles === "function") ? window.db.getFinalStyles().length : 0;
+    const dsList = (typeof window.db.getDesignerSamples === "function") ? window.db.getDesignerSamples() : [];
+    const dsMoved = dsList.filter(x => x.moved_to_stock).length;
 
-    return `${r}:${d}:${m}:${p}:${w}:${c}:${rap}:${dp}:${t}:${fs}`;
+    return `${r}:${d}:${m}:${p}:${w}:${c}:${rap}:${dp}:${t}:${fs}:${dsList.length}:${dsMoved}`;
   } catch (e) {
     return Date.now().toString();
   }
@@ -3892,6 +4357,7 @@ function startLiveNeonConnection() {
 
   // Only start active polling if connection string or endpoint is configured
   if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) {
+    window._initialNeonSyncDone = true;
     checkNeonStatus();
     return;
   }
@@ -3899,11 +4365,17 @@ function startLiveNeonConnection() {
   // Immediately reflect ready/connected status in the top bar
   checkNeonStatus();
 
-  // Ensure Neon schema is migrated so period column is available
-  window.db.migrateNeonPaymentSchema().catch(() => null);
-
-  // 1. Initial immediate background sync on startup / refresh
-  syncLiveFromNeon(true);
+  // 1. Initial immediate background sync on startup / refresh (schema migration only runs once per version!)
+  const runInitialSync = async () => {
+    try {
+      const schemaVer = localStorage.getItem("craftflow_schema_version");
+      if (schemaVer !== "55") {
+        await window.db.migrateNeonPaymentSchema().catch(() => null);
+      }
+    } catch (e) { }
+    await syncLiveFromNeon(true, true);
+  };
+  runInitialSync();
 
   // 2. Background polling every 30 seconds (optimized for zero UI jitter on PC)
   if (cfg.autoSync !== false) {
@@ -3911,7 +4383,7 @@ function startLiveNeonConnection() {
       if (document.hidden) return; // Zero background CPU load when tab is minimized
       const currentCfg = window.db.getConfig();
       if (currentCfg.autoSync !== false && (currentCfg.neonConnectionString || currentCfg.neonEndpointUrl)) {
-        syncLiveFromNeon(true);
+        syncLiveFromNeon(true, false);
       }
     }, 30000);
   }
@@ -3924,11 +4396,11 @@ window.addEventListener("focus", () => {
   lastWindowFocusSync = Date.now();
   const currentCfg = window.db.getConfig();
   if (currentCfg.autoSync !== false && (currentCfg.neonConnectionString || currentCfg.neonEndpointUrl)) {
-    syncLiveFromNeon(true);
+    syncLiveFromNeon(true, false);
   }
 });
 
-async function syncLiveFromNeon(isBackground = true) {
+async function syncLiveFromNeon(isBackground = true, forceInitial = false) {
   if (isLiveSyncing) return;
 
   // Don't disturb user if a modal form or any input/select/textarea is actively focused
@@ -3938,10 +4410,10 @@ async function syncLiveFromNeon(isBackground = true) {
     document.activeElement.tagName === "SELECT" ||
     document.activeElement.tagName === "TEXTAREA"
   );
-  if ((activeModal || isInputActive) && isBackground) return;
+  if (!forceInitial && (activeModal || isInputActive) && isBackground) return;
 
   // Pause background sync for 5 seconds if user just performed an action locally
-  if (isBackground && window.lastUserActionTime && (Date.now() - window.lastUserActionTime < 5000)) {
+  if (!forceInitial && isBackground && window.lastUserActionTime && (Date.now() - window.lastUserActionTime < 5000)) {
     return;
   }
 
@@ -3950,13 +4422,14 @@ async function syncLiveFromNeon(isBackground = true) {
     const preSig = getDataSignature();
     const res = await window.db.fetchFromNeon();
     const postSig = getDataSignature();
+    window._initialNeonSyncDone = true;
 
     const dot = document.getElementById("neon-status-dot");
     const label = document.getElementById("neon-status-label");
 
     if (res && res.success) {
-      // Re-render if cloud data has changed or signature differs
-      const dataChanged = res.hasChanged || (preSig !== postSig);
+      // Re-render if cloud data has changed, signature differs, or this was the initial load
+      const dataChanged = forceInitial || res.hasChanged || (preSig !== postSig);
       if (!isBackground || dataChanged) {
         renderAll();
       }
@@ -3989,6 +4462,7 @@ async function syncLiveFromNeon(isBackground = true) {
   } catch (err) {
     console.warn("Live sync polling error:", err);
   } finally {
+    window._initialNeonSyncDone = true;
     isLiveSyncing = false;
   }
 }
@@ -4193,7 +4667,8 @@ function initGlobalInputFormatters() {
     "edit-log-style-code",
     "dist-entry-style-code",
     "payment-style-code",
-    "quick-style-input"
+    "quick-style-input",
+    "ds-entry-style"
   ];
   styleCodeIds.forEach(id => attachUppercaseInputHandler(id));
 
@@ -6115,7 +6590,7 @@ function initAuthSystem() {
   if (currentUser && sessionActive && !isExpired) {
     if (overlay) overlay.style.display = "none";
     updateHeaderUserProfile(currentUser);
-    applyUserPermissions(currentUser);
+    applyUserPermissions(currentUser, true);
     initInactivityTimer(); // Start 5-minute inactivity tracker
   } else {
     // Show login overlay by default
@@ -6223,7 +6698,7 @@ function initAuthSystem() {
         } else if (canViewDash && typeof switchTab === "function") {
           switchTab("dashboard");
         } else if (typeof switchTab === "function") {
-          const tabs = ["master-inventory", "receiving-log", "dispatch-log", "final-style", "work-distribution", "payment-sheet", "contractors"];
+          const tabs = ["master-inventory", "receiving-log", "dispatch-log", "designer-samples", "final-style", "work-distribution", "payment-sheet", "contractors"];
           const firstTab = tabs.find(t => window.db.canUserAccessTab(t.replace(/-/g, '_'), result.user));
           if (firstTab) switchTab(firstTab);
         }
@@ -6332,7 +6807,7 @@ function updateHeaderUserProfile(user) {
   }
 }
 
-function applyUserPermissions(user) {
+function applyUserPermissions(user, skipAutoSwitch = false) {
   if (!user) return;
   updateHeaderUserProfile(user);
 
@@ -6375,8 +6850,8 @@ function applyUserPermissions(user) {
     }
   });
 
-  // If active tab is forbidden for this user, jump to first allowed tab
-  if (!currentActiveAllowed && firstVisibleTab) {
+  // If active tab is forbidden for this user, jump to first allowed tab (unless initial startup restores savedTab)
+  if (!skipAutoSwitch && !currentActiveAllowed && firstVisibleTab) {
     switchTab(firstVisibleTab);
   }
 
@@ -6391,6 +6866,7 @@ function applyUserPermissions(user) {
     "btn-quick-dispatch",
     "btn-open-rec-modal",
     "btn-open-dis-modal",
+    "btn-open-ds-modal",
     "btn-open-new-contractor",
     "btn-add-final-style",
     "btn-auto-populate-active",
@@ -6502,6 +6978,7 @@ function renderUsersTable() {
     if (tabs.master_inventory) allowedTabNames.push("Master");
     if (tabs.receiving_log) allowedTabNames.push("Receiving");
     if (tabs.dispatch_log) allowedTabNames.push("Dispatch");
+    if (tabs.designer_samples) allowedTabNames.push("Designer");
     if (tabs.final_style) allowedTabNames.push("Daily Sheet");
     if (tabs.contractors) allowedTabNames.push("Contractors");
     if (tabs.work_distribution || (u.role === "admin")) allowedTabNames.push("Distribution");
@@ -6627,6 +7104,7 @@ function openUserFormModal(userId = null) {
     checkEl("perm-tab-master", tabs.master_inventory);
     checkEl("perm-tab-rec", tabs.receiving_log);
     checkEl("perm-tab-dis", tabs.dispatch_log);
+    checkEl("perm-tab-designer", tabs.designer_samples !== undefined ? tabs.designer_samples : Boolean(tabs.receiving_log || tabs.dispatch_log));
     checkEl("perm-tab-final", tabs.final_style);
     checkEl("perm-tab-cont", tabs.contractors);
     checkEl("perm-tab-dist", tabs.work_distribution !== undefined ? tabs.work_distribution : true);
@@ -6686,6 +7164,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-master", true);
     checkEl("perm-tab-rec", true);
     checkEl("perm-tab-dis", true);
+    checkEl("perm-tab-designer", true);
     checkEl("perm-tab-final", true);
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", true);
@@ -6700,6 +7179,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-master", true);
     checkEl("perm-tab-rec", true);
     checkEl("perm-tab-dis", true);
+    checkEl("perm-tab-designer", true);
     checkEl("perm-tab-final", false);
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", false);
@@ -6714,6 +7194,7 @@ function applyRolePreset(role) {
     checkEl("perm-tab-master", true);
     checkEl("perm-tab-rec", true);
     checkEl("perm-tab-dis", true);
+    checkEl("perm-tab-designer", true);
     checkEl("perm-tab-final", true);
     checkEl("perm-tab-dist", true);
     checkEl("perm-tab-cont", true);
@@ -6727,7 +7208,7 @@ function applyRolePreset(role) {
 }
 
 function setAllTabCheckboxes(val) {
-  const ids = ["perm-tab-dashboard", "perm-tab-master", "perm-tab-rec", "perm-tab-dis", "perm-tab-final", "perm-tab-dist", "perm-tab-cont", "perm-tab-payment", "perm-tab-neon"];
+  const ids = ["perm-tab-dashboard", "perm-tab-master", "perm-tab-rec", "perm-tab-dis", "perm-tab-designer", "perm-tab-final", "perm-tab-dist", "perm-tab-cont", "perm-tab-payment", "perm-tab-neon"];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.checked = val;
@@ -6787,6 +7268,7 @@ async function saveUserAccountFromForm() {
       master_inventory: isChecked("perm-tab-master"),
       receiving_log: isChecked("perm-tab-rec"),
       dispatch_log: isChecked("perm-tab-dis"),
+      designer_samples: isChecked("perm-tab-designer"),
       final_style: isChecked("perm-tab-final"),
       work_distribution: isChecked("perm-tab-dist"),
       contractors: isChecked("perm-tab-cont"),
@@ -8201,15 +8683,15 @@ function renderPaymentSheet() {
   // Calculate entries specifically for the active period (or all if "all" is selected)
   const targetPeriodItems = (periodFilter && periodFilter !== "all")
     ? list.filter(item => {
-        const itemPeriod = (item.period || "").trim().toLowerCase();
-        const activePeriod = periodFilter.trim().toLowerCase();
-        if (itemPeriod === activePeriod) return true;
-        // Match if start dates match (e.g. "11-nov-2026" matches "11-nov-2026 to 25-nov-2026")
-        const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-        const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-        if (itemStart && activeStart && itemStart === activeStart) return true;
-        return false;
-      })
+      const itemPeriod = (item.period || "").trim().toLowerCase();
+      const activePeriod = periodFilter.trim().toLowerCase();
+      if (itemPeriod === activePeriod) return true;
+      // Match if start dates match (e.g. "11-nov-2026" matches "11-nov-2026 to 25-nov-2026")
+      const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+      const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+      if (itemStart && activeStart && itemStart === activeStart) return true;
+      return false;
+    })
     : list;
 
   // When searching, search across ALL sheets and periods; otherwise view active period sheet
@@ -8323,15 +8805,12 @@ function renderPaymentSheet() {
     } else {
       const totalFilteredCount = filtered.length;
       const isSearchActive = Boolean(query);
-      const displayLimit = 50;
-      const displayList = filtered.slice(0, displayLimit);
+      const displayList = filtered;
 
       const payBadge = document.getElementById("payment-records-badge");
       if (payBadge) {
         if (isSearchActive) {
-          payBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
-        } else if (totalFilteredCount > displayLimit) {
-          payBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+          payBadge.textContent = `Search results: ${totalFilteredCount} records`;
         } else {
           payBadge.textContent = `Showing all ${totalFilteredCount} records`;
         }
@@ -8508,7 +8987,7 @@ function renderPaymentSheet() {
       tbodyDetailed.innerHTML = `<tr><td colspan="15" style="text-align: center; vertical-align: middle; padding: 2rem;">No entries found</td></tr>`;
       if (tfootDetailed) tfootDetailed.innerHTML = "";
     } else {
-      const detailedDisplay = filtered.slice(0, 50);
+      const detailedDisplay = filtered;
       tbodyDetailed.innerHTML = detailedDisplay.map((item, idx) => {
         let thumbHtml = item.image_data
           ? `<div class="payment-thumb-wrapper" onclick="openImageLightbox('${item.id}')"><img src="${item.image_data}" class="payment-thumb-img"/></div>`
@@ -9925,20 +10404,19 @@ function renderWorkDistribution() {
   // Filter entries for the selected distribution date or all
   const periodEntries = (activePeriod && activePeriod !== "all")
     ? allEntries.filter(e => {
-        const actVal = formatDistDate(activePeriod).toLowerCase();
-        const p1 = formatDistDate(e.period || "").toLowerCase();
-        const p2 = formatDistDate(e.dist_date || "").toLowerCase();
-        const p3 = formatDistDate(e.date || "").toLowerCase();
-        return p1 === actVal || p2 === actVal || p3 === actVal ||
-               (e.period && e.period.trim().toLowerCase() === activePeriod.trim().toLowerCase()) ||
-               (e.dist_date && e.dist_date.trim().toLowerCase() === activePeriod.trim().toLowerCase());
-      })
+      const actVal = formatDistDate(activePeriod).toLowerCase();
+      const p1 = formatDistDate(e.period || "").toLowerCase();
+      const p2 = formatDistDate(e.dist_date || "").toLowerCase();
+      const p3 = formatDistDate(e.date || "").toLowerCase();
+      return p1 === actVal || p2 === actVal || p3 === actVal ||
+        (e.period && e.period.trim().toLowerCase() === activePeriod.trim().toLowerCase()) ||
+        (e.dist_date && e.dist_date.trim().toLowerCase() === activePeriod.trim().toLowerCase());
+    })
     : allEntries;
 
   // 1. Compute KPIs for the active period
   let periodPcs = 0;
   let periodAmount = 0;
-  const distinctStylesSet = new Set();
 
   periodEntries.forEach(e => {
     const qty = parseInt(e.pcs_qty, 10) || 0;
@@ -9947,7 +10425,6 @@ function renderWorkDistribution() {
 
     periodPcs += qty;
     periodAmount += tot;
-    if (e.style_code) distinctStylesSet.add(e.style_code.trim().toUpperCase());
   });
 
   const avgRate = periodPcs > 0 ? Math.round(periodAmount / periodPcs) : 0;
@@ -9960,7 +10437,7 @@ function renderWorkDistribution() {
   if (elTotalAmount) elTotalAmount.textContent = `Rs. ${Math.round(periodAmount).toLocaleString()}`;
 
   const elTotalStyles = document.getElementById("kpi-dist-total-styles");
-  if (elTotalStyles) elTotalStyles.textContent = distinctStylesSet.size.toLocaleString();
+  if (elTotalStyles) elTotalStyles.textContent = periodEntries.length.toLocaleString();
 
   const elAvgRate = document.getElementById("kpi-dist-avg-rate");
   if (elAvgRate) elAvgRate.textContent = `Rs. ${avgRate.toLocaleString()}`;
@@ -10016,15 +10493,12 @@ function renderWorkDistribution() {
   // 4. Render Table Rows
   const totalFilteredCount = filtered.length;
   const isSearchActive = Boolean(query);
-  const displayLimit = 50;
-  const displayList = filtered.slice(0, displayLimit);
+  const displayList = filtered;
 
   const workDistBadge = document.getElementById("work-dist-records-badge");
   if (workDistBadge) {
     if (isSearchActive) {
-      workDistBadge.textContent = `Search results: ${displayList.length} of ${totalFilteredCount}`;
-    } else if (totalFilteredCount > displayLimit) {
-      workDistBadge.textContent = `Showing latest 50 of ${totalFilteredCount} records (use search for older)`;
+      workDistBadge.textContent = `Search results: ${totalFilteredCount} records`;
     } else {
       workDistBadge.textContent = `Showing all ${totalFilteredCount} records`;
     }
@@ -10116,7 +10590,7 @@ function renderWorkDistribution() {
     tfoot.innerHTML = `
       <tr style="background: rgba(16, 185, 129, 0.08); font-weight: 800; border-top: 2px solid rgba(16, 185, 129, 0.4);">
         <td colspan="4" style="text-align: right; text-transform: uppercase; letter-spacing: 0.05em; font-size: 0.85rem; padding: 0.85rem 1rem;">
-          Total Distributed (${displayList.length < totalFilteredCount ? `Showing latest ${displayList.length} of ${totalFilteredCount}` : totalFilteredCount} Styles):
+          Total Distributed (${totalFilteredCount} Styles):
         </td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.95rem; font-weight: 900; color: #10b981;">${tablePcs.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); font-size: 0.85rem; color: var(--text-muted);">Avg ${tableAvgRate > 0 ? tableAvgRate.toLocaleString() : '-'}</td>
@@ -11376,821 +11850,567 @@ function setPrintStudioOrientation(orientation, triggerPreview = true) {
   if (orientation === "landscape") {
     btnLand?.classList.add("active");
     btnPort?.classList.remove("active");
-    if (previewPaper) {
-      previewPaper.classList.add("orientation-landscape");
-      previewPaper.classList.remove("orientation-portrait");
-      previewPaper.style.width = "297mm";
-      previewPaper.style.minHeight = "210mm";
-    }
+    previewPaper?.classList.remove("portrait");
+    previewPaper?.classList.add("landscape");
   } else {
     btnPort?.classList.add("active");
     btnLand?.classList.remove("active");
-    if (previewPaper) {
-      previewPaper.classList.add("orientation-portrait");
-      previewPaper.classList.remove("orientation-landscape");
-      previewPaper.style.width = "210mm";
-      previewPaper.style.minHeight = "297mm";
-    }
+    previewPaper?.classList.remove("landscape");
+    previewPaper?.classList.add("portrait");
   }
 
-  updatePreviewZoom();
   if (triggerPreview) {
     renderLiveA4Preview();
   }
 }
 
-function updatePreviewZoom() {
-  const zoomSelect = document.getElementById("preview-zoom-select");
-  const paper = document.getElementById("a4-sheet-preview");
-  const viewport = document.getElementById("preview-paper-viewport");
-  if (!zoomSelect || !paper || !viewport) return;
-
-  const val = zoomSelect.value;
-  if (val === "fit") {
-    const availableWidth = viewport.clientWidth - 48;
-    const baseWidth = (printStudioOrientation === "landscape") ? 1122 : 794;
-    const scale = Math.min(1, Math.max(0.35, availableWidth / baseWidth));
-    paper.style.transform = `scale(${scale.toFixed(2)})`;
-  } else {
-    paper.style.transform = `scale(${val})`;
-  }
-}
-
-function renderPrintColumnControls() {
-  const container = document.getElementById("print-columns-list-container");
-  if (!container) return;
-
-  // Calculate sum of active weights
-  const activeCols = printStudioColumns.filter(c => c.enabled);
-  const totalWeight = activeCols.reduce((sum, c) => sum + (c.currentWidth || 10), 0) || 1;
-
-  container.innerHTML = printStudioColumns.map((col) => {
-    const normPct = col.enabled ? Math.round((col.currentWidth / totalWeight) * 100) : 0;
-    const isBold = Boolean(col.bold);
-    return `
-      <div class="print-col-item ${col.enabled ? 'is-enabled' : 'is-disabled'}" data-col-id="${col.id}">
-        <div class="print-col-meta">
-          <input type="checkbox" id="chk-col-${col.id}" ${col.enabled ? 'checked' : ''} onchange="togglePrintStudioCol('${col.id}', this.checked)">
-          <label for="chk-col-${col.id}" title="${escapeHtml(col.label)}">${escapeHtml(col.label)}</label>
-        </div>
-        <div class="print-col-width-box">
-          <button type="button" 
-                  class="btn-col-bold-toggle ${isBold ? 'active' : ''}" 
-                  onclick="togglePrintStudioColBold('${col.id}')" 
-                  title="${isBold ? 'Data is BOLD — click to make normal' : 'Data is NORMAL — click to make bold'}" 
-                  ${!col.enabled ? 'disabled' : ''}>
-            ${isBold ? '𝐁' : 'B'}
-          </button>
-          <input type="range" class="print-col-slider" min="3" max="50" value="${col.currentWidth}" ${!col.enabled ? 'disabled' : ''} oninput="updatePrintStudioColWidth('${col.id}', this.value)">
-          <input type="number" class="print-col-num-input" min="3" max="50" value="${col.currentWidth}" ${!col.enabled ? 'disabled' : ''} onchange="updatePrintStudioColWidth('${col.id}', this.value)">
-          <span class="print-col-pct" title="Effective normalized width on paper">${col.enabled ? `${normPct}%` : '—'}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
-
-  const badge = document.getElementById("preview-col-count-badge");
-  if (badge) {
-    badge.textContent = `${activeCols.length} Columns Selected`;
-  }
-}
-
-window.togglePrintStudioColBold = function (colId) {
-  const col = printStudioColumns.find(c => c.id === colId);
-  if (col) {
-    col.bold = !col.bold;
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  }
-};
-
-window.togglePrintStudioCol = function (colId, isChecked) {
-  const col = printStudioColumns.find(c => c.id === colId);
-  if (col) {
-    const activeCount = printStudioColumns.filter(c => c.enabled).length;
-    if (!isChecked && activeCount <= 1) {
-      showToast("At least one column must remain enabled for printing.", "info");
-      renderPrintColumnControls();
-      return;
-    }
-    col.enabled = isChecked;
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  }
-};
-
-window.updatePrintStudioColWidth = function (colId, newWidth) {
-  const widthVal = Math.max(3, Math.min(60, parseInt(newWidth, 10) || 10));
-  const col = printStudioColumns.find(c => c.id === colId);
-  if (col) {
-    col.currentWidth = widthVal;
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  }
-};
-
 function saveActivePrintPreset() {
   const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-  const preset = presets.find(p => p.id === printStudioCurrentPresetId);
-  if (!preset) return;
-
-  preset.orientation = printStudioOrientation;
-  preset.headerFontSize = printStudioHeaderFontSize;
-  preset.headerBold = printStudioHeaderBold;
-  preset.headerPadding = printStudioHeaderPadding;
-  preset.rowPadding = printStudioRowPadding;
-  preset.totalPadding = printStudioTotalPadding;
-  preset.bodyFontSize = printStudioBodyFontSize;
-  preset.textAlign = printStudioTextAlign;
-  preset.autoFit = printStudioAutoFit;
-  preset.columns = printStudioColumns.map(c => ({
-    id: c.id,
-    enabled: c.enabled,
-    width: c.currentWidth,
-    bold: Boolean(c.bold)
-  }));
-
-  savePrintPresetsForSheet(printStudioActiveSheet, presets);
-  showPrintStudioStatus(`✓ Layout "${preset.name}" saved successfully!`, true);
-}
-
-function saveNewPrintPreset() {
-  const name = prompt("Enter a name for your custom layout alignment (e.g. Daily Balance Print / Floor Summary):");
-  if (!name || !name.trim()) return;
-
-  const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-  const newId = "preset_" + Date.now();
-  const newPreset = {
-    id: newId,
-    name: name.trim(),
+  const idx = presets.findIndex(p => p.id === printStudioCurrentPresetId);
+  const currentObj = {
+    id: printStudioCurrentPresetId || "default",
+    name: idx >= 0 ? presets[idx].name : "Custom Alignment",
     orientation: printStudioOrientation,
+    textAlign: printStudioTextAlign,
     headerFontSize: printStudioHeaderFontSize,
     headerBold: printStudioHeaderBold,
     headerPadding: printStudioHeaderPadding,
     rowPadding: printStudioRowPadding,
     totalPadding: printStudioTotalPadding,
     bodyFontSize: printStudioBodyFontSize,
-    textAlign: printStudioTextAlign,
     autoFit: printStudioAutoFit,
     columns: printStudioColumns.map(c => ({
       id: c.id,
-      enabled: c.enabled,
-      width: c.currentWidth,
+      enabled: Boolean(c.enabled),
+      width: parseInt(c.currentWidth, 10) || c.defaultWidth,
       bold: Boolean(c.bold)
     }))
   };
+  if (idx >= 0) presets[idx] = currentObj;
+  else presets.push(currentObj);
 
-  presets.push(newPreset);
   savePrintPresetsForSheet(printStudioActiveSheet, presets);
   populatePrintPresetsDropdown(printStudioActiveSheet);
-  applyPrintPreset(newId);
-  showPrintStudioStatus(`✓ New layout "${newPreset.name}" saved successfully!`, true);
+  const sel = document.getElementById("print-preset-selector");
+  if (sel) sel.value = currentObj.id;
+  showPrintStudioStatus(`Alignment "${currentObj.name}" saved!`, true);
 }
 
-function deleteActivePrintPreset() {
-  if (printStudioCurrentPresetId === "default") {
-    showPrintStudioStatus("Default layout cannot be deleted.", false);
-    return;
-  }
-
-  const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-  const target = presets.find(p => p.id === printStudioCurrentPresetId);
-  if (!target) return;
-
-  if (confirm(`Are you sure you want to delete the alignment "${target.name}"?`)) {
-    const updated = presets.filter(p => p.id !== printStudioCurrentPresetId);
-    savePrintPresetsForSheet(printStudioActiveSheet, updated);
+  function saveNewPrintPreset() {
+    const name = prompt("Enter a name for this new print alignment preset:", "Custom Alignment");
+    if (!name || !name.trim()) return;
+    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+    const newId = "preset_" + Date.now();
+    const newPreset = {
+      id: newId,
+      name: name.trim(),
+      orientation: printStudioOrientation,
+      textAlign: printStudioTextAlign,
+      headerFontSize: printStudioHeaderFontSize,
+      headerBold: printStudioHeaderBold,
+      headerPadding: printStudioHeaderPadding,
+      rowPadding: printStudioRowPadding,
+      totalPadding: printStudioTotalPadding,
+      bodyFontSize: printStudioBodyFontSize,
+      autoFit: printStudioAutoFit,
+      columns: printStudioColumns.map(c => ({
+        id: c.id,
+        enabled: Boolean(c.enabled),
+        width: parseInt(c.currentWidth, 10) || c.defaultWidth,
+        bold: Boolean(c.bold)
+      }))
+    };
+    presets.push(newPreset);
+    savePrintPresetsForSheet(printStudioActiveSheet, presets);
+    printStudioCurrentPresetId = newId;
     populatePrintPresetsDropdown(printStudioActiveSheet);
-    applyPrintPreset(updated[0]?.id || "default");
-    showPrintStudioStatus(`Layout "${target.name}" has been deleted.`, false);
+    const sel = document.getElementById("print-preset-selector");
+    if (sel) sel.value = newId;
+    showPrintStudioStatus(`New preset "${newPreset.name}" created!`, true);
   }
-}
 
-function resetPrintPresetsToDefault() {
-  if (confirm("Reset layout alignments for this sheet back to factory defaults?")) {
-    const defaults = PRINT_STUDIO_DEFAULTS[printStudioActiveSheet]?.presets || [];
-    savePrintPresetsForSheet(printStudioActiveSheet, defaults);
+  function deleteActivePrintPreset() {
+    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+    if (presets.length <= 1) {
+      showPrintStudioStatus("Cannot delete the last remaining preset.", false);
+      return;
+    }
+    const target = presets.find(p => p.id === printStudioCurrentPresetId);
+    if (!target) return;
+    if (!confirm(`Delete alignment preset "${target.name}"?`)) return;
+
+    const remaining = presets.filter(p => p.id !== target.id);
+    savePrintPresetsForSheet(printStudioActiveSheet, remaining);
     populatePrintPresetsDropdown(printStudioActiveSheet);
-    applyPrintPreset("default");
-    showPrintStudioStatus("Layouts restored to factory defaults.", true);
+    applyPrintPreset(remaining[0].id);
+    showPrintStudioStatus(`Deleted preset "${target.name}".`, true);
   }
-}
 
-function getPrintHeaderDate() {
-  if (printStudioActiveSheet === "daily") {
-    const reportDateEl = document.getElementById("daily-sheet-date");
-    if (reportDateEl && reportDateEl.value) {
-      const parts = reportDateEl.value.split("-");
-      if (parts.length === 3) {
-        const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-        const m = months[parseInt(parts[1], 10) - 1] || parts[1];
-        return `${parts[2]}-${m}-${parts[0]}`;
+  function resetPrintPresetsToDefault() {
+    const key = `craftflow_print_presets_${printStudioActiveSheet}`;
+    try { localStorage.removeItem(key); } catch (e) { }
+    populatePrintPresetsDropdown(printStudioActiveSheet);
+    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+    if (presets.length > 0) {
+      applyPrintPreset(presets[0].id);
+    }
+    showPrintStudioStatus("Reset presets & widths to factory defaults.", true);
+  }
+
+  function renderPrintColumnControls() {
+    const container = document.getElementById("print-columns-list-container");
+    if (!container) return;
+
+    const activeCols = printStudioColumns.filter(c => c.enabled);
+    const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
+    const badge = document.getElementById("preview-col-count-badge");
+    if (badge) badge.textContent = `${activeCols.length} Columns Selected`;
+
+    container.innerHTML = printStudioColumns.map((col, idx) => {
+      const pct = col.enabled ? Math.round(((Number(col.currentWidth) || 0) / totalWidth) * 100) : 0;
+      return `
+      <div class="print-col-item ${col.enabled ? "" : "is-disabled"}">
+        <div class="print-col-meta">
+          <input type="checkbox" id="pcol-chk-${idx}" ${col.enabled ? "checked" : ""} onchange="togglePrintStudioColumn(${idx}, this.checked)">
+          <label for="pcol-chk-${idx}" title="${escapeHtml(col.label)}">${escapeHtml(col.label)}</label>
+        </div>
+        <div class="print-col-width-box">
+          <button type="button" class="btn-col-bold-toggle ${col.bold ? "active" : ""}" ${col.enabled ? "" : "disabled"} onclick="togglePrintStudioColBold(${idx})" title="Toggle Bold Text">B</button>
+          <input type="range" class="print-col-slider" min="3" max="40" value="${Number(col.currentWidth) || col.defaultWidth}" ${col.enabled ? "" : "disabled"} oninput="updatePrintStudioColWidth(${idx}, this.value)">
+          <input type="number" class="print-col-num-input" min="3" max="40" value="${Number(col.currentWidth) || col.defaultWidth}" ${col.enabled ? "" : "disabled"} onchange="updatePrintStudioColWidth(${idx}, this.value)">
+          <span class="print-col-pct">${pct}%</span>
+        </div>
+      </div>
+    `;
+    }).join("");
+  }
+
+  window.togglePrintStudioColumn = function (idx, checked) {
+    if (!printStudioColumns[idx]) return;
+    printStudioColumns[idx].enabled = Boolean(checked);
+    renderPrintColumnControls();
+    renderLiveA4Preview();
+  };
+
+  window.togglePrintStudioColBold = function (idx) {
+    if (!printStudioColumns[idx]) return;
+    printStudioColumns[idx].bold = !Boolean(printStudioColumns[idx].bold);
+    renderPrintColumnControls();
+    renderLiveA4Preview();
+  };
+
+  window.updatePrintStudioColWidth = function (idx, val) {
+    if (!printStudioColumns[idx]) return;
+    const num = Math.max(3, Math.min(40, parseInt(val, 10) || printStudioColumns[idx].defaultWidth));
+    printStudioColumns[idx].currentWidth = num;
+    renderPrintColumnControls();
+    renderLiveA4Preview();
+  };
+
+  function updatePreviewZoom() {
+    const previewPaper = document.getElementById("a4-sheet-preview");
+    const viewport = document.getElementById("preview-paper-viewport");
+    const zoomSel = document.getElementById("preview-zoom-select");
+    if (!previewPaper || !zoomSel) return;
+
+    const val = zoomSel.value;
+    let scale = 0.9;
+    if (val === "fit" && viewport) {
+      const availW = Math.max(320, viewport.clientWidth - 48);
+      const paperW = previewPaper.offsetWidth || 1000;
+      scale = Math.min(1, +(availW / paperW).toFixed(2));
+    } else {
+      scale = parseFloat(val) || 0.9;
+    }
+    previewPaper.style.transform = `scale(${scale})`;
+  }
+
+  function getPrintStudioSheetData(sheetType) {
+    const numericCols = new Set([
+      "cut_qty", "received_qty", "balance_from_stock", "balance_stock",
+      "dispatch_from_hemb", "dispatch_hemb", "balance_from_hemb", "balance_hemb",
+      "total_balance", "pcs_qty", "rate", "total", "prod_pcs_qty", "carigar_rate", "commission", "rate_total"
+    ]);
+    const totals = {};
+    let rows = [];
+
+    if (sheetType === "master") {
+      const list = (typeof getFilteredMasterInventory === "function")
+        ? getFilteredMasterInventory()
+        : (window.db?.getMasterInventory ? window.db.getMasterInventory() : []);
+      rows = list.map((m, i) => ({
+        sr_no: m.sr_no || (i + 1),
+        style_code: m.style_code || "",
+        category: m.category || "",
+        cut_qty: Number(m.cut_qty) || 0,
+        received_qty: Number(m.received_qty) || 0,
+        balance_from_stock: Number(m.balance_from_stock) || 0,
+        date_receive: m.date_receive || "-",
+        challan_rec: m.challan_rec || "-",
+        dispatch_from_hemb: Number(m.dispatch_from_hemb) || 0,
+        balance_from_hemb: Number(m.balance_from_hemb) || 0,
+        total_balance: Number(m.total_balance) || 0,
+        date_dispatch: m.date_dispatch || "-",
+        challan_dis: m.challan_dis || "-"
+      }));
+    } else if (sheetType === "distribution") {
+      const activePeriod = (typeof getActiveDistributionPeriod === "function") ? getActiveDistributionPeriod() : "all";
+      let list = window.db?.getWorkDistribution ? window.db.getWorkDistribution() : [];
+      if (activePeriod && activePeriod !== "all") {
+        list = list.filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
       }
-      return reportDateEl.value;
+      rows = list.map((w, i) => ({
+        sr_no: w.sr_no || (i + 1),
+        style_code: w.style_code || "",
+        contractor_name: w.contractor_name || "-",
+        pcs_qty: Number(w.pcs_qty) || 0,
+        rate: Number(w.rate) || 0,
+        item: w.item || "SHIRT",
+        floor: w.floor || "-",
+        total: Number(w.total_amount != null ? w.total_amount : ((Number(w.pcs_qty) || 0) * (Number(w.rate) || 0))),
+        period: w.period || "-",
+        remarks: w.remarks || "-"
+      }));
+    } else if (sheetType === "payment") {
+      const activePeriod = (typeof getActiveRateApprovalPeriod === "function") ? getActiveRateApprovalPeriod() : "all";
+      let list = window.db?.getPaymentSheets ? window.db.getPaymentSheets() : [];
+      if (activePeriod && activePeriod !== "all") {
+        list = list.filter(p => (p.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+      }
+      rows = list.map((p, i) => ({
+        sr_no: p.sr_no || (i + 1),
+        style_code: p.style_code || "",
+        working: p.working || p.category || "SHIRT",
+        contractor_name: p.contractor_name || "-",
+        rate: Number(p.rate_per_pc || p.fix_rate || p.rate || 0),
+        cut_qty: Number(p.cut_qty) || 0,
+        prod_pcs_qty: Number(p.prod_pcs_qty) || 0,
+        carigar_rate: Number(p.carigar_rate) || 0,
+        commission: Number(p.commission) || 0,
+        rate_total: Number(p.rate_total || 0),
+        remarks: p.remarks_1 || p.remarks || "-",
+        balance_stock: Number(p.balance_from_stock || 0),
+        balance_hemb: Number(p.balance_from_hemb || 0),
+        total_balance: Number(p.total_balance || 0),
+        period: p.period || "-"
+      }));
+    } else {
+      const list = window.db?.getFinalStyles ? window.db.getFinalStyles() : [];
+      rows = list.map((f, i) => ({
+        sr_no: f.s_no || (i + 1),
+        style_code: f.style_code || "",
+        category: f.category || "Shirt",
+        contractor: f.contractor_name || "-",
+        cut_qty: Number(f.cut_qty) || 0,
+        received_qty: Number(f.received_qty) || 0,
+        balance_stock: Number(f.balance_from_stock) || 0,
+        dispatch_hemb: Number(f.dispatch_from_hemb) || 0,
+        balance_hemb: Number(f.balance_from_hemb) || 0,
+        remarks: f.time_remarks || "-"
+      }));
     }
-  } else if (printStudioActiveSheet === "distribution") {
-    const activePeriod = getActiveDistributionPeriod();
-    if (activePeriod && activePeriod !== "all") return activePeriod;
-  } else if (printStudioActiveSheet === "payment") {
-    const periodFilter = (document.getElementById("filter-payment-period")?.value || "").trim();
-    if (periodFilter && periodFilter !== "all") return periodFilter;
+
+    numericCols.forEach(colId => {
+      if (rows.some(r => r[colId] !== undefined)) {
+        totals[colId] = rows.reduce((sum, r) => sum + (Number(r[colId]) || 0), 0);
+      }
+    });
+
+    return { rows, totals, numericCols };
   }
 
-  const d = new Date();
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = months[d.getMonth()];
-  const year = d.getFullYear();
-  return `${day}-${month}-${year}`;
-}
+  function renderLiveA4Preview() {
+    const previewContainer = document.getElementById("a4-sheet-preview");
+    if (!previewContainer) return;
 
-function getPrintHeaderTime() {
-  const d = new Date();
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, "0");
-  const ampm = hours >= 12 ? "PM" : "AM";
-  hours = hours % 12;
-  hours = hours ? hours : 12;
-  return `${hours}:${minutes} ${ampm}`;
-}
+    const sheetCfg = PRINT_STUDIO_DEFAULTS[printStudioActiveSheet] || PRINT_STUDIO_DEFAULTS.daily;
+    const activeCols = printStudioColumns.filter(c => c.enabled);
+    const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
+    const colsWithEffectiveWidth = activeCols.map(c => ({
+      ...c,
+      effectiveWidth: printStudioAutoFit ? (((Number(c.currentWidth) || 0) / totalWidth) * 100).toFixed(2) : (Number(c.currentWidth) || 10)
+    }));
 
-// -------------------------------------------------------------
-// REAL-TIME A4 PREVIEW & RENDER ENGINE
-// -------------------------------------------------------------
-function renderLiveA4Preview() {
-  const previewContainer = document.getElementById("a4-sheet-preview");
-  if (!previewContainer) return;
+    const { rows, totals, numericCols } = getPrintStudioSheetData(printStudioActiveSheet);
+    const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    const dateStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
 
-  // Active Columns & Normalized Widths
-  const activeCols = printStudioColumns.filter(c => c.enabled);
-  if (activeCols.length === 0) {
-    previewContainer.innerHTML = `<div style="text-align: center; padding: 3rem; color: #64748b;">No columns selected for printing. Please enable at least 1 column.</div>`;
-    return;
-  }
-
-  const totalWeight = activeCols.reduce((sum, c) => sum + (c.currentWidth || 10), 0) || 1;
-  const colsWithEffectiveWidth = activeCols.map(col => {
-    const pct = printStudioAutoFit
-      ? ((col.currentWidth / totalWeight) * 100).toFixed(2) + "%"
-      : `${col.currentWidth}%`;
-    return { ...col, effectiveWidth: pct };
-  });
-
-  // Pull active data according to sheet
-  let rows = [];
-  let totals = {};
-
-  if (printStudioActiveSheet === "master") {
-    let masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-    const searchQuery = (document.getElementById("master-search-input")?.value || "").toLowerCase().trim();
-    const selectedCont = (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim();
-    const selectedCat = (document.getElementById("filter-category")?.value || "").toLowerCase().trim();
-    const selectedBal = document.getElementById("filter-balance-status")?.value || "";
-
-    if (searchQuery || selectedCont || selectedCat || selectedBal) {
-      masterList = masterList.filter(item => {
-        const computed = window.db.computeRecordBalances(item);
-        const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-        const recMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
-        const disMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
-        const queryPassed = !searchQuery || codeMatch || recMatch || disMatch;
-
-        const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
-        const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
-
-        let balPassed = true;
-        if (selectedBal === "pending_hemb") balPassed = (computed.balance_from_hemb > 0);
-        else if (selectedBal === "pending_stock") balPassed = (computed.balance_from_stock > 0);
-        else if (selectedBal === "completed") balPassed = (computed.total_balance === 0 && (item.cut_qty || 0) > 0);
-
-        return queryPassed && contPassed && catPassed && balPassed;
-      });
-    }
-
-    let sumCut = 0;
-    let sumRec = 0;
-    let sumStock = 0;
-    let sumDisHemb = 0;
-    let sumHemb = 0;
-    let sumTotBal = 0;
-
-    rows = masterList.map((item, idx) => {
-      const computed = window.db.computeRecordBalances(item);
-      const cut = item.cut_qty || 0;
-      const rec = item.received_qty || 0;
-      const stock = computed.balance_from_stock || 0;
-      const disHemb = item.dispatch_from_hemb || 0;
-      const hemb = computed.balance_from_hemb || 0;
-      const totBal = computed.total_balance || 0;
-
-      sumCut += cut;
-      sumRec += rec;
-      sumStock += stock;
-      sumDisHemb += disHemb;
-      sumHemb += hemb;
-      sumTotBal += totBal;
-
-      return {
-        sr_no: item.sr_no || (idx + 1),
-        style_code: item.style_code || "",
-        category: item.category || "SHIRT",
-        cut_qty: cut,
-        received_qty: rec,
-        balance_from_stock: stock,
-        date_receive: item.date_receive || "-",
-        challan_rec: item.challan_rec || "-",
-        dispatch_from_hemb: disHemb,
-        balance_from_hemb: hemb,
-        total_balance: totBal,
-        date_dispatch: item.date_dispatch || "-",
-        challan_dis: item.challan_dis || "-"
-      };
-    });
-
-    totals = {
-      cut_qty: sumCut,
-      received_qty: sumRec,
-      balance_from_stock: sumStock,
-      dispatch_from_hemb: sumDisHemb,
-      balance_from_hemb: sumHemb,
-      total_balance: sumTotBal,
-      count: rows.length
-    };
-
-  } else if (printStudioActiveSheet === "daily") {
-    const finalStyles = window.db.getFinalStyles();
-    const master = window.db.getMasterInventory();
-
-    let sumCut = 0;
-    let sumRec = 0;
-    let sumStock = 0;
-    let sumDisHemb = 0;
-    let sumHemb = 0;
-
-    rows = finalStyles.map((item, idx) => {
-      const sMatch = master.find(m =>
-        m.style_code.toLowerCase() === item.style_code.toLowerCase() &&
-        m.category.toLowerCase() === item.category.toLowerCase()
-      );
-      const cut = sMatch ? (sMatch.cut_qty || 0) : 0;
-      const rec = sMatch ? (sMatch.received_qty || 0) : 0;
-      const stock = sMatch ? (sMatch.balance_from_stock || 0) : 0;
-      const disHemb = sMatch ? (sMatch.dispatch_from_hemb || 0) : (item.dispatch_from_hemb || 0);
-      const hemb = sMatch ? (sMatch.balance_from_hemb || 0) : 0;
-
-      sumCut += cut;
-      sumRec += rec;
-      sumStock += stock;
-      sumDisHemb += disHemb;
-      sumHemb += hemb;
-
-      return {
-        sr_no: idx + 1,
-        style_code: item.style_code || "",
-        category: item.category || "SHIRT",
-        contractor: sMatch ? (sMatch.contractor_name || "-") : "-",
-        cut_qty: cut,
-        received_qty: rec,
-        balance_stock: stock,
-        dispatch_hemb: disHemb,
-        balance_hemb: hemb,
-        remarks: item.remarks || (sMatch ? (sMatch.remarks || "") : "")
-      };
-    });
-
-    totals = {
-      cut_qty: sumCut,
-      received_qty: sumRec,
-      balance_stock: sumStock,
-      dispatch_hemb: sumDisHemb,
-      balance_hemb: sumHemb,
-      count: rows.length
-    };
-
-  } else if (printStudioActiveSheet === "distribution") {
-    const activePeriod = getActiveDistributionPeriod();
-    const searchInput = document.getElementById("search-dist-input");
-    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
-
-    let distList = window.db.getWorkDistribution();
-    if (query) {
-      distList = distList.filter(item =>
-        (item.style_code && item.style_code.toLowerCase().includes(query)) ||
-        (item.contractor_name && item.contractor_name.toLowerCase().includes(query)) ||
-        (item.floor && item.floor.toLowerCase().includes(query)) ||
-        (item.item && item.item.toLowerCase().includes(query)) ||
-        (item.remarks && item.remarks.toLowerCase().includes(query)) ||
-        (item.period && item.period.toLowerCase().includes(query))
-      );
-    } else if (activePeriod && activePeriod !== "all") {
-      distList = distList.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-    }
-
-    let sumPcs = 0;
-    let sumTotal = 0;
-
-    rows = distList.map((item, idx) => {
-      const qty = parseInt(item.pcs_qty, 10) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const total = (item.total_amount != null && !isNaN(Number(item.total_amount))) ? Number(item.total_amount) : (qty * rate);
-
-      sumPcs += qty;
-      sumTotal += total;
-
-      return {
-        sr_no: item.sr_no || (idx + 1),
-        style_code: item.style_code || "",
-        contractor_name: item.contractor_name || "",
-        pcs_qty: qty,
-        rate: rate > 0 ? rate : "-",
-        item: item.item || "SHIRT",
-        floor: item.floor || "-",
-        total: total > 0 ? Math.round(total) : 0,
-        period: item.period || activePeriod || "-",
-        remarks: item.remarks || ""
-      };
-    });
-
-    totals = {
-      pcs_qty: sumPcs,
-      total: sumTotal,
-      count: rows.length
-    };
-
-  } else if (printStudioActiveSheet === "payment") {
-    const periodFilter = (document.getElementById("filter-payment-period")?.value || "").trim();
-    const query = (document.getElementById("search-payment-style")?.value || "").trim().toLowerCase();
-
-    let payList = window.db.getPaymentSheets();
-    if (query) {
-      payList = payList.filter(item =>
-        (item.style_code && item.style_code.toLowerCase().includes(query)) ||
-        (item.contractor_name && item.contractor_name.toLowerCase().includes(query)) ||
-        (item.category && item.category.toLowerCase().includes(query)) ||
-        (item.remarks && item.remarks.toLowerCase().includes(query)) ||
-        (item.period && item.period.toLowerCase().includes(query))
-      );
-    } else if (periodFilter && periodFilter !== "all") {
-      payList = payList.filter(item => (item.period || "").trim().toLowerCase() === periodFilter.trim().toLowerCase());
-    }
-
-    let sumCut = 0;
-    let sumProd = 0;
-    let sumStock = 0;
-    let sumHemb = 0;
-    let sumTotBal = 0;
-
-    rows = payList.map((item, idx) => {
-      const cutQty = item.cut_qty != null ? item.cut_qty : (item.total_pcs || 0);
-      const prodQty = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
-      const carigarRate = parseFloat(item.carigar_rate) || 0;
-      const commission = parseFloat(item.commission) || 0;
-      const rateTotal = item.rate_total != null ? parseFloat(item.rate_total) : (carigarRate + commission);
-      const stockBal = item.balance_from_stock != null ? item.balance_from_stock : 0;
-      const hembBal = item.balance_from_hemb != null ? item.balance_from_hemb : 0;
-      const totalBal = item.total_balance != null ? item.total_balance : (stockBal + hembBal);
-
-      sumCut += cutQty;
-      sumProd += prodQty;
-      sumStock += stockBal;
-      sumHemb += hembBal;
-      sumTotBal += totalBal;
-
-      return {
-        sr_no: item.sr_no || (idx + 1),
-        style_code: item.style_code || "",
-        working: item.category || "SHIRT",
-        contractor_name: item.contractor_name || "",
-        rate: item.rate_per_pc || "-",
-        cut_qty: cutQty,
-        prod_pcs_qty: prodQty,
-        carigar_rate: carigarRate > 0 ? carigarRate : "-",
-        commission: commission > 0 ? commission : "-",
-        rate_total: rateTotal > 0 ? rateTotal : "-",
-        remarks: item.remarks || "",
-        balance_stock: stockBal,
-        balance_hemb: hembBal,
-        total_balance: totalBal,
-        period: item.period || periodFilter || "-"
-      };
-    });
-
-    totals = {
-      cut_qty: sumCut,
-      prod_pcs_qty: sumProd,
-      balance_stock: sumStock,
-      balance_hemb: sumHemb,
-      total_balance: sumTotBal,
-      count: rows.length
-    };
-  }
-
-  // Exact Header Strip Requested by User: Left Time, Center Hand Embroidery, Right Date
-  const headerHtml = `
-    <div class="print-strip-header" style="display: flex !important; justify-content: space-between !important; align-items: flex-end !important; padding-bottom: 5px !important; margin-bottom: 8px !important; border-bottom: 2px solid #000000 !important; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif !important; color: #000000 !important; width: 100% !important;">
-      <div style="font-size: 9.5pt; font-weight: 700; width: 30%; text-align: left; white-space: nowrap;">
-        Time: ${getPrintHeaderTime()}
-      </div>
-      <div style="font-size: 13pt; font-weight: 900; letter-spacing: 0.06em; text-transform: uppercase; text-align: center; width: 40%; white-space: nowrap;">
-        Hand Embroidery
-      </div>
-      <div style="font-size: 9.5pt; font-weight: 700; width: 30%; text-align: right; white-space: nowrap;">
-        Date: ${getPrintHeaderDate()}
-      </div>
+    const headerHtml = `
+    <div class="print-strip-header">
+      <div style="font-size: 8.5pt; font-weight: 700;">Time: ${escapeHtml(nowStr)}</div>
+      <div style="font-size: 11.5pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em;">Hand Embroidery — ${escapeHtml(sheetCfg.title)}</div>
+      <div style="font-size: 8.5pt; font-weight: 700;">Date: ${escapeHtml(dateStr)}</div>
     </div>
   `;
 
-  // Render Table
-  const tableHtml = `
-    <table class="print-render-table" style="width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; border: 1.5px solid #000000 !important;">
-      <colgroup>
-        ${colsWithEffectiveWidth.map(c => `<col style="width: ${c.effectiveWidth};">`).join("")}
-      </colgroup>
+    const headerStyle = `font-size: ${printStudioHeaderFontSize}pt !important; font-weight: ${printStudioHeaderBold ? "900" : "600"}; padding: ${printStudioHeaderPadding}px 3px !important;`;
+
+    const tableHtml = `
+    <table class="print-render-table">
       <thead>
         <tr>
-          ${colsWithEffectiveWidth.map(c => {
-    const headAlign = printStudioTextAlign === 'auto' ? c.align : printStudioTextAlign;
-    return `
-              <th style="text-align: ${headAlign}; width: ${c.effectiveWidth}; font-size: ${printStudioHeaderFontSize}pt !important; font-weight: ${printStudioHeaderBold ? '800' : '500'} !important; padding: ${printStudioHeaderPadding}px 4px !important; line-height: 1.15; border: 1px solid #000000; background: #f1f5f9; color: #000000;">
-                ${escapeHtml(c.label)}
-              </th>
-            `;
-  }).join("")}
+          ${colsWithEffectiveWidth.map(col => `<th style="width: ${col.effectiveWidth}%; ${headerStyle}">${escapeHtml(col.label)}</th>`).join("")}
         </tr>
       </thead>
       <tbody>
-        ${rows.length === 0 ? `
-          <tr>
-            <td colspan="${colsWithEffectiveWidth.length}" style="text-align: center; padding: 2rem; color: #64748b; font-size: ${printStudioBodyFontSize}pt;">
-              No records found for the selected sheet criteria.
-            </td>
-          </tr>
-        ` : rows.map(r => `
+        ${rows.map((row, rIdx) => `
           <tr>
             ${colsWithEffectiveWidth.map(col => {
-    const val = r[col.id];
-    let cellContent = (val != null) ? escapeHtml(String(val)) : "-";
-    const dataAlign = printStudioTextAlign === 'auto' ? col.align : printStudioTextAlign;
-    let extraStyle = `text-align: ${dataAlign};`;
+      const align = printStudioTextAlign === "auto" ? (col.align || "left") : printStudioTextAlign;
+      const isNum = numericCols.has(col.id);
+      const fw = col.bold ? "800" : (isNum ? "600" : "500");
+      const extraStyle = `text-align: ${align}; font-weight: ${fw}; ${isNum ? "font-family: monospace;" : ""}`;
+      const rawVal = row[col.id];
+      const cellContent = (col.id === "sr_no")
+        ? (rawVal || (rIdx + 1))
+        : (isNum ? Number(rawVal || 0).toLocaleString() : escapeHtml(rawVal != null && rawVal !== "" ? String(rawVal) : "-"));
 
-    if (typeof val === "number") {
-      cellContent = val.toLocaleString();
-      extraStyle += " font-family: monospace;";
-    }
-    if (col.id.includes("balance") || col.id === "total_balance") {
-      if (Number(val) > 0) extraStyle += " color: #b91c1c;";
-    }
-    if (col.id === "total") {
-      cellContent = `Rs. ${Number(val).toLocaleString()}`;
-    }
+      if (col.id === "remarks") {
+        const rawText = String(rawVal || "").trim();
+        if (!rawText || rawText === "-") {
+          return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
+        }
 
-    // Apply individual column bold setting
-    const isColBold = Boolean(col.bold);
-    extraStyle += ` font-weight: ${isColBold ? '800' : '400'} !important;`;
+        // Check if text is multiple lines or long enough to wrap into 2 lines
+        const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
+        const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
 
-    const isRemarksCol = col.id.toLowerCase().includes("remark");
-    if (isRemarksCol) {
-      const rawText = val != null ? String(val).trim() : "";
-      if (!rawText || rawText === "-") {
-        return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
-      }
-
-      // Check if text is multiple lines or long enough to wrap into 2 lines
-      const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
-      const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
-
-      if (isDoubleLine) {
-        // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
-        const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
-        return `
+        if (isDoubleLine) {
+          // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
+          const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
+          return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} padding: 0px 3px !important; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       <div class="print-remarks-container" style="font-size: ${compactFontSize}pt !important; line-height: 0.92 !important; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 100%; word-break: break-word;">
                         ${formattedHtml}
                       </div>
                     </td>
                   `;
-      } else {
-        return `
+        } else {
+          return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       ${formattedHtml}
                     </td>
                   `;
+        }
       }
-    }
 
-    return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
-  }).join("")}
+      return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
+    }).join("")}
           </tr>
         `).join("")}
       </tbody>
       <tfoot>
         <tr class="print-total-row">
           ${colsWithEffectiveWidth.map((col, idx) => {
-    const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
-    const isColBold = Boolean(col.bold);
-    const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
-    if (idx === 0) {
-      return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
-    }
-    if (col.id === "style_code") {
-      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
-    }
-    if (totals[col.id] != null) {
-      const formattedVal = (col.id === "total")
-        ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
-        : totals[col.id].toLocaleString();
-      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
-    }
-    return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
-  }).join("")}
+      const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
+      const isColBold = Boolean(col.bold);
+      const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
+      if (idx === 0) {
+        return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
+      }
+      if (col.id === "style_code") {
+        return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
+      }
+      if (totals[col.id] != null) {
+        const formattedVal = (col.id === "total")
+          ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
+          : totals[col.id].toLocaleString();
+        return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
+      }
+      return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
+    }).join("")}
         </tr>
       </tfoot>
     </table>
   `;
 
-  // Only the single-line header strip and the table! No extra text above or below!
-  previewContainer.innerHTML = headerHtml + tableHtml;
+    // Only the single-line header strip and the table! No extra text above or below!
+    previewContainer.innerHTML = headerHtml + tableHtml;
 
-  // Post-render remarks auto-fit guard: ensure no remarks cell stretches row height beyond single-line height
-  adjustRemarksRowHeights(previewContainer);
-}
+    // Post-render remarks auto-fit guard: ensure no remarks cell stretches row height beyond single-line height
+    adjustRemarksRowHeights(previewContainer);
+  }
 
-function adjustRemarksRowHeights(container) {
-  if (!container) return;
-  const rows = container.querySelectorAll(".print-render-table tbody tr");
-  rows.forEach(tr => {
-    const remarksTd = tr.querySelector(".print-remarks-td");
-    if (!remarksTd) return;
+  function adjustRemarksRowHeights(container) {
+    if (!container) return;
+    const rows = container.querySelectorAll(".print-render-table tbody tr");
+    rows.forEach(tr => {
+      const remarksTd = tr.querySelector(".print-remarks-td");
+      if (!remarksTd) return;
 
-    const remarksDiv = remarksTd.querySelector(".print-remarks-container");
-    const refTd = tr.querySelector("td:not(.print-remarks-td)");
-    if (!refTd) return;
+      const remarksDiv = remarksTd.querySelector(".print-remarks-container");
+      const refTd = tr.querySelector("td:not(.print-remarks-td)");
+      if (!refTd) return;
 
-    const targetHeight = refTd.clientHeight || refTd.offsetHeight;
+      const targetHeight = refTd.clientHeight || refTd.offsetHeight;
 
-    // If remarks cell does not have container yet, but its height is taller than reference cell, convert it
-    if (!remarksDiv && remarksTd.textContent.trim() && remarksTd.clientHeight > (targetHeight + 2)) {
-      const text = remarksTd.innerHTML;
-      const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
-      remarksTd.style.setProperty("padding", "0px 3px", "important");
-      remarksTd.innerHTML = `
+      // If remarks cell does not have container yet, but its height is taller than reference cell, convert it
+      if (!remarksDiv && remarksTd.textContent.trim() && remarksTd.clientHeight > (targetHeight + 2)) {
+        const text = remarksTd.innerHTML;
+        const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
+        remarksTd.style.setProperty("padding", "0px 3px", "important");
+        remarksTd.innerHTML = `
         <div class="print-remarks-container" style="font-size: ${compactFontSize}pt !important; line-height: 0.92 !important; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 100%; word-break: break-word;">
           ${text}
         </div>
       `;
-    }
-
-    // If it has remarksDiv, ensure it does not expand the row height
-    const activeDiv = remarksTd.querySelector(".print-remarks-container");
-    if (activeDiv) {
-      let currentPt = parseFloat(activeDiv.style.fontSize) || +(printStudioBodyFontSize * 0.62).toFixed(1);
-      let count = 0;
-      while (count < 5 && tr.clientHeight > (targetHeight + 2) && currentPt > 4.2) {
-        currentPt = +(currentPt - 0.4).toFixed(1);
-        activeDiv.style.setProperty("font-size", `${currentPt}pt`, "important");
-        count++;
       }
-    }
-  });
-}
 
-function executeStudioPrint() {
-  const previewContent = document.getElementById("a4-sheet-preview")?.innerHTML;
-  const printRoot = document.getElementById("print-studio-paper-root");
-  if (!previewContent || !printRoot) {
-    showToast("Unable to generate print document.", "error");
-    return;
-  }
-  printRoot.innerHTML = previewContent;
-  window.print();
-}
-let currentTrashFilterType = "all";
-
-function renderTrashView() {
-  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-
-  // Update KPI counters
-  let receivingCount = 0;
-  let dispatchCount = 0;
-  let masterDailyCount = 0;
-  let paymentDistCount = 0;
-
-  allTrash.forEach(item => {
-    const t = item.entity_type;
-    if (t === "receiving") receivingCount++;
-    else if (t === "dispatch") dispatchCount++;
-    else if (t === "master" || t === "final_style") masterDailyCount++;
-    else if (t === "payment" || t === "distribution" || t === "period" || t === "distribution_period") paymentDistCount++;
-  });
-
-  const totalEl = document.getElementById("trash-kpi-total");
-  if (totalEl) totalEl.textContent = allTrash.length;
-  const recEl = document.getElementById("trash-kpi-receiving");
-  if (recEl) recEl.textContent = receivingCount;
-  const disEl = document.getElementById("trash-kpi-dispatch");
-  if (disEl) disEl.textContent = dispatchCount;
-  const mdEl = document.getElementById("trash-kpi-master-daily");
-  if (mdEl) mdEl.textContent = masterDailyCount;
-  const pdEl = document.getElementById("trash-kpi-payment-dist");
-  if (pdEl) pdEl.textContent = paymentDistCount;
-  const badgeEl = document.getElementById("trash-kpi-count-badge");
-  if (badgeEl) badgeEl.textContent = `${allTrash.length} Items`;
-
-  // Search and Module Filter
-  const query = (document.getElementById("trash-search-input")?.value || document.getElementById("input-trash-search")?.value || "").toLowerCase().trim();
-  const modFilter = document.getElementById("filter-trash-type")?.value || document.getElementById("filter-trash-module")?.value || "all";
-  currentTrashFilterType = modFilter;
-
-  let filtered = allTrash.filter(item => {
-    if (modFilter && modFilter !== "all") {
-      if (modFilter === "period") {
-        if (item.entity_type !== "period" && item.entity_type !== "distribution_period") return false;
-      } else if (item.entity_type !== modFilter) {
-        return false;
+      // If it has remarksDiv, ensure it does not expand the row height
+      const activeDiv = remarksTd.querySelector(".print-remarks-container");
+      if (activeDiv) {
+        let currentPt = parseFloat(activeDiv.style.fontSize) || +(printStudioBodyFontSize * 0.62).toFixed(1);
+        let count = 0;
+        while (count < 5 && tr.clientHeight > (targetHeight + 2) && currentPt > 4.2) {
+          currentPt = +(currentPt - 0.4).toFixed(1);
+          activeDiv.style.setProperty("font-size", `${currentPt}pt`, "important");
+          count++;
+        }
       }
-    }
-    if (!query) return true;
-    const matchTitle = (item.title || "").toLowerCase().includes(query);
-    const matchSub = (item.subtitle || "").toLowerCase().includes(query);
-    const matchUser = (item.deleted_by || "").toLowerCase().includes(query);
-    const matchType = (item.entity_type || "").toLowerCase().includes(query);
-    const d = item.data || item.item_data || {};
-    const matchStyle = (d.style_code || "").toLowerCase().includes(query);
-    const matchContractor = (d.contractor_name || "").toLowerCase().includes(query);
-    const matchChallanRec = (d.challan_rec || "").toLowerCase().includes(query);
-    const matchChallanDis = (d.challan_dis || "").toLowerCase().includes(query);
-    return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis;
-  });
-
-  const tbody = document.getElementById("trash-table-body");
-  const emptyState = document.getElementById("trash-empty-state");
-  const tableEl = document.getElementById("table-trash-items");
-
-  if (!tbody) return;
-
-  if (filtered.length === 0) {
-    tbody.innerHTML = "";
-    if (emptyState) emptyState.style.display = "block";
-    if (tableEl) tableEl.style.display = (allTrash.length === 0) ? "none" : "";
-    return;
+    });
   }
 
-  if (emptyState) emptyState.style.display = "none";
-  if (tableEl) tableEl.style.display = "";
-
-  const canDestroy = window.db.canUserPerformAction("can_destroy_trash");
-
-  tbody.innerHTML = filtered.map(item => {
-    // Determine friendly badge
-    let badgeClass = "badge-trash-receiving";
-    let badgeLabel = "📥 Receiving";
-
-    if (item.entity_type === "dispatch") {
-      badgeClass = "badge-trash-dispatch";
-      badgeLabel = "📤 Dispatch";
-    } else if (item.entity_type === "master") {
-      badgeClass = "badge-trash-master";
-      badgeLabel = "📦 Master Style";
-    } else if (item.entity_type === "final_style") {
-      badgeClass = "badge-trash-final";
-      badgeLabel = "📋 Daily Sheet";
-    } else if (item.entity_type === "distribution") {
-      badgeClass = "badge-trash-distribution";
-      badgeLabel = "📑 Work Dist.";
-    } else if (item.entity_type === "payment") {
-      badgeClass = "badge-trash-payment";
-      badgeLabel = "💰 Payment";
-    } else if (item.entity_type === "period") {
-      badgeClass = "badge-trash-period";
-      badgeLabel = "🗓️ Sheet Period";
-    } else if (item.entity_type === "distribution_period") {
-      badgeClass = "badge-trash-period";
-      badgeLabel = "🗓️ Dist. Period";
-    } else if (item.entity_type === "user") {
-      badgeClass = "badge-trash-user";
-      badgeLabel = "👤 User";
-    } else if (item.entity_type === "contractor") {
-      badgeClass = "badge-trash-master";
-      badgeLabel = "👷 Contractor";
+  function executeStudioPrint() {
+    const previewContent = document.getElementById("a4-sheet-preview")?.innerHTML;
+    const printRoot = document.getElementById("print-studio-paper-root");
+    if (!previewContent || !printRoot) {
+      showToast("Unable to generate print document.", "error");
+      return;
     }
+    printRoot.innerHTML = previewContent;
+    window.print();
+  }
+  let currentTrashFilterType = "all";
 
-    // Format deletion date
-    let dateStr = "";
-    if (item.deleted_at) {
-      try {
-        const d = new Date(item.deleted_at);
-        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      } catch (e) {
-        dateStr = item.deleted_at;
+  function renderTrashView() {
+    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+
+    // Update KPI counters
+    let receivingCount = 0;
+    let dispatchCount = 0;
+    let masterDailyCount = 0;
+    let paymentDistCount = 0;
+
+    allTrash.forEach(item => {
+      const t = item.entity_type;
+      if (t === "receiving") receivingCount++;
+      else if (t === "dispatch") dispatchCount++;
+      else if (t === "master" || t === "final_style") masterDailyCount++;
+      else if (t === "payment" || t === "distribution" || t === "period" || t === "distribution_period") paymentDistCount++;
+    });
+
+    const totalEl = document.getElementById("trash-kpi-total");
+    if (totalEl) totalEl.textContent = allTrash.length;
+    const recEl = document.getElementById("trash-kpi-receiving");
+    if (recEl) recEl.textContent = receivingCount;
+    const disEl = document.getElementById("trash-kpi-dispatch");
+    if (disEl) disEl.textContent = dispatchCount;
+    const mdEl = document.getElementById("trash-kpi-master-daily");
+    if (mdEl) mdEl.textContent = masterDailyCount;
+    const pdEl = document.getElementById("trash-kpi-payment-dist");
+    if (pdEl) pdEl.textContent = paymentDistCount;
+    const badgeEl = document.getElementById("trash-kpi-count-badge");
+    if (badgeEl) badgeEl.textContent = `${allTrash.length} Items`;
+
+    // Search and Module Filter
+    const query = (document.getElementById("trash-search-input")?.value || document.getElementById("input-trash-search")?.value || "").toLowerCase().trim();
+    const modFilter = document.getElementById("filter-trash-type")?.value || document.getElementById("filter-trash-module")?.value || "all";
+    currentTrashFilterType = modFilter;
+
+    let filtered = allTrash.filter(item => {
+      if (modFilter && modFilter !== "all") {
+        if (modFilter === "period") {
+          if (item.entity_type !== "period" && item.entity_type !== "distribution_period") return false;
+        } else if (item.entity_type !== modFilter) {
+          return false;
+        }
       }
+      if (!query) return true;
+      const matchTitle = (item.title || "").toLowerCase().includes(query);
+      const matchSub = (item.subtitle || "").toLowerCase().includes(query);
+      const matchUser = (item.deleted_by || "").toLowerCase().includes(query);
+      const matchType = (item.entity_type || "").toLowerCase().includes(query);
+      const d = item.data || item.item_data || {};
+      const matchStyle = (d.style_code || "").toLowerCase().includes(query);
+      const matchContractor = (d.contractor_name || "").toLowerCase().includes(query);
+      const matchChallanRec = (d.challan_rec || "").toLowerCase().includes(query);
+      const matchChallanDis = (d.challan_dis || "").toLowerCase().includes(query);
+      const matchChallanDs = (d.challan_no || "").toLowerCase().includes(query);
+      return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis || matchChallanDs;
+    });
+
+    const tbody = document.getElementById("trash-table-body");
+    const emptyState = document.getElementById("trash-empty-state");
+    const tableEl = document.getElementById("table-trash-items");
+
+    if (!tbody) return;
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = "";
+      if (emptyState) emptyState.style.display = "block";
+      if (tableEl) tableEl.style.display = (allTrash.length === 0) ? "none" : "";
+      return;
     }
 
-    const safeTitle = escapeHtml(item.title || "Deleted Record");
-    const safeSubtitle = escapeHtml(item.subtitle || "");
-    const safeUser = escapeHtml(item.deleted_by || "Admin");
+    if (emptyState) emptyState.style.display = "none";
+    if (tableEl) tableEl.style.display = "";
 
-    return `
+    const canDestroy = window.db.canUserPerformAction("can_destroy_trash");
+
+    tbody.innerHTML = filtered.map(item => {
+      // Determine friendly badge
+      let badgeClass = "badge-trash-receiving";
+      let badgeLabel = "📥 Receiving";
+
+      if (item.entity_type === "dispatch") {
+        badgeClass = "badge-trash-dispatch";
+        badgeLabel = "📤 Dispatch";
+      } else if (item.entity_type === "designer_sample") {
+        badgeClass = "badge-trash-dispatch";
+        badgeLabel = "🎨 Designer Pcs";
+      } else if (item.entity_type === "master") {
+        badgeClass = "badge-trash-master";
+        badgeLabel = "📦 Master Style";
+      } else if (item.entity_type === "final_style") {
+        badgeClass = "badge-trash-final";
+        badgeLabel = "📋 Daily Sheet";
+      } else if (item.entity_type === "distribution") {
+        badgeClass = "badge-trash-distribution";
+        badgeLabel = "📑 Work Dist.";
+      } else if (item.entity_type === "payment") {
+        badgeClass = "badge-trash-payment";
+        badgeLabel = "💰 Payment";
+      } else if (item.entity_type === "period") {
+        badgeClass = "badge-trash-period";
+        badgeLabel = "🗓️ Sheet Period";
+      } else if (item.entity_type === "distribution_period") {
+        badgeClass = "badge-trash-period";
+        badgeLabel = "🗓️ Dist. Period";
+      } else if (item.entity_type === "user") {
+        badgeClass = "badge-trash-user";
+        badgeLabel = "👤 User";
+      } else if (item.entity_type === "contractor") {
+        badgeClass = "badge-trash-master";
+        badgeLabel = "👷 Contractor";
+      }
+
+      // Format deletion date
+      let dateStr = "";
+      if (item.deleted_at) {
+        try {
+          const d = new Date(item.deleted_at);
+          dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+            ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch (e) {
+          dateStr = item.deleted_at;
+        }
+      }
+
+      const safeTitle = escapeHtml(item.title || "Deleted Record");
+      const safeSubtitle = escapeHtml(item.subtitle || "");
+      const safeUser = escapeHtml(item.deleted_by || "Admin");
+
+      return `
       <tr class="trash-item-row" data-id="${item.id}">
         <td>
           <span class="badge-trash-type ${badgeClass}">${badgeLabel}</span>
@@ -12219,31 +12439,31 @@ function renderTrashView() {
         </td>
       </tr>
     `;
-  }).join("");
-}
+    }).join("");
+  }
 
-function openTrashDetailsModal(id) {
-  const item = window.db.getTrashItemById(id);
-  if (!item) return;
+  function openTrashDetailsModal(id) {
+    const item = window.db.getTrashItemById(id);
+    if (!item) return;
 
-  const metaBox = document.getElementById("trash-detail-meta-box") || document.getElementById("trash-detail-meta");
-  const grid = document.getElementById("trash-detail-grid");
-  const btnRestore = document.getElementById("btn-trash-detail-restore");
-  const btnDestroy = document.getElementById("btn-trash-detail-destroy");
+    const metaBox = document.getElementById("trash-detail-meta-box") || document.getElementById("trash-detail-meta");
+    const grid = document.getElementById("trash-detail-grid");
+    const btnRestore = document.getElementById("btn-trash-detail-restore");
+    const btnDestroy = document.getElementById("btn-trash-detail-destroy");
 
-  if (metaBox) {
-    let dateStr = "";
-    if (item.deleted_at) {
-      try {
-        const d = new Date(item.deleted_at);
-        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      } catch (e) {
-        dateStr = item.deleted_at;
+    if (metaBox) {
+      let dateStr = "";
+      if (item.deleted_at) {
+        try {
+          const d = new Date(item.deleted_at);
+          dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+            ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        } catch (e) {
+          dateStr = item.deleted_at;
+        }
       }
-    }
 
-    metaBox.innerHTML = `
+      metaBox.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
         <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">${escapeHtml(item.title)}</span>
         <span class="badge-tag" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); font-weight: 700;">${item.entity_type.toUpperCase()}</span>
@@ -12252,205 +12472,205 @@ function openTrashDetailsModal(id) {
         📅 <strong>Deleted On:</strong> ${dateStr} &nbsp;|&nbsp; 👤 <strong>Deleted By:</strong> ${escapeHtml(item.deleted_by || "Admin")}
       </div>
     `;
-  }
+    }
 
-  if (grid) {
-    const data = item.data || {};
-    const entries = Object.entries(data);
-    if (entries.length === 0) {
-      grid.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No additional data fields recorded.</div>`;
-    } else {
-      grid.innerHTML = entries.map(([k, v]) => {
-        let valStr = "";
-        if (typeof v === "object" && v !== null) {
-          valStr = JSON.stringify(v);
-        } else {
-          valStr = String(v !== undefined && v !== null ? v : "—");
-        }
-        return `
+    if (grid) {
+      const data = item.data || {};
+      const entries = Object.entries(data);
+      if (entries.length === 0) {
+        grid.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No additional data fields recorded.</div>`;
+      } else {
+        grid.innerHTML = entries.map(([k, v]) => {
+          let valStr = "";
+          if (typeof v === "object" && v !== null) {
+            valStr = JSON.stringify(v);
+          } else {
+            valStr = String(v !== undefined && v !== null ? v : "—");
+          }
+          return `
           <div class="trash-detail-card">
             <span class="trash-detail-label">${escapeHtml(k.replace(/_/g, " "))}</span>
             <span class="trash-detail-val">${escapeHtml(valStr)}</span>
           </div>
         `;
-      }).join("");
+        }).join("");
+      }
+    }
+
+    if (btnRestore) {
+      btnRestore.onclick = () => {
+        restoreTrashItem(item.id);
+        closeModal("modal-trash-details");
+      };
+    }
+
+    if (btnDestroy) {
+      btnDestroy.onclick = () => {
+        destroyTrashItem(item.id);
+      };
+    }
+
+    openModal("modal-trash-details");
+  }
+
+  async function restoreTrashItem(id) {
+    if (!id) return;
+    try {
+      const item = window.db.getTrashItemById(id);
+      const title = item ? item.title : "record";
+      showToast(`Restoring ${title}...`, "info");
+      await window.db.restoreFromTrash(id);
+      showToast(`✓ Successfully restored: ${title}`, "success");
+      renderTrashView();
+      if (typeof refreshAllViews === "function") refreshAllViews();
+      else if (typeof renderAll === "function") renderAll();
+    } catch (err) {
+      console.error("restoreTrashItem error:", err);
+      showToast(`✕ Error restoring item: ${err.message || err}`, "error");
     }
   }
 
-  if (btnRestore) {
-    btnRestore.onclick = () => {
-      restoreTrashItem(item.id);
-      closeModal("modal-trash-details");
-    };
-  }
-
-  if (btnDestroy) {
-    btnDestroy.onclick = () => {
-      destroyTrashItem(item.id);
-    };
-  }
-
-  openModal("modal-trash-details");
-}
-
-async function restoreTrashItem(id) {
-  if (!id) return;
-  try {
+  async function destroyTrashItem(id) {
+    if (!id) return;
     const item = window.db.getTrashItemById(id);
-    const title = item ? item.title : "record";
-    showToast(`Restoring ${title}...`, "info");
-    await window.db.restoreFromTrash(id);
-    showToast(`✓ Successfully restored: ${title}`, "success");
+    const title = item ? item.title : "this item";
+    if (!confirm(`Are you sure you want to permanently destroy "${title}"?\nThis action cannot be undone.`)) {
+      return;
+    }
+    try {
+      showToast(`Permanently deleting...`, "info");
+      await window.db.destroyFromTrash(id);
+      showToast(`✓ Item permanently destroyed.`, "success");
+      closeModal("modal-trash-details");
+      renderTrashView();
+    } catch (err) {
+      console.error("destroyTrashItem error:", err);
+      showToast(`✕ Error destroying item: ${err.message || err}`, "error");
+    }
+  }
+
+  async function restoreAllTrashAction() {
+    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+    if (allTrash.length === 0) {
+      showToast("Trash is already empty.", "info");
+      return;
+    }
+    if (!confirm(`Restore all ${allTrash.length} items from trash?`)) {
+      return;
+    }
+    try {
+      showToast("Restoring all items...", "info");
+      const res = await window.db.restoreAllTrash(currentTrashFilterType);
+      showToast(`✓ Restored ${(res && res.restoredCount) || allTrash.length} items successfully!`, "success");
+      renderTrashView();
+      if (typeof refreshAllViews === "function") refreshAllViews();
+      else if (typeof renderAll === "function") renderAll();
+    } catch (err) {
+      console.error("restoreAllTrashAction error:", err);
+      showToast(`✕ Error restoring all: ${err.message || err}`, "error");
+    }
+  }
+
+  async function emptyTrashAction() {
+    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+    if (allTrash.length === 0) {
+      showToast("Trash is already empty.", "info");
+      return;
+    }
+    if (!confirm(`⚠️ PERMANENT DESTRUCTION WARNING!\n\nAre you sure you want to permanently empty the trash (${allTrash.length} items)?\nThis cannot be undone.`)) {
+      return;
+    }
+    try {
+      showToast("Emptying trash...", "info");
+      await window.db.emptyTrash();
+      showToast("✓ Trash has been emptied completely.", "success");
+      renderTrashView();
+    } catch (err) {
+      console.error("emptyTrashAction error:", err);
+      showToast(`✕ Error emptying trash: ${err.message || err}`, "error");
+    }
+  }
+
+  function initTrashView() {
+    const btnRestoreAll = document.getElementById("btn-trash-restore-all");
+    if (btnRestoreAll) btnRestoreAll.onclick = restoreAllTrashAction;
+
+    const btnEmpty = document.getElementById("btn-trash-empty");
+    if (btnEmpty) btnEmpty.onclick = emptyTrashAction;
+
+    const searchInp = document.getElementById("trash-search-input") || document.getElementById("input-trash-search");
+    if (searchInp) searchInp.oninput = renderTrashView;
+
+    const typeFilter = document.getElementById("filter-trash-type") || document.getElementById("filter-trash-module");
+    if (typeFilter) typeFilter.onchange = renderTrashView;
+
     renderTrashView();
-    if (typeof refreshAllViews === "function") refreshAllViews();
-    else if (typeof renderAll === "function") renderAll();
-  } catch (err) {
-    console.error("restoreTrashItem error:", err);
-    showToast(`✕ Error restoring item: ${err.message || err}`, "error");
-  }
-}
-
-async function destroyTrashItem(id) {
-  if (!id) return;
-  const item = window.db.getTrashItemById(id);
-  const title = item ? item.title : "this item";
-  if (!confirm(`Are you sure you want to permanently destroy "${title}"?\nThis action cannot be undone.`)) {
-    return;
-  }
-  try {
-    showToast(`Permanently deleting...`, "info");
-    await window.db.destroyFromTrash(id);
-    showToast(`✓ Item permanently destroyed.`, "success");
-    closeModal("modal-trash-details");
-    renderTrashView();
-  } catch (err) {
-    console.error("destroyTrashItem error:", err);
-    showToast(`✕ Error destroying item: ${err.message || err}`, "error");
-  }
-}
-
-async function restoreAllTrashAction() {
-  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-  if (allTrash.length === 0) {
-    showToast("Trash is already empty.", "info");
-    return;
-  }
-  if (!confirm(`Restore all ${allTrash.length} items from trash?`)) {
-    return;
-  }
-  try {
-    showToast("Restoring all items...", "info");
-    const res = await window.db.restoreAllTrash(currentTrashFilterType);
-    showToast(`✓ Restored ${(res && res.restoredCount) || allTrash.length} items successfully!`, "success");
-    renderTrashView();
-    if (typeof refreshAllViews === "function") refreshAllViews();
-    else if (typeof renderAll === "function") renderAll();
-  } catch (err) {
-    console.error("restoreAllTrashAction error:", err);
-    showToast(`✕ Error restoring all: ${err.message || err}`, "error");
-  }
-}
-
-async function emptyTrashAction() {
-  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-  if (allTrash.length === 0) {
-    showToast("Trash is already empty.", "info");
-    return;
-  }
-  if (!confirm(`⚠️ PERMANENT DESTRUCTION WARNING!\n\nAre you sure you want to permanently empty the trash (${allTrash.length} items)?\nThis cannot be undone.`)) {
-    return;
-  }
-  try {
-    showToast("Emptying trash...", "info");
-    await window.db.emptyTrash();
-    showToast("✓ Trash has been emptied completely.", "success");
-    renderTrashView();
-  } catch (err) {
-    console.error("emptyTrashAction error:", err);
-    showToast(`✕ Error emptying trash: ${err.message || err}`, "error");
-  }
-}
-
-function initTrashView() {
-  const btnRestoreAll = document.getElementById("btn-trash-restore-all");
-  if (btnRestoreAll) btnRestoreAll.onclick = restoreAllTrashAction;
-
-  const btnEmpty = document.getElementById("btn-trash-empty");
-  if (btnEmpty) btnEmpty.onclick = emptyTrashAction;
-
-  const searchInp = document.getElementById("trash-search-input") || document.getElementById("input-trash-search");
-  if (searchInp) searchInp.oninput = renderTrashView;
-
-  const typeFilter = document.getElementById("filter-trash-type") || document.getElementById("filter-trash-module");
-  if (typeFilter) typeFilter.onchange = renderTrashView;
-
-  renderTrashView();
-}
-
-window.initTrashView = initTrashView;
-window.openTrashDetailsModal = openTrashDetailsModal;
-window.restoreTrashItem = restoreTrashItem;
-window.destroyTrashItem = destroyTrashItem;
-window.restoreAllTrashAction = restoreAllTrashAction;
-window.emptyTrashAction = emptyTrashAction;
-window.renderTrashView = renderTrashView;
-window.renderTrashTable = renderTrashView;
-
-// ====================================================================
-// FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
-// ====================================================================
-function renderDashboardOverdueAlerts() {
-  const container = document.getElementById("dash-overdue-list-container");
-  if (!container) return;
-
-  const summary = (window.db && typeof window.db.getOverdueStylesSummary === "function")
-    ? window.db.getOverdueStylesSummary()
-    : { overdueList: [], dueSoonList: [], onScheduleList: [], totalOverdueCount: 0, totalOverduePieces: 0, totalDueSoonCount: 0, totalDueSoonPieces: 0, totalOnScheduleCount: 0 };
-
-  const badgeCount = document.getElementById("dash-overdue-badge-count");
-  if (badgeCount) {
-    badgeCount.textContent = `${summary.totalOverdueCount} Overdue`;
-    badgeCount.className = summary.totalOverdueCount > 0 ? "badge-tag rose inline" : "badge-tag inline";
   }
 
-  const elOverdueCount = document.getElementById("dash-overdue-count");
-  if (elOverdueCount) elOverdueCount.textContent = `${summary.totalOverdueCount} Style${summary.totalOverdueCount === 1 ? '' : 's'}`;
+  window.initTrashView = initTrashView;
+  window.openTrashDetailsModal = openTrashDetailsModal;
+  window.restoreTrashItem = restoreTrashItem;
+  window.destroyTrashItem = destroyTrashItem;
+  window.restoreAllTrashAction = restoreAllTrashAction;
+  window.emptyTrashAction = emptyTrashAction;
+  window.renderTrashView = renderTrashView;
+  window.renderTrashTable = renderTrashView;
 
-  const elOverduePcs = document.getElementById("dash-overdue-pcs");
-  if (elOverduePcs) elOverduePcs.textContent = `${summary.totalOverduePieces.toLocaleString()} pcs pending`;
+  // ====================================================================
+  // FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
+  // ====================================================================
+  function renderDashboardOverdueAlerts() {
+    const container = document.getElementById("dash-overdue-list-container");
+    if (!container) return;
 
-  const elDueSoonCount = document.getElementById("dash-due-soon-count");
-  if (elDueSoonCount) elDueSoonCount.textContent = `${summary.totalDueSoonCount} Style${summary.totalDueSoonCount === 1 ? '' : 's'}`;
+    const summary = (window.db && typeof window.db.getOverdueStylesSummary === "function")
+      ? window.db.getOverdueStylesSummary()
+      : { overdueList: [], dueSoonList: [], onScheduleList: [], totalOverdueCount: 0, totalOverduePieces: 0, totalDueSoonCount: 0, totalDueSoonPieces: 0, totalOnScheduleCount: 0 };
 
-  const elDueSoonPcs = document.getElementById("dash-due-soon-pcs");
-  if (elDueSoonPcs) elDueSoonPcs.textContent = `${summary.totalDueSoonPieces.toLocaleString()} pcs pending`;
+    const badgeCount = document.getElementById("dash-overdue-badge-count");
+    if (badgeCount) {
+      badgeCount.textContent = `${summary.totalOverdueCount} Overdue`;
+      badgeCount.className = summary.totalOverdueCount > 0 ? "badge-tag rose inline" : "badge-tag inline";
+    }
 
-  const elOnTrack = document.getElementById("dash-on-track-count");
-  if (elOnTrack) elOnTrack.textContent = `${summary.totalOnScheduleCount} Style${summary.totalOnScheduleCount === 1 ? '' : 's'}`;
+    const elOverdueCount = document.getElementById("dash-overdue-count");
+    if (elOverdueCount) elOverdueCount.textContent = `${summary.totalOverdueCount} Style${summary.totalOverdueCount === 1 ? '' : 's'}`;
 
-  const combinedAlerts = [...summary.overdueList, ...summary.dueSoonList];
+    const elOverduePcs = document.getElementById("dash-overdue-pcs");
+    if (elOverduePcs) elOverduePcs.textContent = `${summary.totalOverduePieces.toLocaleString()} pcs pending`;
 
-  if (combinedAlerts.length === 0) {
-    container.innerHTML = `
+    const elDueSoonCount = document.getElementById("dash-due-soon-count");
+    if (elDueSoonCount) elDueSoonCount.textContent = `${summary.totalDueSoonCount} Style${summary.totalDueSoonCount === 1 ? '' : 's'}`;
+
+    const elDueSoonPcs = document.getElementById("dash-due-soon-pcs");
+    if (elDueSoonPcs) elDueSoonPcs.textContent = `${summary.totalDueSoonPieces.toLocaleString()} pcs pending`;
+
+    const elOnTrack = document.getElementById("dash-on-track-count");
+    if (elOnTrack) elOnTrack.textContent = `${summary.totalOnScheduleCount} Style${summary.totalOnScheduleCount === 1 ? '' : 's'}`;
+
+    const combinedAlerts = [...summary.overdueList, ...summary.dueSoonList];
+
+    if (combinedAlerts.length === 0) {
+      container.innerHTML = `
       <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); background: var(--bg-surface); border: 1.5px dashed var(--border-color); border-radius: var(--radius-md);">
         <div style="font-size: 2rem; margin-bottom: 0.35rem;">🎉</div>
         <strong style="color: var(--text-main); font-size: 0.95rem;">All Embroidery Floor Orders Are On Schedule!</strong>
         <p style="font-size: 0.775rem; margin-top: 0.25rem;">Zero styles currently exceeding delivery target dates. Great job team!</p>
       </div>
     `;
-    return;
-  }
+      return;
+    }
 
-  container.innerHTML = combinedAlerts.slice(0, 8).map(item => {
-    const isLate = (item.status === "overdue");
-    const rowClass = isLate ? "is-late" : "is-due-soon";
-    const badgeTag = isLate
-      ? `<span class="badge-tag rose inline" style="font-weight: 800;">🚨 ${item.daysLate} Day${item.daysLate === 1 ? '' : 's'} Late</span>`
-      : `<span class="badge-tag amber inline" style="font-weight: 800;">⏳ Due in ${item.daysLeft} Day${item.daysLeft === 1 ? '' : 's'}</span>`;
+    container.innerHTML = combinedAlerts.slice(0, 8).map(item => {
+      const isLate = (item.status === "overdue");
+      const rowClass = isLate ? "is-late" : "is-due-soon";
+      const badgeTag = isLate
+        ? `<span class="badge-tag rose inline" style="font-weight: 800;">🚨 ${item.daysLate} Day${item.daysLate === 1 ? '' : 's'} Late</span>`
+        : `<span class="badge-tag amber inline" style="font-weight: 800;">⏳ Due in ${item.daysLeft} Day${item.daysLeft === 1 ? '' : 's'}</span>`;
 
-    const targetFormatted = item.target_date || "No date set";
+      const targetFormatted = item.target_date || "No date set";
 
-    return `
+      return `
       <div class="overdue-item-row ${rowClass}">
         <div style="display: flex; align-items: center; gap: 0.65rem; min-width: 200px;">
           <div style="display: flex; flex-direction: column;">
@@ -12494,275 +12714,275 @@ function renderDashboardOverdueAlerts() {
         </div>
       </div>
     `;
-  }).join("");
-}
-
-function sendOverdueWhatsAppReminder(styleCode, category, contractor, balance, targetDate, daysLate, phone) {
-  let cleanPhone = (phone || "").replace(/[^0-9]/g, "");
-  if (cleanPhone.startsWith("0")) {
-    cleanPhone = "92" + cleanPhone.substring(1);
+    }).join("");
   }
 
-  let delayNotice = daysLate > 0 ? `jo ${daysLate} din pehle guzar chuki hai` : `aaj hai`;
-  const message = `*URGENT: CRAFTFLOW HAND EMBROIDERY FLOOR REMINDER*\n` +
-    `---------------------------------------\n` +
-    `Salam *${contractor}* bhai,\n\n` +
-    `Aap k paas Style *${styleCode}* (*${category}*) k *${Number(balance).toLocaleString()} pieces* pending hain.\n` +
-    `Is order ki target delivery date *${targetDate}* thi (${delayNotice}).\n\n` +
-    `Garment unit dispatch aur finishing k liye yeh maal foran darkar hai. Meharbani farma kar aaj hi finished pieces adday se dispatch karwayen.\n\n` +
-    `Shukriya,\n*Hand Embroidery Department*`;
+  function sendOverdueWhatsAppReminder(styleCode, category, contractor, balance, targetDate, daysLate, phone) {
+    let cleanPhone = (phone || "").replace(/[^0-9]/g, "");
+    if (cleanPhone.startsWith("0")) {
+      cleanPhone = "92" + cleanPhone.substring(1);
+    }
 
-  const encoded = encodeURIComponent(message);
-  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-  window.open(url, "_blank");
-}
+    let delayNotice = daysLate > 0 ? `jo ${daysLate} din pehle guzar chuki hai` : `aaj hai`;
+    const message = `*URGENT: CRAFTFLOW HAND EMBROIDERY FLOOR REMINDER*\n` +
+      `---------------------------------------\n` +
+      `Salam *${contractor}* bhai,\n\n` +
+      `Aap k paas Style *${styleCode}* (*${category}*) k *${Number(balance).toLocaleString()} pieces* pending hain.\n` +
+      `Is order ki target delivery date *${targetDate}* thi (${delayNotice}).\n\n` +
+      `Garment unit dispatch aur finishing k liye yeh maal foran darkar hai. Meharbani farma kar aaj hi finished pieces adday se dispatch karwayen.\n\n` +
+      `Shukriya,\n*Hand Embroidery Department*`;
 
-function openUpdateDeadlineModal(masterId) {
-  const master = window.db.getMasterInventory();
-  const item = master.find(m => Number(m.id) === Number(masterId));
-  if (!item) {
-    showToast("Style record not found", "error");
-    return;
+    const encoded = encodeURIComponent(message);
+    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    window.open(url, "_blank");
   }
 
-  document.getElementById("deadline-style-id").value = item.id;
-  document.getElementById("deadline-summary-code").textContent = item.style_code;
-  document.getElementById("deadline-summary-cat").textContent = item.category;
-  document.getElementById("deadline-summary-cont").textContent = item.contractor_name || "Unassigned";
-  document.getElementById("deadline-summary-wip").textContent = `${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs`;
-
-  const odInfo = item.overdue_info || { badgeText: "On Schedule" };
-  document.getElementById("deadline-summary-status").textContent = odInfo.badgeText;
-
-  const dateInput = document.getElementById("deadline-date-input");
-  if (item.target_date) {
-    dateInput.value = item.target_date;
-  } else {
-    const defaultDate = new Date();
-    defaultDate.setDate(defaultDate.getDate() + 7);
-    dateInput.value = defaultDate.toISOString().split("T")[0];
-  }
-
-  openModal("modal-update-deadline");
-}
-
-function initDeadlineModalEvents() {
-  const form = document.getElementById("form-update-deadline");
-  if (form) {
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const id = document.getElementById("deadline-style-id").value;
-      const targetDate = document.getElementById("deadline-date-input").value;
-      if (!id || !targetDate) return;
-
-      window.db.updateMasterTargetDate(id, targetDate);
-      closeModal("modal-update-deadline");
-      showToast(`Target delivery date updated to ${targetDate}!`, "success");
-
-      // Refresh views
-      if (typeof renderMasterInventory === "function") renderMasterInventory();
-      if (typeof renderDashboardView === "function") renderDashboardView();
-      if (typeof renderFinalStyleSheet === "function") renderFinalStyleSheet();
-    });
-  }
-
-  document.querySelectorAll(".btn-preset-deadline").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const days = parseInt(btn.getAttribute("data-days"), 10) || 7;
-      const d = new Date();
-      d.setDate(d.getDate() + days);
-      const dateInput = document.getElementById("deadline-date-input");
-      if (dateInput) dateInput.value = d.toISOString().split("T")[0];
-    });
-  });
-}
-
-// ====================================================================
-// AUTOMATIC CONTRACTOR PARCHA & BILLING SHEET CONTROLLER
-// ====================================================================
-let activeParchaData = null;
-
-function openContractorParchaModal(contractorName = null, period = null) {
-  try {
-    const contractors = (window.db && typeof window.db.getContractors === "function")
-      ? window.db.getContractors()
-      : [];
-
-    if (!contractors || contractors.length === 0) {
-      showToast("No contractors registered yet. Add a contractor first.", "info");
+  function openUpdateDeadlineModal(masterId) {
+    const master = window.db.getMasterInventory();
+    const item = master.find(m => Number(m.id) === Number(masterId));
+    if (!item) {
+      showToast("Style record not found", "error");
       return;
     }
 
-    populateParchaDropdowns(contractorName, period);
+    document.getElementById("deadline-style-id").value = item.id;
+    document.getElementById("deadline-summary-code").textContent = item.style_code;
+    document.getElementById("deadline-summary-cat").textContent = item.category;
+    document.getElementById("deadline-summary-cont").textContent = item.contractor_name || "Unassigned";
+    document.getElementById("deadline-summary-wip").textContent = `${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs`;
 
-    // Set today's date
-    const dateInput = document.getElementById("parcha-date-input");
-    if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+    const odInfo = item.overdue_info || { badgeText: "On Schedule" };
+    document.getElementById("deadline-summary-status").textContent = odInfo.badgeText;
 
-    // Reset inputs
-    const adv = document.getElementById("parcha-input-advance");
-    if (adv) adv.value = 0;
-    const ded = document.getElementById("parcha-input-deduction");
-    if (ded) ded.value = 0;
-    const bon = document.getElementById("parcha-input-bonus");
-    if (bon) bon.value = 0;
-    const nts = document.getElementById("parcha-input-notes");
-    if (nts) nts.value = "Payment cleared on inspection.";
+    const dateInput = document.getElementById("deadline-date-input");
+    if (item.target_date) {
+      dateInput.value = item.target_date;
+    } else {
+      const defaultDate = new Date();
+      defaultDate.setDate(defaultDate.getDate() + 7);
+      dateInput.value = defaultDate.toISOString().split("T")[0];
+    }
 
-    // Open modal FIRST so user sees instant feedback
-    openModal("modal-contractor-parcha");
-
-    try { renderContractorParchaPreview(); } catch (err) { console.error("Parcha preview render error:", err); }
-    try { renderParchaHistoryList(); } catch (err) { console.error("Parcha history render error:", err); }
-  } catch (e) {
-    console.error("openContractorParchaModal error:", e);
-    showToast("Error opening Contractor Parcha: " + (e.message || e), "error");
+    openModal("modal-update-deadline");
   }
-}
 
-function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
-  const contSelect = document.getElementById("parcha-select-contractor");
-  if (contSelect) {
-    const contractors = (window.db && typeof window.db.getContractors === "function")
-      ? window.db.getContractors()
-      : [];
-    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
-      ? window.db.getWorkDistribution()
-      : [];
+  function initDeadlineModalEvents() {
+    const form = document.getElementById("form-update-deadline");
+    if (form) {
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const id = document.getElementById("deadline-style-id").value;
+        const targetDate = document.getElementById("deadline-date-input").value;
+        if (!id || !targetDate) return;
 
-    const contMap = new Map();
-    contractors.forEach(c => {
-      if (c && c.name && c.name.trim()) {
-        const cleanKey = c.name.trim().toLowerCase();
-        contMap.set(cleanKey, { name: toProperCase(c.name.trim()), phone: c.phone || "" });
-      }
+        window.db.updateMasterTargetDate(id, targetDate);
+        closeModal("modal-update-deadline");
+        showToast(`Target delivery date updated to ${targetDate}!`, "success");
+
+        // Refresh views
+        if (typeof renderMasterInventory === "function") renderMasterInventory();
+        if (typeof renderDashboardView === "function") renderDashboardView();
+        if (typeof renderFinalStyleSheet === "function") renderFinalStyleSheet();
+      });
+    }
+
+    document.querySelectorAll(".btn-preset-deadline").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const days = parseInt(btn.getAttribute("data-days"), 10) || 7;
+        const d = new Date();
+        d.setDate(d.getDate() + days);
+        const dateInput = document.getElementById("deadline-date-input");
+        if (dateInput) dateInput.value = d.toISOString().split("T")[0];
+      });
     });
+  }
 
-    distList.forEach(w => {
-      if (w && w.contractor_name && w.contractor_name.trim()) {
-        const cleanKey = w.contractor_name.trim().toLowerCase();
-        if (!contMap.has(cleanKey)) {
-          contMap.set(cleanKey, { name: w.contractor_name.trim(), phone: "" });
+  // ====================================================================
+  // AUTOMATIC CONTRACTOR PARCHA & BILLING SHEET CONTROLLER
+  // ====================================================================
+  let activeParchaData = null;
+
+  function openContractorParchaModal(contractorName = null, period = null) {
+    try {
+      const contractors = (window.db && typeof window.db.getContractors === "function")
+        ? window.db.getContractors()
+        : [];
+
+      if (!contractors || contractors.length === 0) {
+        showToast("No contractors registered yet. Add a contractor first.", "info");
+        return;
+      }
+
+      populateParchaDropdowns(contractorName, period);
+
+      // Set today's date
+      const dateInput = document.getElementById("parcha-date-input");
+      if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+
+      // Reset inputs
+      const adv = document.getElementById("parcha-input-advance");
+      if (adv) adv.value = 0;
+      const ded = document.getElementById("parcha-input-deduction");
+      if (ded) ded.value = 0;
+      const bon = document.getElementById("parcha-input-bonus");
+      if (bon) bon.value = 0;
+      const nts = document.getElementById("parcha-input-notes");
+      if (nts) nts.value = "Payment cleared on inspection.";
+
+      // Open modal FIRST so user sees instant feedback
+      openModal("modal-contractor-parcha");
+
+      try { renderContractorParchaPreview(); } catch (err) { console.error("Parcha preview render error:", err); }
+      try { renderParchaHistoryList(); } catch (err) { console.error("Parcha history render error:", err); }
+    } catch (e) {
+      console.error("openContractorParchaModal error:", e);
+      showToast("Error opening Contractor Parcha: " + (e.message || e), "error");
+    }
+  }
+
+  function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
+    const contSelect = document.getElementById("parcha-select-contractor");
+    if (contSelect) {
+      const contractors = (window.db && typeof window.db.getContractors === "function")
+        ? window.db.getContractors()
+        : [];
+      const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+        ? window.db.getWorkDistribution()
+        : [];
+
+      const contMap = new Map();
+      contractors.forEach(c => {
+        if (c && c.name && c.name.trim()) {
+          const cleanKey = c.name.trim().toLowerCase();
+          contMap.set(cleanKey, { name: toProperCase(c.name.trim()), phone: c.phone || "" });
         }
-      }
-    });
+      });
 
-    const allConts = Array.from(contMap.values());
-    contSelect.innerHTML = allConts.map(c => `
+      distList.forEach(w => {
+        if (w && w.contractor_name && w.contractor_name.trim()) {
+          const cleanKey = w.contractor_name.trim().toLowerCase();
+          if (!contMap.has(cleanKey)) {
+            contMap.set(cleanKey, { name: w.contractor_name.trim(), phone: "" });
+          }
+        }
+      });
+
+      const allConts = Array.from(contMap.values());
+      contSelect.innerHTML = allConts.map(c => `
       <option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} ${c.phone ? `(${escapeHtml(c.phone)})` : ''}</option>
     `).join("");
 
-    if (selectedCont) {
-      const match = allConts.find(c => c.name.toLowerCase() === selectedCont.trim().toLowerCase());
-      if (match) contSelect.value = match.name;
-    } else if (allConts.length > 0) {
-      contSelect.value = allConts[0].name;
+      if (selectedCont) {
+        const match = allConts.find(c => c.name.toLowerCase() === selectedCont.trim().toLowerCase());
+        if (match) contSelect.value = match.name;
+      } else if (allConts.length > 0) {
+        contSelect.value = allConts[0].name;
+      }
+    }
+
+    const periodSelect = document.getElementById("parcha-select-period");
+    if (periodSelect) {
+      const distPeriods = (window.db && typeof window.db.getDistributionPeriods === "function")
+        ? window.db.getDistributionPeriods()
+        : [];
+      const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+        ? window.db.getWorkDistribution()
+        : [];
+
+      const periodSet = new Set();
+      distPeriods.forEach(p => {
+        if (p && p.period_name && p.period_name.trim()) periodSet.add(p.period_name.trim());
+      });
+      distList.forEach(w => {
+        if (w && w.period && w.period.trim()) periodSet.add(w.period.trim());
+      });
+
+      const uniquePeriods = Array.from(periodSet);
+      let periodOptions = "";
+      uniquePeriods.forEach(p => {
+        periodOptions += `<option value="${escapeHtml(p)}">📅 ${escapeHtml(p)}</option>`;
+      });
+      periodOptions += `<option value="all">⚡ All Production Cycles</option>`;
+      periodSelect.innerHTML = periodOptions;
+
+      const activeP = (typeof getActiveDistributionPeriod === "function")
+        ? getActiveDistributionPeriod()
+        : (uniquePeriods[0] || "all");
+
+      if (selectedPeriod && (selectedPeriod === "all" || uniquePeriods.some(p => p.toLowerCase() === selectedPeriod.toLowerCase()))) {
+        const match = uniquePeriods.find(p => p.toLowerCase() === selectedPeriod.toLowerCase());
+        periodSelect.value = match || selectedPeriod;
+      } else if (uniquePeriods.some(p => p.toLowerCase() === (activeP || "").toLowerCase())) {
+        const match = uniquePeriods.find(p => p.toLowerCase() === activeP.toLowerCase());
+        periodSelect.value = match;
+      } else if (uniquePeriods.length > 0) {
+        periodSelect.value = uniquePeriods[0];
+      } else {
+        periodSelect.value = "all";
+      }
     }
   }
 
-  const periodSelect = document.getElementById("parcha-select-period");
-  if (periodSelect) {
-    const distPeriods = (window.db && typeof window.db.getDistributionPeriods === "function")
-      ? window.db.getDistributionPeriods()
-      : [];
-    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
-      ? window.db.getWorkDistribution()
-      : [];
+  function renderContractorParchaPreview() {
+    const contSelect = document.getElementById("parcha-select-contractor");
+    const periodSelect = document.getElementById("parcha-select-period");
+    const dateInput = document.getElementById("parcha-date-input");
 
-    const periodSet = new Set();
-    distPeriods.forEach(p => {
-      if (p && p.period_name && p.period_name.trim()) periodSet.add(p.period_name.trim());
-    });
-    distList.forEach(w => {
-      if (w && w.period && w.period.trim()) periodSet.add(w.period.trim());
-    });
-
-    const uniquePeriods = Array.from(periodSet);
-    let periodOptions = "";
-    uniquePeriods.forEach(p => {
-      periodOptions += `<option value="${escapeHtml(p)}">📅 ${escapeHtml(p)}</option>`;
-    });
-    periodOptions += `<option value="all">⚡ All Production Cycles</option>`;
-    periodSelect.innerHTML = periodOptions;
-
-    const activeP = (typeof getActiveDistributionPeriod === "function")
-      ? getActiveDistributionPeriod()
-      : (uniquePeriods[0] || "all");
-
-    if (selectedPeriod && (selectedPeriod === "all" || uniquePeriods.some(p => p.toLowerCase() === selectedPeriod.toLowerCase()))) {
-      const match = uniquePeriods.find(p => p.toLowerCase() === selectedPeriod.toLowerCase());
-      periodSelect.value = match || selectedPeriod;
-    } else if (uniquePeriods.some(p => p.toLowerCase() === (activeP || "").toLowerCase())) {
-      const match = uniquePeriods.find(p => p.toLowerCase() === activeP.toLowerCase());
-      periodSelect.value = match;
-    } else if (uniquePeriods.length > 0) {
-      periodSelect.value = uniquePeriods[0];
-    } else {
-      periodSelect.value = "all";
+    let contractorName = contSelect ? contSelect.value : "";
+    if (!contractorName && contSelect && contSelect.options && contSelect.options.length > 0) {
+      contractorName = contSelect.options[0].value;
+      contSelect.value = contractorName;
     }
-  }
-}
+    const period = periodSelect ? periodSelect.value : "all";
+    const slipDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
 
-function renderContractorParchaPreview() {
-  const contSelect = document.getElementById("parcha-select-contractor");
-  const periodSelect = document.getElementById("parcha-select-period");
-  const dateInput = document.getElementById("parcha-date-input");
+    if (!contractorName) return;
 
-  let contractorName = contSelect ? contSelect.value : "";
-  if (!contractorName && contSelect && contSelect.options && contSelect.options.length > 0) {
-    contractorName = contSelect.options[0].value;
-    contSelect.value = contractorName;
-  }
-  const period = periodSelect ? periodSelect.value : "all";
-  const slipDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
+    const data = (window.db && typeof window.db.generateContractorParchaData === "function")
+      ? window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period)
+      : null;
 
-  if (!contractorName) return;
+    if (!data) return;
+    data.slip_date = slipDate;
 
-  const data = (window.db && typeof window.db.generateContractorParchaData === "function")
-    ? window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period)
-    : null;
+    // Read overrides from inputs
+    const advance = Number(document.getElementById("parcha-input-advance")?.value) || 0;
+    const deduction = Number(document.getElementById("parcha-input-deduction")?.value) || 0;
+    const bonus = Number(document.getElementById("parcha-input-bonus")?.value) || 0;
+    const notes = document.getElementById("parcha-input-notes")?.value || "";
 
-  if (!data) return;
-  data.slip_date = slipDate;
+    data.advance_amount = advance;
+    data.deduction_amount = deduction;
+    data.bonus_amount = bonus;
+    data.net_payable = Math.max(0, (data.gross_amount || 0) - advance - deduction + bonus);
+    data.notes = notes;
 
-  // Read overrides from inputs
-  const advance = Number(document.getElementById("parcha-input-advance")?.value) || 0;
-  const deduction = Number(document.getElementById("parcha-input-deduction")?.value) || 0;
-  const bonus = Number(document.getElementById("parcha-input-bonus")?.value) || 0;
-  const notes = document.getElementById("parcha-input-notes")?.value || "";
+    activeParchaData = data;
 
-  data.advance_amount = advance;
-  data.deduction_amount = deduction;
-  data.bonus_amount = bonus;
-  data.net_payable = Math.max(0, (data.gross_amount || 0) - advance - deduction + bonus);
-  data.notes = notes;
+    // Helper for safe DOM text updates
+    const setTxt = (id, txt) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = txt;
+    };
 
-  activeParchaData = data;
+    setTxt("parcha-paper-no", data.parcha_no || "PCH-0000");
+    setTxt("parcha-paper-cont-name", data.contractor_name || "—");
+    setTxt("parcha-paper-cont-phone", data.contractor_phone || "Not recorded");
+    setTxt("parcha-paper-date", data.slip_date || slipDate);
+    setTxt("parcha-paper-period", data.period || "All Production Records");
 
-  // Helper for safe DOM text updates
-  const setTxt = (id, txt) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = txt;
-  };
-
-  setTxt("parcha-paper-no", data.parcha_no || "PCH-0000");
-  setTxt("parcha-paper-cont-name", data.contractor_name || "—");
-  setTxt("parcha-paper-cont-phone", data.contractor_phone || "Not recorded");
-  setTxt("parcha-paper-date", data.slip_date || slipDate);
-  setTxt("parcha-paper-period", data.period || "All Production Records");
-
-  const tbody = document.getElementById("parcha-paper-tbody");
-  if (tbody) {
-    if (!data.items || data.items.length === 0) {
-      tbody.innerHTML = `
+    const tbody = document.getElementById("parcha-paper-tbody");
+    if (tbody) {
+      if (!data.items || data.items.length === 0) {
+        tbody.innerHTML = `
         <tr>
           <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
             No dispatched or finished pieces found for <strong>${escapeHtml(data.contractor_name)}</strong> in this period.
           </td>
         </tr>
       `;
-    } else {
-      tbody.innerHTML = data.items.map(item => `
+      } else {
+        tbody.innerHTML = data.items.map(item => `
         <tr>
           <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: #64748b;">${item.sr}</td>
           <td><strong style="color: #0f172a; font-family: var(--font-mono);">${escapeHtml(item.style_code)}</strong></td>
@@ -12772,164 +12992,164 @@ function renderContractorParchaPreview() {
           <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: #0f172a;">Rs. ${(item.total_amount || 0).toLocaleString()}</td>
         </tr>
       `).join("");
+      }
     }
+
+    setTxt("parcha-paper-total-pcs", (data.total_pieces || 0).toLocaleString());
+    setTxt("parcha-paper-gross-total", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
+
+    setTxt("parcha-paper-calc-gross", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
+    setTxt("parcha-paper-calc-advance", `- Rs. ${advance.toLocaleString()}`);
+    setTxt("parcha-paper-calc-deduction", `- Rs. ${deduction.toLocaleString()}`);
+    setTxt("parcha-paper-calc-bonus", `+ Rs. ${bonus.toLocaleString()}`);
+    setTxt("parcha-paper-net-payable", `Rs. ${(data.net_payable || 0).toLocaleString()}`);
+
+    setTxt("parcha-paper-words", numberToWordsUrduEnglish(data.net_payable || 0));
+    setTxt("parcha-paper-notes-text", `Notes: ${data.notes || "None"}`);
   }
 
-  setTxt("parcha-paper-total-pcs", (data.total_pieces || 0).toLocaleString());
-  setTxt("parcha-paper-gross-total", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
+  function numberToWordsUrduEnglish(amount) {
+    const num = Math.round(Number(amount)) || 0;
+    if (num === 0) return "Rupees Zero Only";
 
-  setTxt("parcha-paper-calc-gross", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
-  setTxt("parcha-paper-calc-advance", `- Rs. ${advance.toLocaleString()}`);
-  setTxt("parcha-paper-calc-deduction", `- Rs. ${deduction.toLocaleString()}`);
-  setTxt("parcha-paper-calc-bonus", `+ Rs. ${bonus.toLocaleString()}`);
-  setTxt("parcha-paper-net-payable", `Rs. ${(data.net_payable || 0).toLocaleString()}`);
+    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
 
-  setTxt("parcha-paper-words", numberToWordsUrduEnglish(data.net_payable || 0));
-  setTxt("parcha-paper-notes-text", `Notes: ${data.notes || "None"}`);
-}
-
-function numberToWordsUrduEnglish(amount) {
-  const num = Math.round(Number(amount)) || 0;
-  if (num === 0) return "Rupees Zero Only";
-
-  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-  function convertChunk(n) {
-    let str = "";
-    if (n >= 100) {
-      str += ones[Math.floor(n / 100)] + " Hundred ";
-      n %= 100;
+    function convertChunk(n) {
+      let str = "";
+      if (n >= 100) {
+        str += ones[Math.floor(n / 100)] + " Hundred ";
+        n %= 100;
+      }
+      if (n >= 20) {
+        str += tens[Math.floor(n / 10)] + " ";
+        n %= 10;
+      }
+      if (n > 0) {
+        str += ones[n] + " ";
+      }
+      return str.trim();
     }
-    if (n >= 20) {
-      str += tens[Math.floor(n / 10)] + " ";
-      n %= 10;
+
+    let words = "";
+    if (num >= 10000000) {
+      const crore = Math.floor(num / 10000000);
+      words += convertChunk(crore) + " Crore ";
+      num %= 10000000;
     }
-    if (n > 0) {
-      str += ones[n] + " ";
+    if (num >= 100000) {
+      const lakh = Math.floor(num / 100000);
+      words += convertChunk(lakh) + " Lakh ";
+      num %= 100000;
     }
-    return str.trim();
+    if (num >= 1000) {
+      const thousand = Math.floor(num / 1000);
+      words += convertChunk(thousand) + " Thousand ";
+      num %= 1000;
+    }
+    if (num > 0) {
+      words += convertChunk(num);
+    }
+
+    return `Rupees ${words.trim()} Only`;
   }
 
-  let words = "";
-  if (num >= 10000000) {
-    const crore = Math.floor(num / 10000000);
-    words += convertChunk(crore) + " Crore ";
-    num %= 10000000;
-  }
-  if (num >= 100000) {
-    const lakh = Math.floor(num / 100000);
-    words += convertChunk(lakh) + " Lakh ";
-    num %= 100000;
-  }
-  if (num >= 1000) {
-    const thousand = Math.floor(num / 1000);
-    words += convertChunk(thousand) + " Thousand ";
-    num %= 1000;
-  }
-  if (num > 0) {
-    words += convertChunk(num);
-  }
+  function printContractorParcha() {
+    if (!activeParchaData) {
+      showToast("No active parcha to print", "error");
+      return;
+    }
 
-  return `Rupees ${words.trim()} Only`;
-}
+    const paperElement = document.getElementById("contractor-parcha-paper");
+    const printRoot = document.getElementById("printable-contractor-parcha-root");
+    if (!paperElement || !printRoot) return;
 
-function printContractorParcha() {
-  if (!activeParchaData) {
-    showToast("No active parcha to print", "error");
-    return;
-  }
+    printRoot.innerHTML = paperElement.outerHTML;
+    document.body.classList.add("is-printing-parcha");
 
-  const paperElement = document.getElementById("contractor-parcha-paper");
-  const printRoot = document.getElementById("printable-contractor-parcha-root");
-  if (!paperElement || !printRoot) return;
-
-  printRoot.innerHTML = paperElement.outerHTML;
-  document.body.classList.add("is-printing-parcha");
-
-  setTimeout(() => {
-    window.print();
     setTimeout(() => {
-      document.body.classList.remove("is-printing-parcha");
-      printRoot.innerHTML = "";
-    }, 1000);
-  }, 100);
-}
-
-function sendContractorParchaWhatsApp() {
-  if (!activeParchaData) {
-    showToast("No parcha data available", "error");
-    return;
+      window.print();
+      setTimeout(() => {
+        document.body.classList.remove("is-printing-parcha");
+        printRoot.innerHTML = "";
+      }, 1000);
+    }, 100);
   }
 
-  const d = activeParchaData;
-  let cleanPhone = (d.contractor_phone || "").replace(/[^0-9]/g, "");
-  if (cleanPhone.startsWith("0")) {
-    cleanPhone = "92" + cleanPhone.substring(1);
+  function sendContractorParchaWhatsApp() {
+    if (!activeParchaData) {
+      showToast("No parcha data available", "error");
+      return;
+    }
+
+    const d = activeParchaData;
+    let cleanPhone = (d.contractor_phone || "").replace(/[^0-9]/g, "");
+    if (cleanPhone.startsWith("0")) {
+      cleanPhone = "92" + cleanPhone.substring(1);
+    }
+
+    let itemsSummary = "";
+    d.items.forEach(i => {
+      itemsSummary += `• ${i.style_code} (${i.category}): ${i.pieces.toLocaleString()} pcs @ Rs. ${i.rate} = Rs. ${i.total_amount.toLocaleString()}\n`;
+    });
+
+    const msg = `*CRAFTFLOW - CONTRACTOR PAYMENT PARCHA*\n` +
+      `*Parcha No:* ${d.parcha_no}\n` +
+      `*Date:* ${d.slip_date}\n` +
+      `*Contractor:* ${d.contractor_name}\n` +
+      `*Cycle:* ${d.period}\n` +
+      `---------------------------------------\n` +
+      `*WORK BREAKDOWN:*\n` +
+      itemsSummary +
+      `---------------------------------------\n` +
+      `*Total Finished Pieces:* ${d.total_pieces.toLocaleString()} pcs\n` +
+      `*Gross Amount:* Rs. ${d.gross_amount.toLocaleString()}\n` +
+      (d.advance_amount > 0 ? `*Advance (Peshgi):* - Rs. ${d.advance_amount.toLocaleString()}\n` : ``) +
+      (d.deduction_amount > 0 ? `*Alter / Kaat:* - Rs. ${d.deduction_amount.toLocaleString()}\n` : ``) +
+      (d.bonus_amount > 0 ? `*Bonus / Extra:* + Rs. ${d.bonus_amount.toLocaleString()}\n` : ``) +
+      `*NET PAYABLE (SAAF RAQAM): Rs. ${d.net_payable.toLocaleString()}*\n` +
+      `*In Words:* ${numberToWordsUrduEnglish(d.net_payable)}\n` +
+      `---------------------------------------\n` +
+      `*Hand Embroidery Department*`;
+
+    const encoded = encodeURIComponent(msg);
+    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+    window.open(url, "_blank");
   }
 
-  let itemsSummary = "";
-  d.items.forEach(i => {
-    itemsSummary += `• ${i.style_code} (${i.category}): ${i.pieces.toLocaleString()} pcs @ Rs. ${i.rate} = Rs. ${i.total_amount.toLocaleString()}\n`;
-  });
+  function saveContractorParchaAction() {
+    if (!activeParchaData) {
+      showToast("No parcha data to save", "error");
+      return;
+    }
 
-  const msg = `*CRAFTFLOW - CONTRACTOR PAYMENT PARCHA*\n` +
-    `*Parcha No:* ${d.parcha_no}\n` +
-    `*Date:* ${d.slip_date}\n` +
-    `*Contractor:* ${d.contractor_name}\n` +
-    `*Cycle:* ${d.period}\n` +
-    `---------------------------------------\n` +
-    `*WORK BREAKDOWN:*\n` +
-    itemsSummary +
-    `---------------------------------------\n` +
-    `*Total Finished Pieces:* ${d.total_pieces.toLocaleString()} pcs\n` +
-    `*Gross Amount:* Rs. ${d.gross_amount.toLocaleString()}\n` +
-    (d.advance_amount > 0 ? `*Advance (Peshgi):* - Rs. ${d.advance_amount.toLocaleString()}\n` : ``) +
-    (d.deduction_amount > 0 ? `*Alter / Kaat:* - Rs. ${d.deduction_amount.toLocaleString()}\n` : ``) +
-    (d.bonus_amount > 0 ? `*Bonus / Extra:* + Rs. ${d.bonus_amount.toLocaleString()}\n` : ``) +
-    `*NET PAYABLE (SAAF RAQAM): Rs. ${d.net_payable.toLocaleString()}*\n` +
-    `*In Words:* ${numberToWordsUrduEnglish(d.net_payable)}\n` +
-    `---------------------------------------\n` +
-    `*Hand Embroidery Department*`;
-
-  const encoded = encodeURIComponent(msg);
-  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-  window.open(url, "_blank");
-}
-
-function saveContractorParchaAction() {
-  if (!activeParchaData) {
-    showToast("No parcha data to save", "error");
-    return;
+    const saved = window.db.saveContractorParcha(activeParchaData);
+    if (saved) {
+      showToast(`Parcha #${saved.parcha_no} saved successfully in history!`, "success");
+      renderParchaHistoryList();
+    }
   }
 
-  const saved = window.db.saveContractorParcha(activeParchaData);
-  if (saved) {
-    showToast(`Parcha #${saved.parcha_no} saved successfully in history!`, "success");
-    renderParchaHistoryList();
-  }
-}
-
-function toggleParchaHistoryPanel() {
-  const panel = document.getElementById("parcha-history-panel");
-  if (!panel) return;
-  panel.style.display = panel.style.display === "none" ? "block" : "none";
-}
-
-function renderParchaHistoryList() {
-  const container = document.getElementById("parcha-history-list");
-  const countBadge = document.getElementById("parcha-history-count");
-  if (!container) return;
-
-  const list = window.db.getContractorParchas();
-  if (countBadge) countBadge.textContent = `${list.length} Saved`;
-
-  if (list.length === 0) {
-    container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem;">No saved parchay yet.</div>`;
-    return;
+  function toggleParchaHistoryPanel() {
+    const panel = document.getElementById("parcha-history-panel");
+    if (!panel) return;
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
   }
 
-  container.innerHTML = list.slice(0, 10).map(p => `
+  function renderParchaHistoryList() {
+    const container = document.getElementById("parcha-history-list");
+    const countBadge = document.getElementById("parcha-history-count");
+    if (!container) return;
+
+    const list = window.db.getContractorParchas();
+    if (countBadge) countBadge.textContent = `${list.length} Saved`;
+
+    if (list.length === 0) {
+      container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem;">No saved parchay yet.</div>`;
+      return;
+    }
+
+    container.innerHTML = list.slice(0, 10).map(p => `
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem;">
       <div>
         <strong style="color: var(--primary); font-family: var(--font-mono);">${escapeHtml(p.parcha_no)}</strong>
@@ -12943,1455 +13163,1500 @@ function renderParchaHistoryList() {
       </div>
     </div>
   `).join("");
-}
+  }
 
-function loadParchaFromHistory(id) {
-  const p = window.db.getContractorParchaById(id);
-  if (!p) return;
+  function loadParchaFromHistory(id) {
+    const p = window.db.getContractorParchaById(id);
+    if (!p) return;
 
-  activeParchaData = p;
+    activeParchaData = p;
 
-  const contSelect = document.getElementById("parcha-select-contractor");
-  if (contSelect) contSelect.value = p.contractor_name;
+    const contSelect = document.getElementById("parcha-select-contractor");
+    if (contSelect) contSelect.value = p.contractor_name;
 
-  const dateInput = document.getElementById("parcha-date-input");
-  if (dateInput) dateInput.value = p.slip_date;
+    const dateInput = document.getElementById("parcha-date-input");
+    if (dateInput) dateInput.value = p.slip_date;
 
-  document.getElementById("parcha-input-advance").value = p.advance_amount || 0;
-  document.getElementById("parcha-input-deduction").value = p.deduction_amount || 0;
-  document.getElementById("parcha-input-bonus").value = p.bonus_amount || 0;
-  document.getElementById("parcha-input-notes").value = p.notes || "";
+    document.getElementById("parcha-input-advance").value = p.advance_amount || 0;
+    document.getElementById("parcha-input-deduction").value = p.deduction_amount || 0;
+    document.getElementById("parcha-input-bonus").value = p.bonus_amount || 0;
+    document.getElementById("parcha-input-notes").value = p.notes || "";
 
-  renderContractorParchaPreview();
-  showToast(`Loaded Parcha #${p.parcha_no}`, "info");
-}
+    renderContractorParchaPreview();
+    showToast(`Loaded Parcha #${p.parcha_no}`, "info");
+  }
 
-function deleteParchaHistoryItem(id) {
-  window.db.deleteContractorParcha(id);
-  renderParchaHistoryList();
-  showToast("Parcha deleted from history", "info");
-}
+  function deleteParchaHistoryItem(id) {
+    window.db.deleteContractorParcha(id);
+    renderParchaHistoryList();
+    showToast("Parcha deleted from history", "info");
+  }
 
-function initParchaEventListeners() {
-  document.getElementById("btn-open-contractor-parcha")?.addEventListener("click", () => openContractorParchaModal());
-  document.getElementById("btn-open-parcha-from-payment")?.addEventListener("click", () => openContractorParchaModal());
+  function initParchaEventListeners() {
+    document.getElementById("btn-open-contractor-parcha")?.addEventListener("click", () => openContractorParchaModal());
+    document.getElementById("btn-open-parcha-from-payment")?.addEventListener("click", () => openContractorParchaModal());
 
-  document.getElementById("btn-parcha-refresh")?.addEventListener("click", renderContractorParchaPreview);
-  document.getElementById("btn-toggle-parcha-history")?.addEventListener("click", toggleParchaHistoryPanel);
+    document.getElementById("btn-parcha-refresh")?.addEventListener("click", renderContractorParchaPreview);
+    document.getElementById("btn-toggle-parcha-history")?.addEventListener("click", toggleParchaHistoryPanel);
 
-  document.getElementById("parcha-select-contractor")?.addEventListener("change", renderContractorParchaPreview);
-  document.getElementById("parcha-select-period")?.addEventListener("change", renderContractorParchaPreview);
-  document.getElementById("parcha-date-input")?.addEventListener("change", renderContractorParchaPreview);
+    document.getElementById("parcha-select-contractor")?.addEventListener("change", renderContractorParchaPreview);
+    document.getElementById("parcha-select-period")?.addEventListener("change", renderContractorParchaPreview);
+    document.getElementById("parcha-date-input")?.addEventListener("change", renderContractorParchaPreview);
 
-  ["parcha-input-advance", "parcha-input-deduction", "parcha-input-bonus", "parcha-input-notes"].forEach(id => {
-    document.getElementById(id)?.addEventListener("input", renderContractorParchaPreview);
-  });
+    ["parcha-input-advance", "parcha-input-deduction", "parcha-input-bonus", "parcha-input-notes"].forEach(id => {
+      document.getElementById(id)?.addEventListener("input", renderContractorParchaPreview);
+    });
 
-  document.getElementById("btn-print-parcha")?.addEventListener("click", printContractorParcha);
-  document.getElementById("btn-whatsapp-parcha")?.addEventListener("click", sendContractorParchaWhatsApp);
-  document.getElementById("btn-save-parcha")?.addEventListener("click", saveContractorParchaAction);
+    document.getElementById("btn-print-parcha")?.addEventListener("click", printContractorParcha);
+    document.getElementById("btn-whatsapp-parcha")?.addEventListener("click", sendContractorParchaWhatsApp);
+    document.getElementById("btn-save-parcha")?.addEventListener("click", saveContractorParchaAction);
 
-  initDeadlineModalEvents();
+    initDeadlineModalEvents();
 
-  // Filter deadline listener in Master Inventory
-  document.getElementById("filter-master-deadline")?.addEventListener("change", () => {
-    if (typeof renderMasterInventory === "function") renderMasterInventory();
-  });
-}
+    // Filter deadline listener in Master Inventory
+    document.getElementById("filter-master-deadline")?.addEventListener("change", () => {
+      if (typeof renderMasterInventory === "function") renderMasterInventory();
+    });
+  }
 
-// Global window exposure for reliable HTML inline onclick access
-window.openContractorParchaModal = openContractorParchaModal;
-window.openUpdateDeadlineModal = openUpdateDeadlineModal;
-window.renderContractorParchaPreview = renderContractorParchaPreview;
-window.toggleParchaHistoryPanel = toggleParchaHistoryPanel;
-window.saveContractorParchaAction = saveContractorParchaAction;
-window.printContractorParcha = printContractorParcha;
-window.sendContractorParchaWhatsApp = sendContractorParchaWhatsApp;
+  // Global window exposure for reliable HTML inline onclick access
+  window.openContractorParchaModal = openContractorParchaModal;
+  window.openUpdateDeadlineModal = openUpdateDeadlineModal;
+  window.renderContractorParchaPreview = renderContractorParchaPreview;
+  window.toggleParchaHistoryPanel = toggleParchaHistoryPanel;
+  window.saveContractorParchaAction = saveContractorParchaAction;
+  window.printContractorParcha = printContractorParcha;
+  window.sendContractorParchaWhatsApp = sendContractorParchaWhatsApp;
 
-// ====================================================================
-// WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
-// 2x Retina Canvas Engine • Custom Column Picker • LocalStorage Persistence
-// Direct Clipboard Copy (Ctrl+V into WhatsApp) • Contractor Tailored Sharing
-// ====================================================================
+  // ====================================================================
+  // WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
+  // 2x Retina Canvas Engine • Custom Column Picker • LocalStorage Persistence
+  // Direct Clipboard Copy (Ctrl+V into WhatsApp) • Contractor Tailored Sharing
+  // ====================================================================
 
-let currentWhatsAppSheet = "daily";
-let currentWhatsAppContractor = "all";
-let whatsappControllerInitialized = false;
+  let currentWhatsAppSheet = "daily";
+  let currentWhatsAppContractor = "all";
+  let whatsappControllerInitialized = false;
 
-const WHATSAPP_SHEET_DEFS = {
-  daily: {
-    id: "daily",
-    title: "DAILY RUNNING STYLE STATUS SHEET",
-    subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
-    getDatePeriod() {
-      const el = document.getElementById("daily-sheet-date");
-      if (el && el.value) {
-        const parts = el.value.split("-");
-        if (parts.length === 3) {
-          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-          const m = months[parseInt(parts[1], 10) - 1] || parts[1];
-          return `${parts[2]}-${m}-${parts[0]}`;
-        }
-        return el.value;
-      }
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
-      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-      const set = new Set();
-      finalStyles.forEach(item => {
-        const match = master.find(m =>
-          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
-          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
-        );
-        const name = (match ? match.contractor_name : item.contractor_name) || "";
-        if (name && name.trim() && name !== "-") set.add(name.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
-      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-
-      let rows = finalStyles.map((item, idx) => {
-        const match = master.find(m =>
-          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
-          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
-        );
-        const cont = (match ? match.contractor_name : item.contractor_name) || "-";
-        const cut = match ? (Number(match.cut_qty) || 0) : 0;
-        const rec = match ? (Number(match.received_qty) || 0) : 0;
-        const stock = match ? (Number(match.balance_from_stock) || 0) : 0;
-        const dis = match ? (Number(match.dispatch_from_hemb) || 0) : (Number(item.dispatch_from_hemb) || 0);
-        const hemb = match ? (Number(match.balance_from_hemb) || 0) : 0;
-
-        return {
-          sr_no: idx + 1,
-          style_code: item.style_code || "",
-          category: item.category || "SHIRT",
-          contractor: cont,
-          cut_qty: cut,
-          received_qty: rec,
-          balance_stock: stock,
-          dispatch_hemb: dis,
-          balance_hemb: hemb,
-          remarks: item.remarks || (match ? match.remarks || "" : "")
-        };
-      });
-
-      const filterParts = [];
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        rows = rows.filter(r => (r.contractor || "").toLowerCase() === contractorFilter.toLowerCase());
-        rows.forEach((r, i) => { r.sr_no = i + 1; });
-      }
-
-      const totals = {
-        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
-        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
-        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
-      };
-
-      return { rows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "S NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-      { id: "contractor", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor },
-      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
-      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
-      { id: "dispatch_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_hemb },
-      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
-      { id: "remarks", label: "REMARKS / STATUS", default: true, align: "left", width: 180, get: (r) => r.remarks || "-" }
-    ]
-  },
-
-  distribution: {
-    id: "distribution",
-    title: "WORK DISTRIBUTION SHEET",
-    subtitle: "Bi-Monthly Contractor Garment Allocation",
-    getDatePeriod() {
-      if (typeof getActiveDistributionPeriod === "function") {
-        const p = getActiveDistributionPeriod();
-        if (p && p !== "all") return p;
-      }
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
-      const set = new Set();
-      list.forEach(i => {
-        const name = i.contractor_name || "";
-        if (name && name.trim() && name !== "-") set.add(name.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      let list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
-      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-
-      const query = syncWithPage ? (document.getElementById("search-dist-input")?.value || "").toLowerCase().trim() : "";
-      const contFilterVal = syncWithPage ? (document.getElementById("filter-dist-contractor")?.value || "").toLowerCase().trim() : "";
-      const floorFilterVal = syncWithPage ? (document.getElementById("filter-dist-floor")?.value || "").toLowerCase().trim() : "";
-      const itemFilterVal = syncWithPage ? (document.getElementById("filter-dist-item")?.value || "").toLowerCase().trim() : "";
-
-      const filterParts = [];
-      if (query) filterParts.push(`Search: "${query}"`);
-      if (contFilterVal) filterParts.push(`Cont: ${contFilterVal}`);
-      if (floorFilterVal) filterParts.push(`Floor: ${floorFilterVal}`);
-      if (itemFilterVal) filterParts.push(`Item: ${itemFilterVal}`);
-
-      if (!query && typeof getActiveDistributionPeriod === "function") {
-        const activePeriod = getActiveDistributionPeriod();
-        if (activePeriod && activePeriod !== "all") {
-          list = list.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-        }
-      }
-
-      if (syncWithPage && (query || contFilterVal || floorFilterVal || itemFilterVal)) {
-        list = list.filter(item => {
-          const qMatch = !query ||
-            (item.style_code || "").toLowerCase().includes(query) ||
-            (item.contractor_name || "").toLowerCase().includes(query) ||
-            (item.item || "").toLowerCase().includes(query) ||
-            (item.floor || "").toLowerCase().includes(query) ||
-            (item.period || "").toLowerCase().includes(query) ||
-            (item.remarks || "").toLowerCase().includes(query);
-
-          let cMatch = true;
-          if (contFilterVal) {
-            if (contFilterVal === "joint") cMatch = (item.contractor_name || "").includes("/");
-            else cMatch = (item.contractor_name || "").toLowerCase().includes(contFilterVal);
+  const WHATSAPP_SHEET_DEFS = {
+    daily: {
+      id: "daily",
+      title: "DAILY RUNNING STYLE STATUS SHEET",
+      subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
+      getDatePeriod() {
+        const el = document.getElementById("daily-sheet-date");
+        if (el && el.value) {
+          const parts = el.value.split("-");
+          if (parts.length === 3) {
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            const m = months[parseInt(parts[1], 10) - 1] || parts[1];
+            return `${parts[2]}-${m}-${parts[0]}`;
           }
-          const fMatch = !floorFilterVal || (item.floor || "").toLowerCase() === floorFilterVal;
-          const iMatch = !itemFilterVal || (item.item || "").toLowerCase() === itemFilterVal;
-          return qMatch && cMatch && fMatch && iMatch;
+          return el.value;
+        }
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+        const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+        const set = new Set();
+        finalStyles.forEach(item => {
+          const match = master.find(m =>
+            (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+            (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+          );
+          const name = (match ? match.contractor_name : item.contractor_name) || "";
+          if (name && name.trim() && name !== "-") set.add(name.trim());
         });
-      }
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+        const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
 
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-      }
+        let rows = finalStyles.map((item, idx) => {
+          const match = master.find(m =>
+            (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+            (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+          );
+          const cont = (match ? match.contractor_name : item.contractor_name) || "-";
+          const cut = match ? (Number(match.cut_qty) || 0) : 0;
+          const rec = match ? (Number(match.received_qty) || 0) : 0;
+          const stock = match ? (Number(match.balance_from_stock) || 0) : 0;
+          const dis = match ? (Number(match.dispatch_from_hemb) || 0) : (Number(item.dispatch_from_hemb) || 0);
+          const hemb = match ? (Number(match.balance_from_hemb) || 0) : 0;
 
-      const rows = list.map((item, idx) => {
-        const qty = parseInt(item.pcs_qty, 10) || 0;
-        const rate = parseFloat(item.rate) || 0;
-        const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
-          ? Number(item.total_amount)
-          : (qty * rate);
+          return {
+            sr_no: idx + 1,
+            style_code: item.style_code || "",
+            category: item.category || "SHIRT",
+            contractor: cont,
+            cut_qty: cut,
+            received_qty: rec,
+            balance_stock: stock,
+            dispatch_hemb: dis,
+            balance_hemb: hemb,
+            remarks: item.remarks || (match ? match.remarks || "" : "")
+          };
+        });
 
-        return {
+        const filterParts = [];
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          rows = rows.filter(r => (r.contractor || "").toLowerCase() === contractorFilter.toLowerCase());
+          rows.forEach((r, i) => { r.sr_no = i + 1; });
+        }
+
+        const totals = {
+          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+          received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+          dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+        };
+
+        return { rows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "S NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+        { id: "contractor", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor },
+        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+        { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+        { id: "dispatch_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_hemb },
+        { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+        { id: "remarks", label: "REMARKS / STATUS", default: true, align: "left", width: 180, get: (r) => r.remarks || "-" }
+      ]
+    },
+
+    distribution: {
+      id: "distribution",
+      title: "WORK DISTRIBUTION SHEET",
+      subtitle: "Bi-Monthly Contractor Garment Allocation",
+      getDatePeriod() {
+        if (typeof getActiveDistributionPeriod === "function") {
+          const p = getActiveDistributionPeriod();
+          if (p && p !== "all") return p;
+        }
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+        const set = new Set();
+        list.forEach(i => {
+          const name = i.contractor_name || "";
+          if (name && name.trim() && name !== "-") set.add(name.trim());
+        });
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        let list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+        const query = syncWithPage ? (document.getElementById("search-dist-input")?.value || "").toLowerCase().trim() : "";
+        const contFilterVal = syncWithPage ? (document.getElementById("filter-dist-contractor")?.value || "").toLowerCase().trim() : "";
+        const floorFilterVal = syncWithPage ? (document.getElementById("filter-dist-floor")?.value || "").toLowerCase().trim() : "";
+        const itemFilterVal = syncWithPage ? (document.getElementById("filter-dist-item")?.value || "").toLowerCase().trim() : "";
+
+        const filterParts = [];
+        if (query) filterParts.push(`Search: "${query}"`);
+        if (contFilterVal) filterParts.push(`Cont: ${contFilterVal}`);
+        if (floorFilterVal) filterParts.push(`Floor: ${floorFilterVal}`);
+        if (itemFilterVal) filterParts.push(`Item: ${itemFilterVal}`);
+
+        if (!query && typeof getActiveDistributionPeriod === "function") {
+          const activePeriod = getActiveDistributionPeriod();
+          if (activePeriod && activePeriod !== "all") {
+            list = list.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+          }
+        }
+
+        if (syncWithPage && (query || contFilterVal || floorFilterVal || itemFilterVal)) {
+          list = list.filter(item => {
+            const qMatch = !query ||
+              (item.style_code || "").toLowerCase().includes(query) ||
+              (item.contractor_name || "").toLowerCase().includes(query) ||
+              (item.item || "").toLowerCase().includes(query) ||
+              (item.floor || "").toLowerCase().includes(query) ||
+              (item.period || "").toLowerCase().includes(query) ||
+              (item.remarks || "").toLowerCase().includes(query);
+
+            let cMatch = true;
+            if (contFilterVal) {
+              if (contFilterVal === "joint") cMatch = (item.contractor_name || "").includes("/");
+              else cMatch = (item.contractor_name || "").toLowerCase().includes(contFilterVal);
+            }
+            const fMatch = !floorFilterVal || (item.floor || "").toLowerCase() === floorFilterVal;
+            const iMatch = !itemFilterVal || (item.item || "").toLowerCase() === itemFilterVal;
+            return qMatch && cMatch && fMatch && iMatch;
+          });
+        }
+
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        }
+
+        const rows = list.map((item, idx) => {
+          const qty = parseInt(item.pcs_qty, 10) || 0;
+          const rate = parseFloat(item.rate) || 0;
+          const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
+            ? Number(item.total_amount)
+            : (qty * rate);
+
+          return {
+            sr_no: item.sr_no || (idx + 1),
+            style_code: item.style_code || "",
+            contractor_name: item.contractor_name || "-",
+            pcs_qty: qty,
+            rate: rate > 0 ? rate : "-",
+            item: item.item || "SHIRT",
+            floor: item.floor || "-",
+            total: total > 0 ? Math.round(total) : 0,
+            period: item.period || "-",
+            remarks: item.remarks || "-"
+          };
+        });
+
+        const totals = {
+          pcs_qty: rows.reduce((s, r) => s + (Number(r.pcs_qty) || 0), 0),
+          total: rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
+        };
+
+        return { rows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+        { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+        { id: "pcs_qty", label: "PCS QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.pcs_qty },
+        { id: "rate", label: "RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+        { id: "item", label: "ITEM / CAT", default: true, align: "center", width: 95, get: (r) => r.item },
+        { id: "floor", label: "FLOOR", default: true, align: "center", width: 85, get: (r) => r.floor },
+        { id: "total", label: "TOTAL (PKR)", default: true, align: "right", width: 110, isNumeric: true, get: (r) => r.total },
+        { id: "period", label: "TIME PERIOD", default: true, align: "center", width: 125, get: (r) => r.period },
+        { id: "remarks", label: "REMARKS", default: false, align: "left", width: 140, get: (r) => r.remarks }
+      ]
+    },
+
+    payment: {
+      id: "payment",
+      title: "RATE APPROVAL & PAYMENT RECONCILIATION SHEET",
+      subtitle: "Bi-Monthly Contractor Production & Payment Audit",
+      getDatePeriod() {
+        const p = (document.getElementById("filter-payment-period")?.value || "").trim();
+        if (p && p !== "all") return p;
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+        const set = new Set();
+        list.forEach(i => {
+          const name = i.contractor_name || "";
+          if (name && name.trim() && name !== "-") set.add(name.trim());
+        });
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        let list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+        const query = syncWithPage ? (document.getElementById("payment-search-input")?.value || "").toLowerCase().trim() : "";
+        const channelFilter = syncWithPage ? (document.getElementById("filter-payment-channel")?.value || "") : "";
+        const statusFilter = syncWithPage ? (document.getElementById("filter-payment-status")?.value || "") : "";
+        const contractorPageFilter = syncWithPage ? (document.getElementById("filter-payment-contractor")?.value || "").toLowerCase().trim() : "";
+        const periodFilter = (typeof getActiveRateApprovalPeriod === "function" ? getActiveRateApprovalPeriod() : (document.getElementById("filter-payment-period")?.value || "")).trim();
+
+        const filterParts = [];
+        if (query) filterParts.push(`Search: "${query}"`);
+        if (channelFilter) filterParts.push(`Channel: ${channelFilter}`);
+        if (statusFilter) filterParts.push(`Status: ${statusFilter}`);
+        if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
+
+        if (!query && periodFilter && periodFilter !== "all") {
+          list = list.filter(item => {
+            const itemPeriod = (item.period || "").trim().toLowerCase();
+            const activePeriod = periodFilter.trim().toLowerCase();
+            if (itemPeriod === activePeriod) return true;
+            const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+            const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+            if (itemStart && activeStart && itemStart === activeStart) return true;
+            return false;
+          });
+        }
+
+        if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
+          list = list.filter(item => {
+            const qMatch = !query ||
+              (item.style_code || "").toLowerCase().includes(query) ||
+              (item.contractor_name || "").toLowerCase().includes(query) ||
+              (item.working || item.category || "").toLowerCase().includes(query) ||
+              (item.remarks_1 || item.remarks || "").toLowerCase().includes(query) ||
+              (item.remarks_2 || item.status_remarks || "").toLowerCase().includes(query) ||
+              (item.target_floor || "").toLowerCase().includes(query) ||
+              (item.period || "").toLowerCase().includes(query);
+
+            const cMatch = !channelFilter || item.payment_channel === channelFilter;
+
+            let sMatch = true;
+            const rem2 = (item.remarks_2 || item.status_remarks || item.status || "").toLowerCase();
+            const totBal = item.total_balance != null ? item.total_balance : 0;
+            if (statusFilter === "close") sMatch = rem2.includes("close") || totBal === 0;
+            else if (statusFilter === "deduction") sMatch = rem2.includes("deduction");
+            else if (statusFilter === "balance") sMatch = totBal > 0;
+
+            const contMatch = !contractorPageFilter || (item.contractor_name || "").toLowerCase() === contractorPageFilter;
+
+            return qMatch && cMatch && sMatch && contMatch;
+          });
+        }
+
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        }
+
+        const rows = list.map((item, idx) => {
+          const rawCut = Number(item.cut_qty || item.total_pcs || 0);
+          const deduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
+          const baseProd = (item.base_prod_pcs != null)
+            ? Number(item.base_prod_pcs)
+            : ((Number(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs) || 0) + (deduction > 0 && item.base_prod_pcs == null ? deduction : 0));
+          const netProd = Math.max(0, baseProd - deduction);
+
+          return {
+            sr_no: idx + 1,
+            style_code: item.style_code || "",
+            working: item.working || item.category || "SHIRT",
+            contractor_name: item.contractor_name || "-",
+            rate: Number(item.rate_per_pc || item.rate) || 0,
+            cut_qty: rawCut,
+            deduction_pcs: deduction,
+            prod_pcs_qty: netProd,
+            carigar_rate: Number(item.carigar_rate) || 0,
+            commission: Number(item.commission) || 0,
+            rate_total: Number(item.rate_total) || 0,
+            remarks: item.remarks_1 || item.remarks || "-",
+            balance_stock: Number(item.balance_from_stock != null ? item.balance_from_stock : item.balance_stock) || 0,
+            balance_hemb: Number(item.balance_from_hemb != null ? item.balance_from_hemb : item.balance_hemb) || 0,
+            total_balance: Number(item.total_balance != null ? item.total_balance : item.balance_pcs) || 0,
+            period: item.period || "-"
+          };
+        });
+
+        const totals = {
+          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+          deduction_pcs: rows.reduce((s, r) => s + (Number(r.deduction_pcs) || 0), 0),
+          prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
+          rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
+          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0),
+          total_balance: rows.reduce((s, r) => s + (Number(r.total_balance) || 0), 0)
+        };
+
+        return { rows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "S.NO", default: true, align: "center", width: 50, get: (r) => r.sr_no },
+        { id: "style_code", label: "STYLE NAME", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+        { id: "working", label: "WORKING", default: true, align: "center", width: 85, get: (r) => r.working },
+        { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
+        { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
+        { id: "deduction_pcs", label: "KAAT", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.deduction_pcs },
+        { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
+        { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
+        { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },
+        { id: "rate_total", label: "TOTAL (PKR)", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.rate_total },
+        { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+        { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+        { id: "total_balance", label: "TOTAL BAL", default: true, align: "right", width: 90, isNumeric: true, isBalance: true, get: (r) => r.total_balance },
+        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 120, get: (r) => r.remarks },
+        { id: "period", label: "TIME PERIOD", default: false, align: "center", width: 115, get: (r) => r.period }
+      ]
+    },
+
+    receiving: {
+      id: "receiving",
+      title: "INWARD RECEIVING CHALLAN LOG",
+      subtitle: "Incoming Fabric & Garment Challans from Cutting / Stock",
+      getDatePeriod() {
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+        const set = new Set();
+        list.forEach(i => {
+          const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+            ? i.contractor_name.trim()
+            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+          if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+        });
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        let list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+
+        // Sort latest first (descending by SR or ID, matching the UI table)
+        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+        const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
+        const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
+        const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
+        const dateFromVal = syncWithPage ? (document.getElementById("filter-rec-date-from")?.value || "") : "";
+        const dateToVal = syncWithPage ? (document.getElementById("filter-rec-date-to")?.value || "") : "";
+
+        const filterParts = [];
+        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+        if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+        if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+        if (dateFromVal) {
+          filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+        }
+
+        if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
+          list = list.filter(item => {
+            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+            const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+            const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+            const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+            const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+            const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+            const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+            const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
+
+            return queryPassed && catPassed && contPassed && datePassed;
+          });
+        }
+
+        const rows = list.map((item, idx) => {
+          const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+            ? item.contractor_name.trim()
+            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+          return {
+            sr_no: item.sr_no || item.id || (idx + 1),
+            date_receive: item.date_receive || item.date_received || "-",
+            challan_rec: item.challan_rec || item.challan_no || "-",
+            style_code: item.style_code || "",
+            category: item.category || "SHIRT",
+            contractor_name: cont,
+            cut_qty: Number(item.cut_qty != null ? item.cut_qty : item.cut_order_qty) || 0,
+            received_qty: Number(item.received_qty) || 0,
+            remarks: item.remarks || "-"
+          };
+        });
+
+        let filteredRows = rows;
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        }
+
+        const totals = {
+          cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+          received_qty: filteredRows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0)
+        };
+
+        return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "date_receive", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_receive },
+        { id: "challan_rec", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_rec },
+        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+        { id: "cut_qty", label: "CUT ORDER", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.cut_qty },
+        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.received_qty },
+        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 140, get: (r) => r.remarks }
+      ]
+    },
+
+    dispatch: {
+      id: "dispatch",
+      title: "OUTWARD DISPATCH CHALLAN LOG",
+      subtitle: "Finished Hand Embroidery Dispatched to Unit / Finishing",
+      getDatePeriod() {
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+        const set = new Set();
+        list.forEach(i => {
+          const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+            ? i.contractor_name.trim()
+            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+          if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+        });
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        let list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+
+        // Sort latest first (descending by SR or ID, matching the UI table)
+        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+        const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
+        const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
+        const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
+        const dateFromVal = syncWithPage ? (document.getElementById("filter-dis-date-from")?.value || "") : "";
+        const dateToVal = syncWithPage ? (document.getElementById("filter-dis-date-to")?.value || "") : "";
+
+        const filterParts = [];
+        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+        if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+        if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+        if (dateFromVal) {
+          filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+        }
+
+        if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
+          list = list.filter(item => {
+            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+            const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+            const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+            const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+            const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+            const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+            const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+            const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
+
+            return queryPassed && catPassed && contPassed && datePassed;
+          });
+        }
+
+        const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+
+        const rows = list.map((item, idx) => {
+          const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+            ? item.contractor_name.trim()
+            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+          const mMatch = masterList.find(m =>
+            (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+            (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+          );
+          const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
+
+          return {
+            sr_no: item.sr_no || item.id || (idx + 1),
+            date_dispatch: item.date_dispatch || item.date_dispatched || "-",
+            challan_dis: item.challan_dis || item.challan_no || "-",
+            style_code: item.style_code || "",
+            category: item.category || "SHIRT",
+            contractor_name: cont,
+            cut_qty: cutQty,
+            dispatch_qty: Number(item.dispatch_qty) || 0,
+            remarks: item.remarks || "-"
+          };
+        });
+
+        let filteredRows = rows;
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        }
+
+        const totals = {
+          cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+          dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
+        };
+
+        return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "date_dispatch", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_dispatch },
+        { id: "challan_dis", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_dis },
+        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+        { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
+        { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+      ]
+    },
+
+    designer: {
+      id: "designer",
+      title: "DESIGNER PCS & STOCK TRANSFER",
+      subtitle: "Designer Sample Pieces & Stock Movement Status",
+      getDatePeriod() {
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        return [];
+      },
+      getData() {
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+        let list = syncWithPage
+          ? getFilteredDesignerSamples().list
+          : (window.db && window.db.getDesignerSamples ? [...window.db.getDesignerSamples()] : []);
+
+        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+        const rows = list.map((item, idx) => ({
+          sr_no: item.sr_no || item.id || (idx + 1),
+          entry_date: item.entry_date || "-",
+          challan_no: item.challan_no || "-",
+          style_code: item.style_code || "",
+          item_type: item.item_type || "Shirt",
+          qty: parseInt(item.qty, 10) || 1,
+          stock_status: item.moved_to_stock ? "✅ Moved to Stock" : "⏳ Pending",
+          remarks: item.remarks || "Designer Sample"
+        }));
+
+        const totals = {
+          qty: rows.reduce((s, r) => s + (Number(r.qty) || 0), 0)
+        };
+
+        return { rows, totals, filterDesc: "" };
+      },
+      columns: [
+        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "entry_date", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.entry_date },
+        { id: "challan_no", label: "CHALLAN #", default: true, align: "center", width: 95, get: (r) => r.challan_no },
+        { id: "style_code", label: "STYLE NO", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+        { id: "item_type", label: "ITEM", default: true, align: "center", width: 90, get: (r) => r.item_type },
+        { id: "qty", label: "QTY", default: true, align: "right", width: 70, isNumeric: true, get: (r) => r.qty },
+        { id: "stock_status", label: "STOCK STATUS", default: true, align: "center", width: 135, get: (r) => r.stock_status },
+        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 160, get: (r) => r.remarks }
+      ]
+    },
+
+    master: {
+      id: "master",
+      title: "MASTER INVENTORY & ACTIVE STYLES",
+      subtitle: "Complete Hand Embroidery Style Production Balances",
+      getDatePeriod() {
+        return new Date().toLocaleDateString("en-GB");
+      },
+      getContractors() {
+        const list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+        const set = new Set();
+        list.forEach(i => {
+          const name = i.contractor_name || "";
+          if (name && name.trim() && name !== "-") set.add(name.trim());
+        });
+        return Array.from(set).sort();
+      },
+      getData(contractorFilter = "all") {
+        let list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+        const searchQuery = syncWithPage ? (document.getElementById("master-search-input")?.value || "").toLowerCase().trim() : "";
+        const selectedContractor = syncWithPage ? (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim() : "";
+        const selectedCategory = syncWithPage ? (document.getElementById("filter-category")?.value || "").toLowerCase().trim() : "";
+        const selectedBalance = syncWithPage ? (document.getElementById("filter-balance-status")?.value || "").trim() : "";
+
+        const filterParts = [];
+        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+        if (selectedContractor) filterParts.push(`Cont: ${selectedContractor}`);
+        if (selectedCategory) filterParts.push(`Cat: ${selectedCategory.toUpperCase()}`);
+        if (selectedBalance) filterParts.push(`Bal: ${selectedBalance}`);
+
+        if (syncWithPage && (searchQuery || selectedContractor || selectedCategory || selectedBalance)) {
+          list = list.filter(item => {
+            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+            const challanRecMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+            const challanDisMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+            const dateRecMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+            const dateDisMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+            const queryPassed = !searchQuery || codeMatch || catMatch || contMatch || challanRecMatch || challanDisMatch || dateRecMatch || dateDisMatch;
+
+            const contractorPassed = !selectedContractor || (item.contractor_name || "").toLowerCase() === selectedContractor;
+            const categoryPassed = !selectedCategory || (item.category || "").toLowerCase() === selectedCategory;
+
+            let balancePassed = true;
+            if (selectedBalance === "pending_hemb") balancePassed = item.balance_from_hemb > 0;
+            if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
+            if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
+
+            return queryPassed && contractorPassed && categoryPassed && balancePassed;
+          });
+        }
+
+        if (contractorFilter && contractorFilter !== "all") {
+          filterParts.push(`Contractor: ${contractorFilter}`);
+          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        }
+
+        const rows = list.map((item, idx) => ({
           sr_no: item.sr_no || (idx + 1),
           style_code: item.style_code || "",
-          contractor_name: item.contractor_name || "-",
-          pcs_qty: qty,
-          rate: rate > 0 ? rate : "-",
-          item: item.item || "SHIRT",
-          floor: item.floor || "-",
-          total: total > 0 ? Math.round(total) : 0,
-          period: item.period || "-",
-          remarks: item.remarks || "-"
-        };
-      });
-
-      const totals = {
-        pcs_qty: rows.reduce((s, r) => s + (Number(r.pcs_qty) || 0), 0),
-        total: rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
-      };
-
-      return { rows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-      { id: "pcs_qty", label: "PCS QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.pcs_qty },
-      { id: "rate", label: "RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
-      { id: "item", label: "ITEM / CAT", default: true, align: "center", width: 95, get: (r) => r.item },
-      { id: "floor", label: "FLOOR", default: true, align: "center", width: 85, get: (r) => r.floor },
-      { id: "total", label: "TOTAL (PKR)", default: true, align: "right", width: 110, isNumeric: true, get: (r) => r.total },
-      { id: "period", label: "TIME PERIOD", default: true, align: "center", width: 125, get: (r) => r.period },
-      { id: "remarks", label: "REMARKS", default: false, align: "left", width: 140, get: (r) => r.remarks }
-    ]
-  },
-
-  payment: {
-    id: "payment",
-    title: "RATE APPROVAL & PAYMENT RECONCILIATION SHEET",
-    subtitle: "Bi-Monthly Contractor Production & Payment Audit",
-    getDatePeriod() {
-      const p = (document.getElementById("filter-payment-period")?.value || "").trim();
-      if (p && p !== "all") return p;
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
-      const set = new Set();
-      list.forEach(i => {
-        const name = i.contractor_name || "";
-        if (name && name.trim() && name !== "-") set.add(name.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      let list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
-      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-
-      const query = syncWithPage ? (document.getElementById("payment-search-input")?.value || "").toLowerCase().trim() : "";
-      const channelFilter = syncWithPage ? (document.getElementById("filter-payment-channel")?.value || "") : "";
-      const statusFilter = syncWithPage ? (document.getElementById("filter-payment-status")?.value || "") : "";
-      const contractorPageFilter = syncWithPage ? (document.getElementById("filter-payment-contractor")?.value || "").toLowerCase().trim() : "";
-      const periodFilter = (typeof getActiveRateApprovalPeriod === "function" ? getActiveRateApprovalPeriod() : (document.getElementById("filter-payment-period")?.value || "")).trim();
-
-      const filterParts = [];
-      if (query) filterParts.push(`Search: "${query}"`);
-      if (channelFilter) filterParts.push(`Channel: ${channelFilter}`);
-      if (statusFilter) filterParts.push(`Status: ${statusFilter}`);
-      if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
-
-      if (!query && periodFilter && periodFilter !== "all") {
-        list = list.filter(item => {
-          const itemPeriod = (item.period || "").trim().toLowerCase();
-          const activePeriod = periodFilter.trim().toLowerCase();
-          if (itemPeriod === activePeriod) return true;
-          const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-          const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-          if (itemStart && activeStart && itemStart === activeStart) return true;
-          return false;
-        });
-      }
-
-      if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
-        list = list.filter(item => {
-          const qMatch = !query ||
-            (item.style_code || "").toLowerCase().includes(query) ||
-            (item.contractor_name || "").toLowerCase().includes(query) ||
-            (item.working || item.category || "").toLowerCase().includes(query) ||
-            (item.remarks_1 || item.remarks || "").toLowerCase().includes(query) ||
-            (item.remarks_2 || item.status_remarks || "").toLowerCase().includes(query) ||
-            (item.target_floor || "").toLowerCase().includes(query) ||
-            (item.period || "").toLowerCase().includes(query);
-
-          const cMatch = !channelFilter || item.payment_channel === channelFilter;
-
-          let sMatch = true;
-          const rem2 = (item.remarks_2 || item.status_remarks || item.status || "").toLowerCase();
-          const totBal = item.total_balance != null ? item.total_balance : 0;
-          if (statusFilter === "close") sMatch = rem2.includes("close") || totBal === 0;
-          else if (statusFilter === "deduction") sMatch = rem2.includes("deduction");
-          else if (statusFilter === "balance") sMatch = totBal > 0;
-
-          const contMatch = !contractorPageFilter || (item.contractor_name || "").toLowerCase() === contractorPageFilter;
-
-          return qMatch && cMatch && sMatch && contMatch;
-        });
-      }
-
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-      }
-
-      const rows = list.map((item, idx) => {
-        const rawCut = Number(item.cut_qty || item.total_pcs || 0);
-        const deduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
-        const baseProd = (item.base_prod_pcs != null)
-          ? Number(item.base_prod_pcs)
-          : ((Number(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs) || 0) + (deduction > 0 && item.base_prod_pcs == null ? deduction : 0));
-        const netProd = Math.max(0, baseProd - deduction);
-
-        return {
-          sr_no: idx + 1,
-          style_code: item.style_code || "",
-          working: item.working || item.category || "SHIRT",
-          contractor_name: item.contractor_name || "-",
-          rate: Number(item.rate_per_pc || item.rate) || 0,
-          cut_qty: rawCut,
-          deduction_pcs: deduction,
-          prod_pcs_qty: netProd,
-          carigar_rate: Number(item.carigar_rate) || 0,
-          commission: Number(item.commission) || 0,
-          rate_total: Number(item.rate_total) || 0,
-          remarks: item.remarks_1 || item.remarks || "-",
-          balance_stock: Number(item.balance_from_stock != null ? item.balance_from_stock : item.balance_stock) || 0,
-          balance_hemb: Number(item.balance_from_hemb != null ? item.balance_from_hemb : item.balance_hemb) || 0,
-          total_balance: Number(item.total_balance != null ? item.total_balance : item.balance_pcs) || 0,
-          period: item.period || "-"
-        };
-      });
-
-      const totals = {
-        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-        deduction_pcs: rows.reduce((s, r) => s + (Number(r.deduction_pcs) || 0), 0),
-        prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
-        rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
-        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0),
-        total_balance: rows.reduce((s, r) => s + (Number(r.total_balance) || 0), 0)
-      };
-
-      return { rows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "S.NO", default: true, align: "center", width: 50, get: (r) => r.sr_no },
-      { id: "style_code", label: "STYLE NAME", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-      { id: "working", label: "WORKING", default: true, align: "center", width: 85, get: (r) => r.working },
-      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
-      { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
-      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
-      { id: "deduction_pcs", label: "KAAT", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.deduction_pcs },
-      { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
-      { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
-      { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },
-      { id: "rate_total", label: "TOTAL (PKR)", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.rate_total },
-      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
-      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
-      { id: "total_balance", label: "TOTAL BAL", default: true, align: "right", width: 90, isNumeric: true, isBalance: true, get: (r) => r.total_balance },
-      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 120, get: (r) => r.remarks },
-      { id: "period", label: "TIME PERIOD", default: false, align: "center", width: 115, get: (r) => r.period }
-    ]
-  },
-
-  receiving: {
-    id: "receiving",
-    title: "INWARD RECEIVING CHALLAN LOG",
-    subtitle: "Incoming Fabric & Garment Challans from Cutting / Stock",
-    getDatePeriod() {
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
-      const set = new Set();
-      list.forEach(i => {
-        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
-          ? i.contractor_name.trim()
-          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
-        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      let list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
-
-      // Sort latest first (descending by SR or ID, matching the UI table)
-      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
-
-      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-      const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
-      const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
-      const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
-      const dateFromVal = syncWithPage ? (document.getElementById("filter-rec-date-from")?.value || "") : "";
-      const dateToVal = syncWithPage ? (document.getElementById("filter-rec-date-to")?.value || "") : "";
-
-      const filterParts = [];
-      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
-      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
-      if (dateFromVal) {
-        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
-      }
-
-      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
-        list = list.filter(item => {
-          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-          const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
-          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-          const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
-          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
-
-          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
-          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
-          const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
-
-          return queryPassed && catPassed && contPassed && datePassed;
-        });
-      }
-
-      const rows = list.map((item, idx) => {
-        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
-          ? item.contractor_name.trim()
-          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
-
-        return {
-          sr_no: item.sr_no || item.id || (idx + 1),
-          date_receive: item.date_receive || item.date_received || "-",
-          challan_rec: item.challan_rec || item.challan_no || "-",
-          style_code: item.style_code || "",
           category: item.category || "SHIRT",
-          contractor_name: cont,
-          cut_qty: Number(item.cut_qty != null ? item.cut_qty : item.cut_order_qty) || 0,
+          contractor_name: item.contractor_name || "-",
+          cut_qty: Number(item.cut_qty) || 0,
           received_qty: Number(item.received_qty) || 0,
+          balance_from_stock: Number(item.balance_from_stock) || 0,
+          dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+          balance_from_hemb: Number(item.balance_from_hemb) || 0,
+          status: item.status || "ACTIVE",
           remarks: item.remarks || "-"
+        }));
+
+        const totals = {
+          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+          received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+          dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
         };
-      });
 
-      let filteredRows = rows;
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+        return { rows, totals, filterDesc: filterParts.join(" • ") };
+      },
+      columns: [
+        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+        { id: "balance_from_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_stock },
+        { id: "dispatch_from_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_from_hemb },
+        { id: "balance_from_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_hemb },
+        { id: "status", label: "STATUS", default: false, align: "center", width: 85, get: (r) => r.status },
+        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+      ]
+    }
+  };
+
+  function getSavedWhatsAppColumns(sheetKey) {
+    const key = `craftflow_whatsapp_cols_${sheetKey}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        let parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Map legacy column IDs to current column IDs
+          parsed = parsed.map(id => {
+            if (id === "date_received") return "date_receive";
+            if (id === "date_dispatched") return "date_dispatch";
+            if (id === "challan_no") return sheetKey === "dispatch" ? "challan_dis" : "challan_rec";
+            if (id === "cut_order_qty") return "cut_qty";
+            return id;
+          });
+          return parsed;
+        }
+      } catch (e) {
+        console.warn("Failed reading saved whatsapp cols:", e);
       }
-
-      const totals = {
-        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-        received_qty: filteredRows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0)
-      };
-
-      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-      { id: "date_receive", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_receive },
-      { id: "challan_rec", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_rec },
-      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-      { id: "cut_qty", label: "CUT ORDER", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.cut_qty },
-      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.received_qty },
-      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 140, get: (r) => r.remarks }
-    ]
-  },
-
-  dispatch: {
-    id: "dispatch",
-    title: "OUTWARD DISPATCH CHALLAN LOG",
-    subtitle: "Finished Hand Embroidery Dispatched to Unit / Finishing",
-    getDatePeriod() {
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
-      const set = new Set();
-      list.forEach(i => {
-        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
-          ? i.contractor_name.trim()
-          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
-        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      let list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
-
-      // Sort latest first (descending by SR or ID, matching the UI table)
-      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
-
-      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-      const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
-      const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
-      const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
-      const dateFromVal = syncWithPage ? (document.getElementById("filter-dis-date-from")?.value || "") : "";
-      const dateToVal = syncWithPage ? (document.getElementById("filter-dis-date-to")?.value || "") : "";
-
-      const filterParts = [];
-      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
-      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
-      if (dateFromVal) {
-        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
-      }
-
-      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
-        list = list.filter(item => {
-          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-          const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
-          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-          const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
-          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
-
-          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
-          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
-          const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
-
-          return queryPassed && catPassed && contPassed && datePassed;
-        });
-      }
-
-      const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-
-      const rows = list.map((item, idx) => {
-        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
-          ? item.contractor_name.trim()
-          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
-
-        const mMatch = masterList.find(m =>
-          (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
-          (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
-        );
-        const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
-
-        return {
-          sr_no: item.sr_no || item.id || (idx + 1),
-          date_dispatch: item.date_dispatch || item.date_dispatched || "-",
-          challan_dis: item.challan_dis || item.challan_no || "-",
-          style_code: item.style_code || "",
-          category: item.category || "SHIRT",
-          contractor_name: cont,
-          cut_qty: cutQty,
-          dispatch_qty: Number(item.dispatch_qty) || 0,
-          remarks: item.remarks || "-"
-        };
-      });
-
-      let filteredRows = rows;
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-      }
-
-      const totals = {
-        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-        dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
-      };
-
-      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-      { id: "date_dispatch", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_dispatch },
-      { id: "challan_dis", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_dis },
-      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-      { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
-      { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
-    ]
-  },
-
-  master: {
-    id: "master",
-    title: "MASTER INVENTORY & ACTIVE STYLES",
-    subtitle: "Complete Hand Embroidery Style Production Balances",
-    getDatePeriod() {
-      return new Date().toLocaleDateString("en-GB");
-    },
-    getContractors() {
-      const list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-      const set = new Set();
-      list.forEach(i => {
-        const name = i.contractor_name || "";
-        if (name && name.trim() && name !== "-") set.add(name.trim());
-      });
-      return Array.from(set).sort();
-    },
-    getData(contractorFilter = "all") {
-      let list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-
-      const searchQuery = syncWithPage ? (document.getElementById("master-search-input")?.value || "").toLowerCase().trim() : "";
-      const selectedContractor = syncWithPage ? (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim() : "";
-      const selectedCategory = syncWithPage ? (document.getElementById("filter-category")?.value || "").toLowerCase().trim() : "";
-      const selectedBalance = syncWithPage ? (document.getElementById("filter-balance-status")?.value || "").trim() : "";
-
-      const filterParts = [];
-      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-      if (selectedContractor) filterParts.push(`Cont: ${selectedContractor}`);
-      if (selectedCategory) filterParts.push(`Cat: ${selectedCategory.toUpperCase()}`);
-      if (selectedBalance) filterParts.push(`Bal: ${selectedBalance}`);
-
-      if (syncWithPage && (searchQuery || selectedContractor || selectedCategory || selectedBalance)) {
-        list = list.filter(item => {
-          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-          const challanRecMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
-          const challanDisMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
-          const dateRecMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
-          const dateDisMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
-          const queryPassed = !searchQuery || codeMatch || catMatch || contMatch || challanRecMatch || challanDisMatch || dateRecMatch || dateDisMatch;
-
-          const contractorPassed = !selectedContractor || (item.contractor_name || "").toLowerCase() === selectedContractor;
-          const categoryPassed = !selectedCategory || (item.category || "").toLowerCase() === selectedCategory;
-
-          let balancePassed = true;
-          if (selectedBalance === "pending_hemb") balancePassed = item.balance_from_hemb > 0;
-          if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
-          if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
-
-          return queryPassed && contractorPassed && categoryPassed && balancePassed;
-        });
-      }
-
-      if (contractorFilter && contractorFilter !== "all") {
-        filterParts.push(`Contractor: ${contractorFilter}`);
-        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-      }
-
-      const rows = list.map((item, idx) => ({
-        sr_no: item.sr_no || (idx + 1),
-        style_code: item.style_code || "",
-        category: item.category || "SHIRT",
-        contractor_name: item.contractor_name || "-",
-        cut_qty: Number(item.cut_qty) || 0,
-        received_qty: Number(item.received_qty) || 0,
-        balance_from_stock: Number(item.balance_from_stock) || 0,
-        dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
-        balance_from_hemb: Number(item.balance_from_hemb) || 0,
-        status: item.status || "ACTIVE",
-        remarks: item.remarks || "-"
-      }));
-
-      const totals = {
-        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
-        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
-        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
-      };
-
-      return { rows, totals, filterDesc: filterParts.join(" • ") };
-    },
-    columns: [
-      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
-      { id: "balance_from_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_stock },
-      { id: "dispatch_from_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_from_hemb },
-      { id: "balance_from_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_hemb },
-      { id: "status", label: "STATUS", default: false, align: "center", width: 85, get: (r) => r.status },
-      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
-    ]
+    }
+    return null;
   }
-};
 
-function getSavedWhatsAppColumns(sheetKey) {
-  const key = `craftflow_whatsapp_cols_${sheetKey}`;
-  const stored = localStorage.getItem(key);
-  if (stored) {
+  function saveWhatsAppColumns(sheetKey, colIds) {
+    const key = `craftflow_whatsapp_cols_${sheetKey}`;
     try {
-      let parsed = JSON.parse(stored);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        // Map legacy column IDs to current column IDs
-        parsed = parsed.map(id => {
-          if (id === "date_received") return "date_receive";
-          if (id === "date_dispatched") return "date_dispatch";
-          if (id === "challan_no") return sheetKey === "dispatch" ? "challan_dis" : "challan_rec";
-          if (id === "cut_order_qty") return "cut_qty";
-          return id;
-        });
-        return parsed;
-      }
+      localStorage.setItem(key, JSON.stringify(colIds));
+      return true;
     } catch (e) {
-      console.warn("Failed reading saved whatsapp cols:", e);
+      console.error("Failed saving whatsapp cols:", e);
+      return false;
     }
   }
-  return null;
-}
 
-function saveWhatsAppColumns(sheetKey, colIds) {
-  const key = `craftflow_whatsapp_cols_${sheetKey}`;
-  try {
-    localStorage.setItem(key, JSON.stringify(colIds));
-    return true;
-  } catch (e) {
-    console.error("Failed saving whatsapp cols:", e);
-    return false;
-  }
-}
-
-function resetSavedWhatsAppColumns(sheetKey) {
-  const key = `craftflow_whatsapp_cols_${sheetKey}`;
-  try {
-    localStorage.removeItem(key);
-  } catch (e) {
-    console.error("Failed clearing saved cols:", e);
-  }
-}
-
-function initWhatsAppTableController() {
-  if (whatsappControllerInitialized) return;
-  whatsappControllerInitialized = true;
-
-  // Global click delegate for any button opening WhatsApp Image modal
-  document.addEventListener("click", (e) => {
-    const btn = e.target.closest(".btn-open-table-whatsapp-img");
-    if (btn) {
-      const sheet = btn.getAttribute("data-sheet") || "daily";
-      openWhatsAppTableImageModal(sheet);
+  function resetSavedWhatsAppColumns(sheetKey) {
+    const key = `craftflow_whatsapp_cols_${sheetKey}`;
+    try {
+      localStorage.removeItem(key);
+    } catch (e) {
+      console.error("Failed clearing saved cols:", e);
     }
-  });
+  }
 
-  // Sheet change listener
-  document.getElementById("whatsapp-sheet-select")?.addEventListener("change", (e) => {
-    switchWhatsAppSheet(e.target.value);
-  });
+  function initWhatsAppTableController() {
+    if (whatsappControllerInitialized) return;
+    whatsappControllerInitialized = true;
 
-  // Contractor change listener
-  document.getElementById("whatsapp-contractor-select")?.addEventListener("change", (e) => {
-    currentWhatsAppContractor = e.target.value;
-    renderWhatsAppTableImage();
-  });
-
-  // Summary toggle
-  document.getElementById("whatsapp-include-totals-toggle")?.addEventListener("change", () => {
-    renderWhatsAppTableImage();
-  });
-
-  // Bulk column buttons
-  document.getElementById("btn-whatsapp-cols-all")?.addEventListener("click", () => {
-    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-    checkboxes.forEach(cb => { cb.checked = true; });
-    renderWhatsAppTableImage();
-  });
-
-  document.getElementById("btn-whatsapp-cols-none")?.addEventListener("click", () => {
-    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-    checkboxes.forEach((cb, idx) => { cb.checked = (idx === 0 || idx === 1); });
-    renderWhatsAppTableImage();
-  });
-
-  document.getElementById("btn-whatsapp-cols-reset")?.addEventListener("click", () => {
-    const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
-    if (!def) return;
-    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-    checkboxes.forEach(cb => {
-      const colId = cb.getAttribute("data-col-id");
-      const cDef = def.columns.find(c => c.id === colId);
-      cb.checked = cDef ? Boolean(cDef.default) : true;
-    });
-    renderWhatsAppTableImage();
-  });
-
-  // Save Column Preferences Button
-  document.getElementById("btn-whatsapp-save-cols")?.addEventListener("click", () => {
-    const selected = getActiveWhatsAppSelectedColIds();
-    if (selected.length === 0) {
-      showToast("Please select at least 1 column before saving.", "error");
-      return;
-    }
-    const ok = saveWhatsAppColumns(currentWhatsAppSheet, selected);
-    if (ok) {
-      const badge = document.getElementById("whatsapp-saved-settings-badge");
-      if (badge) badge.style.display = "inline";
-      const fb = document.getElementById("whatsapp-save-feedback");
-      if (fb) {
-        fb.style.display = "block";
-        setTimeout(() => { fb.style.display = "none"; }, 3500);
+    // Global click delegate for any button opening WhatsApp Image modal
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest(".btn-open-table-whatsapp-img");
+      if (btn) {
+        const sheet = btn.getAttribute("data-sheet") || "daily";
+        openWhatsAppTableImageModal(sheet);
       }
-      showToast("Column preferences saved! CraftFlow will remember your columns.", "success");
-    }
-  });
+    });
 
-  // Reset Saved Preferences Button
-  document.getElementById("btn-whatsapp-reset-saved-cols")?.addEventListener("click", () => {
-    resetSavedWhatsAppColumns(currentWhatsAppSheet);
-    const badge = document.getElementById("whatsapp-saved-settings-badge");
-    if (badge) badge.style.display = "none";
-    document.getElementById("btn-whatsapp-cols-reset")?.click();
-    showToast("Preferences reset to default.", "info");
-  });
+    // Sheet change listener
+    document.getElementById("whatsapp-sheet-select")?.addEventListener("change", (e) => {
+      switchWhatsAppSheet(e.target.value);
+    });
 
-  // Active table filter sync toggle
-  document.getElementById("whatsapp-sync-filters-toggle")?.addEventListener("change", () => {
-    renderWhatsAppTableImage();
-  });
+    // Contractor change listener
+    document.getElementById("whatsapp-contractor-select")?.addEventListener("change", (e) => {
+      currentWhatsAppContractor = e.target.value;
+      renderWhatsAppTableImage();
+    });
 
-  // Fit to screen / 100% Zoom toggle
-  document.getElementById("btn-whatsapp-toggle-zoom")?.addEventListener("click", () => {
+    // Summary toggle
+    document.getElementById("whatsapp-include-totals-toggle")?.addEventListener("change", () => {
+      renderWhatsAppTableImage();
+    });
+
+    // Bulk column buttons
+    document.getElementById("btn-whatsapp-cols-all")?.addEventListener("click", () => {
+      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+      checkboxes.forEach(cb => { cb.checked = true; });
+      renderWhatsAppTableImage();
+    });
+
+    document.getElementById("btn-whatsapp-cols-none")?.addEventListener("click", () => {
+      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+      checkboxes.forEach((cb, idx) => { cb.checked = (idx === 0 || idx === 1); });
+      renderWhatsAppTableImage();
+    });
+
+    document.getElementById("btn-whatsapp-cols-reset")?.addEventListener("click", () => {
+      const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+      if (!def) return;
+      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+      checkboxes.forEach(cb => {
+        const colId = cb.getAttribute("data-col-id");
+        const cDef = def.columns.find(c => c.id === colId);
+        cb.checked = cDef ? Boolean(cDef.default) : true;
+      });
+      renderWhatsAppTableImage();
+    });
+
+    // Save Column Preferences Button
+    document.getElementById("btn-whatsapp-save-cols")?.addEventListener("click", () => {
+      const selected = getActiveWhatsAppSelectedColIds();
+      if (selected.length === 0) {
+        showToast("Please select at least 1 column before saving.", "error");
+        return;
+      }
+      const ok = saveWhatsAppColumns(currentWhatsAppSheet, selected);
+      if (ok) {
+        const badge = document.getElementById("whatsapp-saved-settings-badge");
+        if (badge) badge.style.display = "inline";
+        const fb = document.getElementById("whatsapp-save-feedback");
+        if (fb) {
+          fb.style.display = "block";
+          setTimeout(() => { fb.style.display = "none"; }, 3500);
+        }
+        showToast("Column preferences saved! CraftFlow will remember your columns.", "success");
+      }
+    });
+
+    // Reset Saved Preferences Button
+    document.getElementById("btn-whatsapp-reset-saved-cols")?.addEventListener("click", () => {
+      resetSavedWhatsAppColumns(currentWhatsAppSheet);
+      const badge = document.getElementById("whatsapp-saved-settings-badge");
+      if (badge) badge.style.display = "none";
+      document.getElementById("btn-whatsapp-cols-reset")?.click();
+      showToast("Preferences reset to default.", "info");
+    });
+
+    // Active table filter sync toggle
+    document.getElementById("whatsapp-sync-filters-toggle")?.addEventListener("change", () => {
+      renderWhatsAppTableImage();
+    });
+
+    // Fit to screen / 100% Zoom toggle
+    document.getElementById("btn-whatsapp-toggle-zoom")?.addEventListener("click", () => {
+      const viewport = document.getElementById("whatsapp-preview-viewport");
+      const zoomText = document.getElementById("whatsapp-zoom-text");
+      const zoomIcon = document.getElementById("whatsapp-zoom-icon");
+      if (!viewport) return;
+      const isFit = viewport.classList.toggle("fit-to-screen");
+      if (zoomText) zoomText.textContent = isFit ? "100% Full View" : "Fit to Screen";
+      if (zoomIcon) zoomIcon.textContent = isFit ? "🔍" : "↔️";
+    });
+
+    // Action Buttons: Copy, Download, WhatsApp Web
+    document.getElementById("btn-whatsapp-copy-clipboard")?.addEventListener("click", copyWhatsAppTableImageToClipboard);
+    document.getElementById("btn-whatsapp-download-image")?.addEventListener("click", downloadWhatsAppTableImage);
+    document.getElementById("btn-whatsapp-open-web")?.addEventListener("click", () => {
+      window.open("https://web.whatsapp.com", "_blank");
+    });
+
+    // Print Studio connector
+    document.getElementById("btn-studio-whatsapp-image")?.addEventListener("click", () => {
+      if (typeof closeModal === "function") closeModal("modal-print-studio");
+      const active = (typeof printStudioActiveSheet !== "undefined" && printStudioActiveSheet) ? printStudioActiveSheet : "daily";
+      openWhatsAppTableImageModal(active);
+    });
+  }
+
+  function openWhatsAppTableImageModal(sheetKey = "daily") {
+    initWhatsAppTableController();
+
+    // Reset zoom toggle UI state to match default fit-to-screen
     const viewport = document.getElementById("whatsapp-preview-viewport");
     const zoomText = document.getElementById("whatsapp-zoom-text");
     const zoomIcon = document.getElementById("whatsapp-zoom-icon");
-    if (!viewport) return;
-    const isFit = viewport.classList.toggle("fit-to-screen");
-    if (zoomText) zoomText.textContent = isFit ? "100% Full View" : "Fit to Screen";
-    if (zoomIcon) zoomIcon.textContent = isFit ? "🔍" : "↔️";
-  });
+    if (viewport) {
+      viewport.classList.add("fit-to-screen");
+      if (zoomText) zoomText.textContent = "100% Full View";
+      if (zoomIcon) zoomIcon.textContent = "🔍";
+    }
 
-  // Action Buttons: Copy, Download, WhatsApp Web
-  document.getElementById("btn-whatsapp-copy-clipboard")?.addEventListener("click", copyWhatsAppTableImageToClipboard);
-  document.getElementById("btn-whatsapp-download-image")?.addEventListener("click", downloadWhatsAppTableImage);
-  document.getElementById("btn-whatsapp-open-web")?.addEventListener("click", () => {
-    window.open("https://web.whatsapp.com", "_blank");
-  });
+    // Ensure sync filters toggle is checked by default
+    const syncToggle = document.getElementById("whatsapp-sync-filters-toggle");
+    if (syncToggle) syncToggle.checked = true;
 
-  // Print Studio connector
-  document.getElementById("btn-studio-whatsapp-image")?.addEventListener("click", () => {
-    if (typeof closeModal === "function") closeModal("modal-print-studio");
-    const active = (typeof printStudioActiveSheet !== "undefined" && printStudioActiveSheet) ? printStudioActiveSheet : "daily";
-    openWhatsAppTableImageModal(active);
-  });
-}
-
-function openWhatsAppTableImageModal(sheetKey = "daily") {
-  initWhatsAppTableController();
-
-  // Reset zoom toggle UI state to match default fit-to-screen
-  const viewport = document.getElementById("whatsapp-preview-viewport");
-  const zoomText = document.getElementById("whatsapp-zoom-text");
-  const zoomIcon = document.getElementById("whatsapp-zoom-icon");
-  if (viewport) {
-    viewport.classList.add("fit-to-screen");
-    if (zoomText) zoomText.textContent = "100% Full View";
-    if (zoomIcon) zoomIcon.textContent = "🔍";
+    switchWhatsAppSheet(sheetKey);
+    if (typeof openModal === "function") {
+      openModal("modal-whatsapp-table-image");
+    }
   }
 
-  // Ensure sync filters toggle is checked by default
-  const syncToggle = document.getElementById("whatsapp-sync-filters-toggle");
-  if (syncToggle) syncToggle.checked = true;
+  function switchWhatsAppSheet(sheetKey) {
+    if (!WHATSAPP_SHEET_DEFS[sheetKey]) sheetKey = "daily";
+    currentWhatsAppSheet = sheetKey;
+    currentWhatsAppContractor = "all";
 
-  switchWhatsAppSheet(sheetKey);
-  if (typeof openModal === "function") {
-    openModal("modal-whatsapp-table-image");
-  }
-}
+    const sheetSelect = document.getElementById("whatsapp-sheet-select");
+    if (sheetSelect) sheetSelect.value = sheetKey;
 
-function switchWhatsAppSheet(sheetKey) {
-  if (!WHATSAPP_SHEET_DEFS[sheetKey]) sheetKey = "daily";
-  currentWhatsAppSheet = sheetKey;
-  currentWhatsAppContractor = "all";
-
-  const sheetSelect = document.getElementById("whatsapp-sheet-select");
-  if (sheetSelect) sheetSelect.value = sheetKey;
-
-  populateWhatsAppContractorDropdown(sheetKey);
-  renderWhatsAppColumnCheckboxes(sheetKey);
-  renderWhatsAppTableImage();
-}
-
-function populateWhatsAppContractorDropdown(sheetKey) {
-  const select = document.getElementById("whatsapp-contractor-select");
-  const countEl = document.getElementById("whatsapp-contractor-count");
-  if (!select) return;
-
-  const def = WHATSAPP_SHEET_DEFS[sheetKey];
-  const contractors = def ? def.getContractors() : [];
-
-  select.innerHTML = `<option value="all">👥 All Contractors (Whole Sheet)</option>` +
-    contractors.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-
-  select.value = "all";
-  if (countEl) {
-    countEl.textContent = `${contractors.length} active contractors`;
-  }
-}
-
-function renderWhatsAppColumnCheckboxes(sheetKey) {
-  const container = document.getElementById("whatsapp-columns-container");
-  const badge = document.getElementById("whatsapp-saved-settings-badge");
-  if (!container) return;
-
-  const def = WHATSAPP_SHEET_DEFS[sheetKey];
-  if (!def) return;
-
-  const savedCols = getSavedWhatsAppColumns(sheetKey);
-  if (badge) {
-    badge.style.display = savedCols ? "inline" : "none";
+    populateWhatsAppContractorDropdown(sheetKey);
+    renderWhatsAppColumnCheckboxes(sheetKey);
+    renderWhatsAppTableImage();
   }
 
-  container.innerHTML = def.columns.map(col => {
-    const isChecked = savedCols ? savedCols.includes(col.id) : Boolean(col.default);
-    return `
+  function populateWhatsAppContractorDropdown(sheetKey) {
+    const select = document.getElementById("whatsapp-contractor-select");
+    const countEl = document.getElementById("whatsapp-contractor-count");
+    if (!select) return;
+
+    const def = WHATSAPP_SHEET_DEFS[sheetKey];
+    const contractors = def ? def.getContractors() : [];
+
+    select.innerHTML = `<option value="all">👥 All Contractors (Whole Sheet)</option>` +
+      contractors.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+
+    select.value = "all";
+    if (countEl) {
+      countEl.textContent = `${contractors.length} active contractors`;
+    }
+  }
+
+  function renderWhatsAppColumnCheckboxes(sheetKey) {
+    const container = document.getElementById("whatsapp-columns-container");
+    const badge = document.getElementById("whatsapp-saved-settings-badge");
+    if (!container) return;
+
+    const def = WHATSAPP_SHEET_DEFS[sheetKey];
+    if (!def) return;
+
+    const savedCols = getSavedWhatsAppColumns(sheetKey);
+    if (badge) {
+      badge.style.display = savedCols ? "inline" : "none";
+    }
+
+    container.innerHTML = def.columns.map(col => {
+      const isChecked = savedCols ? savedCols.includes(col.id) : Boolean(col.default);
+      return `
       <label class="whatsapp-col-checkbox-label">
         <input type="checkbox" data-col-id="${escapeHtml(col.id)}" ${isChecked ? "checked" : ""} style="accent-color: #25d366; width: 16px; height: 16px;">
         <span>${escapeHtml(col.label)}</span>
       </label>
     `;
-  }).join("");
+    }).join("");
 
-  // Attach live listener to checkboxes
-  const cbs = container.querySelectorAll("input[type='checkbox']");
-  cbs.forEach(cb => {
-    cb.addEventListener("change", () => {
-      renderWhatsAppTableImage();
+    // Attach live listener to checkboxes
+    const cbs = container.querySelectorAll("input[type='checkbox']");
+    cbs.forEach(cb => {
+      cb.addEventListener("change", () => {
+        renderWhatsAppTableImage();
+      });
     });
-  });
-}
+  }
 
-function getActiveWhatsAppSelectedColIds() {
-  const container = document.getElementById("whatsapp-columns-container");
-  if (!container) return [];
-  const cbs = container.querySelectorAll("input[type='checkbox']:checked");
-  return Array.from(cbs).map(cb => cb.getAttribute("data-col-id"));
-}
+  function getActiveWhatsAppSelectedColIds() {
+    const container = document.getElementById("whatsapp-columns-container");
+    if (!container) return [];
+    const cbs = container.querySelectorAll("input[type='checkbox']:checked");
+    return Array.from(cbs).map(cb => cb.getAttribute("data-col-id"));
+  }
 
-function renderWhatsAppTableImage() {
-  const canvas = document.getElementById("whatsapp-table-canvas");
-  const badge = document.getElementById("whatsapp-preview-badge");
-  if (!canvas) return;
+  function renderWhatsAppTableImage() {
+    const canvas = document.getElementById("whatsapp-table-canvas");
+    const badge = document.getElementById("whatsapp-preview-badge");
+    if (!canvas) return;
 
-  const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
-  if (!def) return;
+    const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+    if (!def) return;
 
-  const selectedColIds = getActiveWhatsAppSelectedColIds();
-  const activeCols = def.columns.filter(c => selectedColIds.includes(c.id));
+    const selectedColIds = getActiveWhatsAppSelectedColIds();
+    const activeCols = def.columns.filter(c => selectedColIds.includes(c.id));
 
-  if (activeCols.length === 0) {
-    canvas.width = 600;
-    canvas.height = 180;
+    if (activeCols.length === 0) {
+      canvas.width = 600;
+      canvas.height = 180;
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "bold 16px Inter, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("No columns selected! Please check at least 1 column on the left.", 300, 95);
+      if (badge) badge.textContent = "0 columns selected";
+      return;
+    }
+
+    const { rows, totals, filterDesc } = def.getData(currentWhatsAppContractor);
+    const includeTotals = Boolean(document.getElementById("whatsapp-include-totals-toggle")?.checked);
+    const datePeriodStr = def.getDatePeriod();
+
+    // Update filter hint in UI sidebar
+    const filterHintEl = document.getElementById("whatsapp-active-filter-hint");
+    if (filterHintEl) {
+      if (filterDesc) {
+        filterHintEl.style.display = "block";
+        filterHintEl.innerHTML = `🔍 <strong>Filter Synced:</strong> ${escapeHtml(filterDesc)} (${rows.length} rows)`;
+        filterHintEl.style.color = "#38bdf8";
+      } else {
+        filterHintEl.style.display = "block";
+        filterHintEl.innerHTML = `✓ <strong>Whole Table:</strong> Showing all ${rows.length} rows`;
+        filterHintEl.style.color = "#10b981";
+      }
+    }
+
+    // ------------------------------------------------------------------
+    // Layout Dimensions & Sizing
+    // ------------------------------------------------------------------
+    const SCALE = 2; // Ultra HD Retina
+    const PADDING_X = 24;
+    const HEADER_HEIGHT = 98;
+    const TABLE_HEADER_HEIGHT = 38;
+    const ROW_HEIGHT = 34;
+    const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
+    const FOOTER_HEIGHT = 32;
+
+    // Calculate dynamic column widths proportionally
+    const baseColWidths = activeCols.map(c => c.width || 100);
+    const totalBaseWidth = baseColWidths.reduce((a, b) => a + b, 0);
+
+    // Target minimum table width for crisp reading
+    const targetTableWidth = Math.max(900, Math.min(1400, totalBaseWidth + 100));
+    const colWidths = baseColWidths.map(w => Math.round((w / totalBaseWidth) * targetTableWidth));
+    const actualTableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+    const logicalWidth = actualTableWidth + (PADDING_X * 2);
+    const effectiveRowsHeight = Math.max(rows.length * ROW_HEIGHT, rows.length === 0 ? 60 : 0);
+    const logicalHeight = HEADER_HEIGHT + TABLE_HEADER_HEIGHT + effectiveRowsHeight + TOTAL_HEIGHT + FOOTER_HEIGHT + 16;
+
+    canvas.width = Math.round(logicalWidth * SCALE);
+    canvas.height = Math.round(logicalHeight * SCALE);
+    canvas.style.width = `${logicalWidth}px`;
+    canvas.style.height = `${logicalHeight}px`;
+
     const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.scale(SCALE, SCALE);
+
+    // Background Canvas
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+    // ------------------------------------------------------------------
+    // 1. TOP BRANDING & DETAILS BANNER
+    // ------------------------------------------------------------------
+    const bannerGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+    bannerGrad.addColorStop(0, "#0f172a");
+    bannerGrad.addColorStop(0.5, "#1e293b");
+    bannerGrad.addColorStop(1, "#0f172a");
+    ctx.fillStyle = bannerGrad;
+    ctx.fillRect(0, 0, logicalWidth, HEADER_HEIGHT);
+
+    // Decorative Accent Bar
+    const accentGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+    accentGrad.addColorStop(0, "#25d366");
+    accentGrad.addColorStop(0.5, "#38bdf8");
+    accentGrad.addColorStop(1, "#10b981");
+    ctx.fillStyle = accentGrad;
+    ctx.fillRect(0, HEADER_HEIGHT - 3.5, logicalWidth, 3.5);
+
+    // Brand Name
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "bold 10px Inter, -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("CRAFTFLOW  •  HAND EMBROIDERY PRODUCTION SUITE", PADDING_X, 22);
+
+    // Sheet Title
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 17px Inter, -apple-system, sans-serif";
+    ctx.fillText(def.title, PADDING_X, 45);
+
+    // Subtitle & Badges
+    ctx.font = "600 11px Inter, -apple-system, sans-serif";
+
+    // Date Badge
+    const dateBadgeWidth = drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 70, "#38bdf8", "rgba(56, 189, 248, 0.18)");
+
+    // Contractor / Filter Badge
+    const contText = currentWhatsAppContractor !== "all"
+      ? `👤 Contractor: ${currentWhatsAppContractor}`
+      : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
+    const badgeX = PADDING_X + dateBadgeWidth + 10;
+    drawCanvasBadge(ctx, contText, badgeX, 70, "#25d366", "rgba(37, 211, 102, 0.18)");
+
+    // Record Count Badge (Right aligned)
+    const countText = filterDesc
+      ? `🔍 Filtered: ${rows.length} rows`
+      : `📦 All Records: ${rows.length}`;
+    ctx.fillStyle = filterDesc ? "#38bdf8" : "#cbd5e1";
+    ctx.font = "bold 11.5px Inter, -apple-system, sans-serif";
+    ctx.textAlign = "right";
+    ctx.fillText(countText, logicalWidth - PADDING_X, 45);
+
+    const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
     ctx.fillStyle = "#64748b";
-    ctx.font = "bold 16px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("No columns selected! Please check at least 1 column on the left.", 300, 95);
-    if (badge) badge.textContent = "0 columns selected";
-    return;
-  }
+    ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
+    ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 70);
 
-  const { rows, totals, filterDesc } = def.getData(currentWhatsAppContractor);
-  const includeTotals = Boolean(document.getElementById("whatsapp-include-totals-toggle")?.checked);
-  const datePeriodStr = def.getDatePeriod();
+    // ------------------------------------------------------------------
+    // 2. TABLE HEADER ROW
+    // ------------------------------------------------------------------
+    let curY = HEADER_HEIGHT + 10;
+    ctx.fillStyle = "#1e293b";
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, TABLE_HEADER_HEIGHT);
 
-  // Update filter hint in UI sidebar
-  const filterHintEl = document.getElementById("whatsapp-active-filter-hint");
-  if (filterHintEl) {
-    if (filterDesc) {
-      filterHintEl.style.display = "block";
-      filterHintEl.innerHTML = `🔍 <strong>Filter Synced:</strong> ${escapeHtml(filterDesc)} (${rows.length} rows)`;
-      filterHintEl.style.color = "#38bdf8";
-    } else {
-      filterHintEl.style.display = "block";
-      filterHintEl.innerHTML = `✓ <strong>Whole Table:</strong> Showing all ${rows.length} rows`;
-      filterHintEl.style.color = "#10b981";
-    }
-  }
-
-  // ------------------------------------------------------------------
-  // Layout Dimensions & Sizing
-  // ------------------------------------------------------------------
-  const SCALE = 2; // Ultra HD Retina
-  const PADDING_X = 24;
-  const HEADER_HEIGHT = 98;
-  const TABLE_HEADER_HEIGHT = 38;
-  const ROW_HEIGHT = 34;
-  const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
-  const FOOTER_HEIGHT = 32;
-
-  // Calculate dynamic column widths proportionally
-  const baseColWidths = activeCols.map(c => c.width || 100);
-  const totalBaseWidth = baseColWidths.reduce((a, b) => a + b, 0);
-
-  // Target minimum table width for crisp reading
-  const targetTableWidth = Math.max(900, Math.min(1400, totalBaseWidth + 100));
-  const colWidths = baseColWidths.map(w => Math.round((w / totalBaseWidth) * targetTableWidth));
-  const actualTableWidth = colWidths.reduce((a, b) => a + b, 0);
-
-  const logicalWidth = actualTableWidth + (PADDING_X * 2);
-  const effectiveRowsHeight = Math.max(rows.length * ROW_HEIGHT, rows.length === 0 ? 60 : 0);
-  const logicalHeight = HEADER_HEIGHT + TABLE_HEADER_HEIGHT + effectiveRowsHeight + TOTAL_HEIGHT + FOOTER_HEIGHT + 16;
-
-  canvas.width = Math.round(logicalWidth * SCALE);
-  canvas.height = Math.round(logicalHeight * SCALE);
-  canvas.style.width = `${logicalWidth}px`;
-  canvas.style.height = `${logicalHeight}px`;
-
-  const ctx = canvas.getContext("2d");
-  ctx.save();
-  ctx.scale(SCALE, SCALE);
-
-  // Background Canvas
-  ctx.fillStyle = "#ffffff";
-  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-
-  // ------------------------------------------------------------------
-  // 1. TOP BRANDING & DETAILS BANNER
-  // ------------------------------------------------------------------
-  const bannerGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
-  bannerGrad.addColorStop(0, "#0f172a");
-  bannerGrad.addColorStop(0.5, "#1e293b");
-  bannerGrad.addColorStop(1, "#0f172a");
-  ctx.fillStyle = bannerGrad;
-  ctx.fillRect(0, 0, logicalWidth, HEADER_HEIGHT);
-
-  // Decorative Accent Bar
-  const accentGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
-  accentGrad.addColorStop(0, "#25d366");
-  accentGrad.addColorStop(0.5, "#38bdf8");
-  accentGrad.addColorStop(1, "#10b981");
-  ctx.fillStyle = accentGrad;
-  ctx.fillRect(0, HEADER_HEIGHT - 3.5, logicalWidth, 3.5);
-
-  // Brand Name
-  ctx.fillStyle = "#94a3b8";
-  ctx.font = "bold 10px Inter, -apple-system, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("CRAFTFLOW  •  HAND EMBROIDERY PRODUCTION SUITE", PADDING_X, 22);
-
-  // Sheet Title
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "800 17px Inter, -apple-system, sans-serif";
-  ctx.fillText(def.title, PADDING_X, 45);
-
-  // Subtitle & Badges
-  ctx.font = "600 11px Inter, -apple-system, sans-serif";
-
-  // Date Badge
-  const dateBadgeWidth = drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 70, "#38bdf8", "rgba(56, 189, 248, 0.18)");
-
-  // Contractor / Filter Badge
-  const contText = currentWhatsAppContractor !== "all"
-    ? `👤 Contractor: ${currentWhatsAppContractor}`
-    : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
-  const badgeX = PADDING_X + dateBadgeWidth + 10;
-  drawCanvasBadge(ctx, contText, badgeX, 70, "#25d366", "rgba(37, 211, 102, 0.18)");
-
-  // Record Count Badge (Right aligned)
-  const countText = filterDesc
-    ? `🔍 Filtered: ${rows.length} rows`
-    : `📦 All Records: ${rows.length}`;
-  ctx.fillStyle = filterDesc ? "#38bdf8" : "#cbd5e1";
-  ctx.font = "bold 11.5px Inter, -apple-system, sans-serif";
-  ctx.textAlign = "right";
-  ctx.fillText(countText, logicalWidth - PADDING_X, 45);
-
-  const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  ctx.fillStyle = "#64748b";
-  ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
-  ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 70);
-
-  // ------------------------------------------------------------------
-  // 2. TABLE HEADER ROW
-  // ------------------------------------------------------------------
-  let curY = HEADER_HEIGHT + 10;
-  ctx.fillStyle = "#1e293b";
-  ctx.fillRect(PADDING_X, curY, actualTableWidth, TABLE_HEADER_HEIGHT);
-
-  let curX = PADDING_X;
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "800 10.5px Inter, -apple-system, sans-serif";
-
-  activeCols.forEach((col, idx) => {
-    const colW = colWidths[idx];
-    ctx.strokeStyle = "#334155";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(curX, curY, colW, TABLE_HEADER_HEIGHT);
-
-    let textX = curX + (colW / 2);
-    ctx.textAlign = "center";
-    if (col.align === "left") {
-      textX = curX + 10;
-      ctx.textAlign = "left";
-    } else if (col.align === "right") {
-      textX = curX + colW - 10;
-      ctx.textAlign = "right";
-    }
-
+    let curX = PADDING_X;
     ctx.fillStyle = "#ffffff";
-    drawTextWithTruncate(ctx, col.label, textX, curY + 23, colW - 16, col.align);
-    curX += colW;
-  });
+    ctx.font = "800 10.5px Inter, -apple-system, sans-serif";
 
-  curY += TABLE_HEADER_HEIGHT;
+    activeCols.forEach((col, idx) => {
+      const colW = colWidths[idx];
+      ctx.strokeStyle = "#334155";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(curX, curY, colW, TABLE_HEADER_HEIGHT);
 
-  // Empty state handling if no records match
-  if (rows.length === 0) {
-    ctx.fillStyle = "#ffffff";
-    ctx.fillRect(PADDING_X, curY, actualTableWidth, 60);
-    ctx.strokeStyle = "#e2e8f0";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(PADDING_X, curY, actualTableWidth, 60);
-    ctx.fillStyle = "#64748b";
-    ctx.font = "italic 12px Inter, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("No table records match active search or filters.", PADDING_X + (actualTableWidth / 2), curY + 35);
-    curY += 60;
-  }
-
-  // ------------------------------------------------------------------
-  // 3. DATA ROWS (Zebra Striping & Balance Highlights)
-  // ------------------------------------------------------------------
-  rows.forEach((row, rIdx) => {
-    const isEven = rIdx % 2 === 0;
-    const rowBg = isEven ? "#ffffff" : "#f8fafc";
-
-    ctx.fillStyle = rowBg;
-    ctx.fillRect(PADDING_X, curY, actualTableWidth, ROW_HEIGHT);
-
-    curX = PADDING_X;
-    activeCols.forEach((col, cIdx) => {
-      const colW = colWidths[cIdx];
-      const rawVal = col.get(row, rIdx);
-      const isNum = Boolean(col.isNumeric);
-      const numVal = isNum ? (Number(rawVal) || 0) : 0;
-      const isBalHighlight = Boolean(col.isBalance) && numVal > 0;
-
-      // Highlight cell if pending balance > 0
-      if (isBalHighlight) {
-        ctx.fillStyle = "#ffe4e6"; // soft rose
-        ctx.fillRect(curX, curY, colW, ROW_HEIGHT);
+      let textX = curX + (colW / 2);
+      ctx.textAlign = "center";
+      if (col.align === "left") {
+        textX = curX + 10;
+        ctx.textAlign = "left";
+      } else if (col.align === "right") {
+        textX = curX + colW - 10;
+        ctx.textAlign = "right";
       }
 
-      // Border
+      ctx.fillStyle = "#ffffff";
+      drawTextWithTruncate(ctx, col.label, textX, curY + 23, colW - 16, col.align);
+      curX += colW;
+    });
+
+    curY += TABLE_HEADER_HEIGHT;
+
+    // Empty state handling if no records match
+    if (rows.length === 0) {
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(PADDING_X, curY, actualTableWidth, 60);
       ctx.strokeStyle = "#e2e8f0";
       ctx.lineWidth = 1;
-      ctx.strokeRect(curX, curY, colW, ROW_HEIGHT);
-
-      // Text Formatting
-      let displayStr = "";
-      if (isNum) {
-        displayStr = numVal.toLocaleString("en-US");
-      } else {
-        displayStr = String(rawVal != null ? rawVal : "-");
-      }
-
-      let textX = curX + (colW / 2);
+      ctx.strokeRect(PADDING_X, curY, actualTableWidth, 60);
+      ctx.fillStyle = "#64748b";
+      ctx.font = "italic 12px Inter, sans-serif";
       ctx.textAlign = "center";
-      if (col.align === "left") {
-        textX = curX + 10;
-        ctx.textAlign = "left";
-      } else if (col.align === "right") {
-        textX = curX + colW - 10;
-        ctx.textAlign = "right";
-      }
+      ctx.fillText("No table records match active search or filters.", PADDING_X + (actualTableWidth / 2), curY + 35);
+      curY += 60;
+    }
 
-      // Font & Color Selection
-      if (isBalHighlight) {
-        ctx.fillStyle = "#e11d48"; // vibrant red/rose
-        ctx.font = "bold 11px Inter, sans-serif";
-      } else if (col.isStyleCode) {
-        ctx.fillStyle = "#0284c7"; // blue
-        ctx.font = "bold 11.5px Inter, sans-serif";
-      } else if (col.isContractor) {
-        ctx.fillStyle = "#0f172a"; // dark bold
-        ctx.font = "bold 11px Inter, sans-serif";
-      } else if (isNum) {
-        ctx.fillStyle = "#0f172a";
-        ctx.font = "600 11px Inter, sans-serif";
-      } else {
-        ctx.fillStyle = "#334155";
-        ctx.font = "500 11px Inter, sans-serif";
-      }
+    // ------------------------------------------------------------------
+    // 3. DATA ROWS (Zebra Striping & Balance Highlights)
+    // ------------------------------------------------------------------
+    rows.forEach((row, rIdx) => {
+      const isEven = rIdx % 2 === 0;
+      const rowBg = isEven ? "#ffffff" : "#f8fafc";
 
-      drawTextWithTruncate(ctx, displayStr, textX, curY + 21, colW - 14, col.align);
-      curX += colW;
+      ctx.fillStyle = rowBg;
+      ctx.fillRect(PADDING_X, curY, actualTableWidth, ROW_HEIGHT);
+
+      curX = PADDING_X;
+      activeCols.forEach((col, cIdx) => {
+        const colW = colWidths[cIdx];
+        const rawVal = col.get(row, rIdx);
+        const isNum = Boolean(col.isNumeric);
+        const numVal = isNum ? (Number(rawVal) || 0) : 0;
+        const isBalHighlight = Boolean(col.isBalance) && numVal > 0;
+
+        // Highlight cell if pending balance > 0
+        if (isBalHighlight) {
+          ctx.fillStyle = "#ffe4e6"; // soft rose
+          ctx.fillRect(curX, curY, colW, ROW_HEIGHT);
+        }
+
+        // Border
+        ctx.strokeStyle = "#e2e8f0";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(curX, curY, colW, ROW_HEIGHT);
+
+        // Text Formatting
+        let displayStr = "";
+        if (isNum) {
+          displayStr = numVal.toLocaleString("en-US");
+        } else {
+          displayStr = String(rawVal != null ? rawVal : "-");
+        }
+
+        let textX = curX + (colW / 2);
+        ctx.textAlign = "center";
+        if (col.align === "left") {
+          textX = curX + 10;
+          ctx.textAlign = "left";
+        } else if (col.align === "right") {
+          textX = curX + colW - 10;
+          ctx.textAlign = "right";
+        }
+
+        // Font & Color Selection
+        if (isBalHighlight) {
+          ctx.fillStyle = "#e11d48"; // vibrant red/rose
+          ctx.font = "bold 11px Inter, sans-serif";
+        } else if (col.isStyleCode) {
+          ctx.fillStyle = "#0284c7"; // blue
+          ctx.font = "bold 11.5px Inter, sans-serif";
+        } else if (col.isContractor) {
+          ctx.fillStyle = "#0f172a"; // dark bold
+          ctx.font = "bold 11px Inter, sans-serif";
+        } else if (isNum) {
+          ctx.fillStyle = "#0f172a";
+          ctx.font = "600 11px Inter, sans-serif";
+        } else {
+          ctx.fillStyle = "#334155";
+          ctx.font = "500 11px Inter, sans-serif";
+        }
+
+        drawTextWithTruncate(ctx, displayStr, textX, curY + 21, colW - 14, col.align);
+        curX += colW;
+      });
+
+      curY += ROW_HEIGHT;
     });
 
-    curY += ROW_HEIGHT;
-  });
+    // ------------------------------------------------------------------
+    // 4. TOTALS ROW (Optional Summary Row)
+    // ------------------------------------------------------------------
+    if (includeTotals && rows.length > 0) {
+      ctx.fillStyle = "#f1f5f9";
+      ctx.fillRect(PADDING_X, curY, actualTableWidth, TOTAL_HEIGHT);
 
-  // ------------------------------------------------------------------
-  // 4. TOTALS ROW (Optional Summary Row)
-  // ------------------------------------------------------------------
-  if (includeTotals && rows.length > 0) {
-    ctx.fillStyle = "#f1f5f9";
-    ctx.fillRect(PADDING_X, curY, actualTableWidth, TOTAL_HEIGHT);
+      // Strong dividing top border
+      ctx.strokeStyle = "#94a3b8";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(PADDING_X, curY);
+      ctx.lineTo(PADDING_X + actualTableWidth, curY);
+      ctx.stroke();
 
-    // Strong dividing top border
-    ctx.strokeStyle = "#94a3b8";
-    ctx.lineWidth = 2;
+      curX = PADDING_X;
+      let totalLabelDrawn = false;
+
+      activeCols.forEach((col, cIdx) => {
+        const colW = colWidths[cIdx];
+        ctx.strokeStyle = "#cbd5e1";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(curX, curY, colW, TOTAL_HEIGHT);
+
+        let textX = curX + (colW / 2);
+        ctx.textAlign = "center";
+        if (col.align === "left") {
+          textX = curX + 10;
+          ctx.textAlign = "left";
+        } else if (col.align === "right") {
+          textX = curX + colW - 10;
+          ctx.textAlign = "right";
+        }
+
+        ctx.font = "bold 11px Inter, sans-serif";
+        ctx.fillStyle = "#0f172a";
+
+        if (totals[col.id] != null) {
+          const sumVal = totals[col.id].toLocaleString("en-US");
+          drawTextWithTruncate(ctx, sumVal, textX, curY + 23, colW - 14, col.align);
+        } else if (!totalLabelDrawn && col.align === "left") {
+          drawTextWithTruncate(ctx, `TOTAL (${rows.length}):`, textX, curY + 23, colW - 14, "left");
+          totalLabelDrawn = true;
+        } else if (!totalLabelDrawn && cIdx === 0) {
+          drawTextWithTruncate(ctx, "TOTAL:", textX, curY + 23, colW - 10, "center");
+          totalLabelDrawn = true;
+        }
+
+        curX += colW;
+      });
+
+      curY += TOTAL_HEIGHT;
+    }
+
+    // ------------------------------------------------------------------
+    // 5. FOOTER WATERMARK
+    // ------------------------------------------------------------------
+    curY += 8;
+    ctx.fillStyle = "#94a3b8";
+    ctx.font = "500 9.5px Inter, -apple-system, sans-serif";
+    ctx.textAlign = "left";
+    ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
+
+    ctx.restore();
+
+    // Update badge
+    if (badge) {
+      const filterNote = filterDesc ? ` • [Filtered: ${filterDesc}]` : " • [All Records]";
+      badge.textContent = `${rows.length} rows • ${activeCols.length} cols • ${logicalWidth * 2} × ${logicalHeight * 2} px Ultra HD 2x${filterNote}`;
+    }
+  }
+
+  function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
+    ctx.save();
+    ctx.font = "bold 10px Inter, sans-serif";
+    const metrics = ctx.measureText(text);
+    const w = metrics.width + 16;
+    const h = 20;
+    const r = 4;
+
+    ctx.fillStyle = bgColor;
     ctx.beginPath();
-    ctx.moveTo(PADDING_X, curY);
-    ctx.lineTo(PADDING_X + actualTableWidth, curY);
+    ctx.roundRect(x, y - 13, w, h, r);
+    ctx.fill();
+
+    ctx.strokeStyle = textColor;
+    ctx.lineWidth = 1;
     ctx.stroke();
 
-    curX = PADDING_X;
-    let totalLabelDrawn = false;
-
-    activeCols.forEach((col, cIdx) => {
-      const colW = colWidths[cIdx];
-      ctx.strokeStyle = "#cbd5e1";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(curX, curY, colW, TOTAL_HEIGHT);
-
-      let textX = curX + (colW / 2);
-      ctx.textAlign = "center";
-      if (col.align === "left") {
-        textX = curX + 10;
-        ctx.textAlign = "left";
-      } else if (col.align === "right") {
-        textX = curX + colW - 10;
-        ctx.textAlign = "right";
-      }
-
-      ctx.font = "bold 11px Inter, sans-serif";
-      ctx.fillStyle = "#0f172a";
-
-      if (totals[col.id] != null) {
-        const sumVal = totals[col.id].toLocaleString("en-US");
-        drawTextWithTruncate(ctx, sumVal, textX, curY + 23, colW - 14, col.align);
-      } else if (!totalLabelDrawn && col.align === "left") {
-        drawTextWithTruncate(ctx, `TOTAL (${rows.length}):`, textX, curY + 23, colW - 14, "left");
-        totalLabelDrawn = true;
-      } else if (!totalLabelDrawn && cIdx === 0) {
-        drawTextWithTruncate(ctx, "TOTAL:", textX, curY + 23, colW - 10, "center");
-        totalLabelDrawn = true;
-      }
-
-      curX += colW;
-    });
-
-    curY += TOTAL_HEIGHT;
+    ctx.fillStyle = textColor;
+    ctx.textAlign = "left";
+    ctx.fillText(text, x + 8, y + 1);
+    ctx.restore();
+    return w;
   }
 
-  // ------------------------------------------------------------------
-  // 5. FOOTER WATERMARK
-  // ------------------------------------------------------------------
-  curY += 8;
-  ctx.fillStyle = "#94a3b8";
-  ctx.font = "500 9.5px Inter, -apple-system, sans-serif";
-  ctx.textAlign = "left";
-  ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
+  function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
+    if (maxWidth <= 0) return;
+    text = String(text != null ? text : "");
+    if (ctx.measureText(text).width <= maxWidth) {
+      ctx.fillText(text, x, y);
+      return;
+    }
 
-  ctx.restore();
-
-  // Update badge
-  if (badge) {
-    const filterNote = filterDesc ? ` • [Filtered: ${filterDesc}]` : " • [All Records]";
-    badge.textContent = `${rows.length} rows • ${activeCols.length} cols • ${logicalWidth * 2} × ${logicalHeight * 2} px Ultra HD 2x${filterNote}`;
-  }
-}
-
-function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
-  ctx.save();
-  ctx.font = "bold 10px Inter, sans-serif";
-  const metrics = ctx.measureText(text);
-  const w = metrics.width + 16;
-  const h = 20;
-  const r = 4;
-
-  ctx.fillStyle = bgColor;
-  ctx.beginPath();
-  ctx.roundRect(x, y - 13, w, h, r);
-  ctx.fill();
-
-  ctx.strokeStyle = textColor;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-
-  ctx.fillStyle = textColor;
-  ctx.textAlign = "left";
-  ctx.fillText(text, x + 8, y + 1);
-  ctx.restore();
-  return w;
-}
-
-function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
-  if (maxWidth <= 0) return;
-  text = String(text != null ? text : "");
-  if (ctx.measureText(text).width <= maxWidth) {
-    ctx.fillText(text, x, y);
-    return;
+    let truncated = text;
+    while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
+      truncated = truncated.slice(0, -1);
+    }
+    ctx.fillText(truncated + "…", x, y);
   }
 
-  let truncated = text;
-  while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
-    truncated = truncated.slice(0, -1);
-  }
-  ctx.fillText(truncated + "…", x, y);
-}
+  async function copyWhatsAppTableImageToClipboard() {
+    const canvas = document.getElementById("whatsapp-table-canvas");
+    if (!canvas) return;
 
-async function copyWhatsAppTableImageToClipboard() {
-  const canvas = document.getElementById("whatsapp-table-canvas");
-  if (!canvas) return;
+    const btn = document.getElementById("btn-whatsapp-copy-clipboard");
+    const origHtml = btn ? btn.innerHTML : "";
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = `<span>⏳</span> <span>Copying...</span>`;
+    }
 
-  const btn = document.getElementById("btn-whatsapp-copy-clipboard");
-  const origHtml = btn ? btn.innerHTML : "";
-  if (btn) {
-    btn.disabled = true;
-    btn.innerHTML = `<span>⏳</span> <span>Copying...</span>`;
-  }
+    try {
+      canvas.toBlob(async (blob) => {
+        if (!blob) throw new Error("Could not create image blob");
 
-  try {
-    canvas.toBlob(async (blob) => {
-      if (!blob) throw new Error("Could not create image blob");
-
-      let copiedSuccessfully = false;
-      if (navigator.clipboard && window.ClipboardItem) {
-        try {
-          const item = new ClipboardItem({ "image/png": blob });
-          await navigator.clipboard.write([item]);
-          copiedSuccessfully = true;
-        } catch (clipErr) {
-          console.warn("Direct clipboard write failed:", clipErr);
+        let copiedSuccessfully = false;
+        if (navigator.clipboard && window.ClipboardItem) {
+          try {
+            const item = new ClipboardItem({ "image/png": blob });
+            await navigator.clipboard.write([item]);
+            copiedSuccessfully = true;
+          } catch (clipErr) {
+            console.warn("Direct clipboard write failed:", clipErr);
+          }
         }
-      }
 
-      if (copiedSuccessfully) {
-        showWhatsAppActionFeedback("Image Copied to Clipboard! Ab WhatsApp me jakar 'Ctrl + V' dabayein.", true);
-        if (typeof showToast === "function") {
-          showToast("Table image copied to clipboard! Paste directly into WhatsApp.", "success");
-        }
-        if (btn) {
-          btn.innerHTML = `<span>✅</span> <span>Copied to Clipboard!</span>`;
-          setTimeout(() => {
+        if (copiedSuccessfully) {
+          showWhatsAppActionFeedback("Image Copied to Clipboard! Ab WhatsApp me jakar 'Ctrl + V' dabayein.", true);
+          if (typeof showToast === "function") {
+            showToast("Table image copied to clipboard! Paste directly into WhatsApp.", "success");
+          }
+          if (btn) {
+            btn.innerHTML = `<span>✅</span> <span>Copied to Clipboard!</span>`;
+            setTimeout(() => {
+              btn.innerHTML = origHtml;
+              btn.disabled = false;
+            }, 3500);
+          }
+        } else {
+          // Fallback: Download file automatically
+          downloadWhatsAppTableImage();
+          showWhatsAppActionFeedback("Image Downloaded! (Direct clipboard copy not permitted by browser)", true);
+          if (btn) {
             btn.innerHTML = origHtml;
             btn.disabled = false;
-          }, 3500);
+          }
         }
-      } else {
-        // Fallback: Download file automatically
-        downloadWhatsAppTableImage();
-        showWhatsAppActionFeedback("Image Downloaded! (Direct clipboard copy not permitted by browser)", true);
-        if (btn) {
-          btn.innerHTML = origHtml;
-          btn.disabled = false;
-        }
+      }, "image/png");
+    } catch (err) {
+      console.error("WhatsApp Copy error:", err);
+      downloadWhatsAppTableImage();
+      if (btn) {
+        btn.innerHTML = origHtml;
+        btn.disabled = false;
       }
-    }, "image/png");
-  } catch (err) {
-    console.error("WhatsApp Copy error:", err);
-    downloadWhatsAppTableImage();
-    if (btn) {
-      btn.innerHTML = origHtml;
-      btn.disabled = false;
     }
   }
-}
 
-function downloadWhatsAppTableImage() {
-  const canvas = document.getElementById("whatsapp-table-canvas");
-  if (!canvas) return;
+  function downloadWhatsAppTableImage() {
+    const canvas = document.getElementById("whatsapp-table-canvas");
+    if (!canvas) return;
 
-  const sheet = currentWhatsAppSheet || "table";
-  const cont = (currentWhatsAppContractor || "all").replace(/[^a-zA-Z0-9_-]/g, "_");
-  const d = new Date().toISOString().slice(0, 10);
-  const filename = `CraftFlow_${sheet}_${cont}_${d}.png`;
+    const sheet = currentWhatsAppSheet || "table";
+    const cont = (currentWhatsAppContractor || "all").replace(/[^a-zA-Z0-9_-]/g, "_");
+    const d = new Date().toISOString().slice(0, 10);
+    const filename = `CraftFlow_${sheet}_${cont}_${d}.png`;
 
-  try {
-    const dataUrl = canvas.toDataURL("image/png");
-    const link = document.createElement("a");
-    link.download = filename;
-    link.href = dataUrl;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    if (typeof showToast === "function") {
-      showToast(`Image downloaded: ${filename}`, "success");
-    }
-  } catch (e) {
-    console.error("Failed to download canvas:", e);
-    if (typeof showToast === "function") {
-      showToast("Download failed. Please check browser permissions.", "error");
+    try {
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = dataUrl;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      if (typeof showToast === "function") {
+        showToast(`Image downloaded: ${filename}`, "success");
+      }
+    } catch (e) {
+      console.error("Failed to download canvas:", e);
+      if (typeof showToast === "function") {
+        showToast("Download failed. Please check browser permissions.", "error");
+      }
     }
   }
-}
 
-function showWhatsAppActionFeedback(msgText, isSuccess = true) {
-  const box = document.getElementById("whatsapp-action-status");
-  const textEl = document.getElementById("whatsapp-action-status-text");
-  if (!box || !textEl) return;
+  function showWhatsAppActionFeedback(msgText, isSuccess = true) {
+    const box = document.getElementById("whatsapp-action-status");
+    const textEl = document.getElementById("whatsapp-action-status-text");
+    if (!box || !textEl) return;
 
-  textEl.textContent = msgText;
-  box.style.display = "flex";
-  box.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
-  box.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
-  box.style.color = isSuccess ? "#10b981" : "#f43f5e";
+    textEl.textContent = msgText;
+    box.style.display = "flex";
+    box.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
+    box.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
+    box.style.color = isSuccess ? "#10b981" : "#f43f5e";
 
-  if (window._whatsappStatusTimer) clearTimeout(window._whatsappStatusTimer);
-  window._whatsappStatusTimer = setTimeout(() => {
-    if (box) box.style.display = "none";
-  }, 6000);
-}
+    if (window._whatsappStatusTimer) clearTimeout(window._whatsappStatusTimer);
+    window._whatsappStatusTimer = setTimeout(() => {
+      if (box) box.style.display = "none";
+    }, 6000);
+  }
 
-// Auto-initialize when DOM is ready
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", initWhatsAppTableController);
-} else {
-  initWhatsAppTableController();
-}
-
-
+  // Auto-initialize when DOM is ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initWhatsAppTableController);
+  } else {
+    initWhatsAppTableController();
+  }
