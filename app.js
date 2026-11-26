@@ -2869,7 +2869,7 @@ function initFinalStyleView() {
 
     const code = (styleInp ? styleInp.value : (styleSelect ? styleSelect.value : "")).trim().toUpperCase();
     const cat = catSelect?.value?.trim() || "Shirt";
-    const remarks = remarksInput?.value?.trim() || "";
+    const remarks = toProperCase(remarksInput?.value?.trim() || "");
 
     if (!code) {
       showToast("Please enter or select a Style Code first!", "error");
@@ -2948,7 +2948,7 @@ function updateDateDisplay(dateStr) {
 function setQuickRemark(tag) {
   const input = document.getElementById("quick-remarks-input");
   if (input) {
-    input.value = tag;
+    input.value = toProperCase(tag);
     input.focus();
   }
 }
@@ -3011,16 +3011,6 @@ function renderFinalStyleSheet() {
     const balStockClass = balStock > 0 ? "balance-highlight-pink" : "";
     const balHembClass = balHemb > 0 ? "balance-highlight-pink" : "";
 
-    let remarkBadge = "";
-    const rLower = (item.time_remarks || "").toLowerCase();
-    if (rLower.includes("not available") || rLower.includes("issue") || rLower.includes("m-na")) {
-      remarkBadge = `<span class="badge-tag issue" style="margin-right: 4px;">MATERIAL ISSUE</span>`;
-    } else if (rLower.includes("inline")) {
-      remarkBadge = `<span class="badge-tag inline" style="margin-right: 4px;">INLINE</span>`;
-    } else if (rLower.includes("alter")) {
-      remarkBadge = `<span class="badge-tag alter" style="margin-right: 4px;">ALTER</span>`;
-    }
-
     const distInfo = window.db.getContractorForStyle(item.style_code, item.category);
     const displayCont = (distInfo && distInfo.contractor_name)
       ? distInfo.contractor_name
@@ -3030,15 +3020,56 @@ function renderFinalStyleSheet() {
 
     const masterItem = window.db.findMasterByStyleAndCategory(item.style_code, item.category);
     let finalOdBadge = "";
-    if (masterItem && masterItem.overdue_info && (balHemb > 0)) {
-      if (masterItem.overdue_info.status === "overdue") {
-        finalOdBadge = `<span class="badge-tag rose inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Overdue">${masterItem.overdue_info.badgeText}</span>`;
-      } else if (masterItem.overdue_info.status === "due_soon" || masterItem.overdue_info.status === "due_today") {
-        finalOdBadge = `<span class="badge-tag amber inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Due Soon">${masterItem.overdue_info.badgeText}</span>`;
+      if (masterItem && masterItem.overdue_info && (balHemb > 0 || balStock > 0)) {
+        const clickableAttr = canEdit ? `onclick="openUpdateDeadlineModal(${masterItem.id})" style="cursor: pointer; font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;"` : `style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;"`;
+        if (masterItem.overdue_info.status === "overdue") {
+          finalOdBadge = `<span class="badge-tag rose inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Overdue">${masterItem.overdue_info.badgeText}</span>`;
+          finalOdBadge = `<button type="button" class="badge-tag rose inline" ${clickableAttr} title="Overdue! Click to update due date">${masterItem.overdue_info.badgeText}</button>`;
+        } else if (masterItem.overdue_info.status === "due_soon" || masterItem.overdue_info.status === "due_today") {
+          finalOdBadge = `<span class="badge-tag amber inline" style="font-size: 0.65rem; padding: 1px 4px; margin-top: 2px;" title="Due Soon">${masterItem.overdue_info.badgeText}</span>`;
+          finalOdBadge = `<button type="button" class="badge-tag amber inline" ${clickableAttr} title="Due Soon! Click to update due date">${masterItem.overdue_info.badgeText}</button>`;
+        } else if (masterItem.target_date) {
+          finalOdBadge = `<button type="button" class="badge-tag inline" ${clickableAttr} title="Target Due Date: ${escapeHtml(masterItem.target_date)}">${masterItem.overdue_info.badgeText}</button>`;
+        }
       }
-    }
 
-    return `
+      let dueDateActionBtn = "";
+      if (canEdit && masterItem) {
+        let btnLabel = "📅 Set Due Date";
+        let btnStyle = "color: #38bdf8; border-color: rgba(56, 189, 248, 0.35); padding: 2px 7px; font-size: 0.72rem; font-weight: 700;";
+        let btnTitle = "Click to set delivery due date";
+
+        if (masterItem.target_date) {
+          const parts = String(masterItem.target_date).split("-");
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const shortDate = parts.length === 3
+            ? `${parts[2]}-${months[parseInt(parts[1], 10) - 1] || parts[1]}`
+            : masterItem.target_date;
+          btnLabel = `📅 ${shortDate}`;
+          btnTitle = `Due Date: ${masterItem.target_date} (Click to update)`;
+          if (masterItem.overdue_info?.status === "overdue" && (balHemb > 0 || balStock > 0)) {
+            btnStyle = "color: #f43f5e; border-color: rgba(244, 63, 94, 0.45); background: rgba(244, 63, 94, 0.08); padding: 2px 7px; font-size: 0.72rem; font-weight: 700;";
+          } else if ((masterItem.overdue_info?.status === "due_soon" || masterItem.overdue_info?.status === "due_today") && (balHemb > 0 || balStock > 0)) {
+            btnStyle = "color: #f59e0b; border-color: rgba(245, 158, 11, 0.45); background: rgba(245, 158, 11, 0.08); padding: 2px 7px; font-size: 0.72rem; font-weight: 700;";
+          } else {
+            btnStyle = "color: #10b981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08); padding: 2px 7px; font-size: 0.72rem; font-weight: 700;";
+          }
+        }
+
+        dueDateActionBtn = `
+        <button type="button" class="btn btn-secondary btn-sm" style="${btnStyle}" onclick="openUpdateDeadlineModal(${masterItem.id})" title="${escapeHtml(btnTitle)}">
+          ${escapeHtml(btnLabel)}
+        </button>`;
+      }
+
+      const editBtn = (canEdit && masterItem)
+        ? `<button type="button" class="btn btn-secondary btn-sm" style="padding: 2px 8px; font-size: 0.72rem; font-weight: 600;" onclick="editMasterEntry(${masterItem.id})" title="Edit style entry in Master">✏️ Edit</button>`
+        : '';
+      const deleteBtn = canDelete
+        ? `<button type="button" class="btn btn-secondary btn-sm" style="color: var(--accent-rose); padding: 2px 7px; font-size: 0.72rem; font-weight: 700;" onclick="removeFinalStyleRow(${item.s_no})" title="Remove from Daily Sheet">✕</button>`
+        : '';
+
+      return `
       <tr>
         <td style="text-align: center; font-weight: 700; font-family: var(--font-mono); color: var(--text-muted);">${item.s_no || index + 1}</td>
         <td>
@@ -3059,28 +3090,32 @@ function renderFinalStyleSheet() {
         <td class="${balStockClass}" style="text-align: right; font-family: var(--font-mono);">${balStock.toLocaleString()}</td>
         <td style="text-align: right; font-family: var(--font-mono); font-weight: 700; color: #818cf8; background: rgba(99, 102, 241, 0.05);">${disQty.toLocaleString()}</td>
         <td class="${balHembClass}" style="text-align: right; font-family: var(--font-mono);">${balHemb.toLocaleString()}</td>
-        <td>
-          <div style="display: flex; align-items: center; gap: 0.35rem;">
-            ${remarkBadge}
-            <input 
-              type="text" 
-              class="inline-remark-input" 
-              value="${escapeHtml(item.time_remarks || '')}" 
-              placeholder="${canEdit ? 'Click to add remarks/date/time...' : 'Read only'}" 
-              ${!canEdit ? 'disabled' : ''}
-              onchange="updateFinalStyleRemark(${item.s_no}, this.value)"
-            >
-          </div>
+        <td style="min-width: 220px;">
+          <input 
+            type="text" 
+            class="inline-remark-input final-style-remark" 
+            data-index="${index}"
+            data-sno="${item.s_no}"
+            value="${escapeHtml(toProperCase(item.time_remarks || ''))}" 
+            placeholder="${canEdit ? 'Type remarks here (Enter for next row)...' : 'Read only'}" 
+            ${!canEdit ? 'disabled' : ''}
+            oninput="handleFinalStyleRemarkInput(this)"
+            onchange="updateFinalStyleRemark(${item.s_no}, this.value)"
+            onblur="updateFinalStyleRemark(${item.s_no}, this.value)"
+            onkeydown="handleFinalStyleRemarkKey(event, ${index}, ${item.s_no})"
+          >
         </td>
-        <td style="text-align: center;">
-          ${canDelete ? `
-          <button class="btn btn-secondary btn-sm" style="color: var(--accent-rose); padding: 2px 7px;" onclick="removeFinalStyleRow(${item.s_no})" title="Remove from sheet">
-            ✕
-          </button>` : `<span style="color: var(--text-faint); font-size: 0.75rem;">—</span>`}
+        <td style="text-align: center; white-space: nowrap;">
+          <div style="display: flex; align-items: center; justify-content: center; gap: 0.35rem;">
+            ${dueDateActionBtn}
+            ${editBtn}
+            ${deleteBtn}
+            ${(!dueDateActionBtn && !editBtn && !deleteBtn) ? `<span style="color: var(--text-faint); font-size: 0.75rem;">—</span>` : ''}
+          </div>
         </td>
       </tr>
     `;
-  }).join("");
+    }).join("");
 
   if (tfoot) {
     tfoot.innerHTML = `
@@ -3105,8 +3140,66 @@ function updateFinalStyleRemark(sNo, val) {
     showToast("Permission Denied: You do not have permission to edit remarks.", "error");
     return;
   }
-  window.db.updateFinalStyleRemarks(sNo, val);
+  const formatted = toProperCase(val);
+  const inputEl = document.querySelector(`.final-style-remark[data-sno="${sNo}"]`);
+  if (inputEl && inputEl.value !== formatted) {
+    inputEl.value = formatted;
+  }
+  window.db.updateFinalStyleRemarks(sNo, formatted);
 }
+window.updateFinalStyleRemark = updateFinalStyleRemark;
+
+function handleFinalStyleRemarkInput(el) {
+  if (!el) return;
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const oldVal = el.value;
+  const proper = toProperCase(oldVal);
+  if (oldVal !== proper) {
+    el.value = proper;
+    if (start !== null && end !== null) {
+      el.setSelectionRange(start, end);
+    }
+  }
+}
+window.handleFinalStyleRemarkInput = handleFinalStyleRemarkInput;
+
+function handleFinalStyleRemarkKey(e, index, sNo) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    const formatted = toProperCase(e.target.value);
+    e.target.value = formatted;
+    updateFinalStyleRemark(sNo, formatted);
+    const allInputs = document.querySelectorAll("#tbody-final-styles .final-style-remark");
+    if (allInputs && index + 1 < allInputs.length) {
+      allInputs[index + 1].focus();
+      allInputs[index + 1].select();
+    } else {
+      e.target.blur();
+    }
+  } else if (e.key === "ArrowDown") {
+    const allInputs = document.querySelectorAll("#tbody-final-styles .final-style-remark");
+    if (allInputs && index + 1 < allInputs.length) {
+      e.preventDefault();
+      const formatted = toProperCase(e.target.value);
+      e.target.value = formatted;
+      updateFinalStyleRemark(sNo, formatted);
+      allInputs[index + 1].focus();
+      allInputs[index + 1].select();
+    }
+  } else if (e.key === "ArrowUp") {
+    const allInputs = document.querySelectorAll("#tbody-final-styles .final-style-remark");
+    if (allInputs && index > 0) {
+      e.preventDefault();
+      const formatted = toProperCase(e.target.value);
+      e.target.value = formatted;
+      updateFinalStyleRemark(sNo, formatted);
+      allInputs[index - 1].focus();
+      allInputs[index - 1].select();
+    }
+  }
+}
+window.handleFinalStyleRemarkKey = handleFinalStyleRemarkKey;
 
 function removeFinalStyleRow(sNo) {
   if (!window.db.canUserPerformAction("can_delete")) {
@@ -4606,6 +4699,7 @@ function focusActiveDateInput() {
 // -------------------------------------------------------------
 function toProperCase(str) {
   if (!str) return "";
+  if (/^Rec:\s*\d+/i.test(str)) return str;
   return String(str).replace(/([^\s/,\-+&]+)/g, (word) => {
     return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
   });
@@ -4677,7 +4771,8 @@ function initGlobalInputFormatters() {
     "edit-log-contractor",
     "dist-entry-contractor",
     "payment-contractor",
-    "cont-name"
+    "cont-name",
+    "quick-remarks-input"
   ];
   contractorIds.forEach(id => attachProperCaseInputHandler(id));
 }
@@ -5753,6 +5848,7 @@ function editMasterEntry(id) {
     openMasterEntryModal(item, "receiving");
   }
 }
+window.editMasterEntry = editMasterEntry;
 
 async function deleteMasterEntry(id) {
   if (!window.db.canUserPerformAction("can_delete")) {
@@ -11896,79 +11992,79 @@ function saveActivePrintPreset() {
   showPrintStudioStatus(`Alignment "${currentObj.name}" saved!`, true);
 }
 
-  function saveNewPrintPreset() {
-    const name = prompt("Enter a name for this new print alignment preset:", "Custom Alignment");
-    if (!name || !name.trim()) return;
-    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-    const newId = "preset_" + Date.now();
-    const newPreset = {
-      id: newId,
-      name: name.trim(),
-      orientation: printStudioOrientation,
-      textAlign: printStudioTextAlign,
-      headerFontSize: printStudioHeaderFontSize,
-      headerBold: printStudioHeaderBold,
-      headerPadding: printStudioHeaderPadding,
-      rowPadding: printStudioRowPadding,
-      totalPadding: printStudioTotalPadding,
-      bodyFontSize: printStudioBodyFontSize,
-      autoFit: printStudioAutoFit,
-      columns: printStudioColumns.map(c => ({
-        id: c.id,
-        enabled: Boolean(c.enabled),
-        width: parseInt(c.currentWidth, 10) || c.defaultWidth,
-        bold: Boolean(c.bold)
-      }))
-    };
-    presets.push(newPreset);
-    savePrintPresetsForSheet(printStudioActiveSheet, presets);
-    printStudioCurrentPresetId = newId;
-    populatePrintPresetsDropdown(printStudioActiveSheet);
-    const sel = document.getElementById("print-preset-selector");
-    if (sel) sel.value = newId;
-    showPrintStudioStatus(`New preset "${newPreset.name}" created!`, true);
+function saveNewPrintPreset() {
+  const name = prompt("Enter a name for this new print alignment preset:", "Custom Alignment");
+  if (!name || !name.trim()) return;
+  const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+  const newId = "preset_" + Date.now();
+  const newPreset = {
+    id: newId,
+    name: name.trim(),
+    orientation: printStudioOrientation,
+    textAlign: printStudioTextAlign,
+    headerFontSize: printStudioHeaderFontSize,
+    headerBold: printStudioHeaderBold,
+    headerPadding: printStudioHeaderPadding,
+    rowPadding: printStudioRowPadding,
+    totalPadding: printStudioTotalPadding,
+    bodyFontSize: printStudioBodyFontSize,
+    autoFit: printStudioAutoFit,
+    columns: printStudioColumns.map(c => ({
+      id: c.id,
+      enabled: Boolean(c.enabled),
+      width: parseInt(c.currentWidth, 10) || c.defaultWidth,
+      bold: Boolean(c.bold)
+    }))
+  };
+  presets.push(newPreset);
+  savePrintPresetsForSheet(printStudioActiveSheet, presets);
+  printStudioCurrentPresetId = newId;
+  populatePrintPresetsDropdown(printStudioActiveSheet);
+  const sel = document.getElementById("print-preset-selector");
+  if (sel) sel.value = newId;
+  showPrintStudioStatus(`New preset "${newPreset.name}" created!`, true);
+}
+
+function deleteActivePrintPreset() {
+  const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+  if (presets.length <= 1) {
+    showPrintStudioStatus("Cannot delete the last remaining preset.", false);
+    return;
   }
+  const target = presets.find(p => p.id === printStudioCurrentPresetId);
+  if (!target) return;
+  if (!confirm(`Delete alignment preset "${target.name}"?`)) return;
 
-  function deleteActivePrintPreset() {
-    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-    if (presets.length <= 1) {
-      showPrintStudioStatus("Cannot delete the last remaining preset.", false);
-      return;
-    }
-    const target = presets.find(p => p.id === printStudioCurrentPresetId);
-    if (!target) return;
-    if (!confirm(`Delete alignment preset "${target.name}"?`)) return;
+  const remaining = presets.filter(p => p.id !== target.id);
+  savePrintPresetsForSheet(printStudioActiveSheet, remaining);
+  populatePrintPresetsDropdown(printStudioActiveSheet);
+  applyPrintPreset(remaining[0].id);
+  showPrintStudioStatus(`Deleted preset "${target.name}".`, true);
+}
 
-    const remaining = presets.filter(p => p.id !== target.id);
-    savePrintPresetsForSheet(printStudioActiveSheet, remaining);
-    populatePrintPresetsDropdown(printStudioActiveSheet);
-    applyPrintPreset(remaining[0].id);
-    showPrintStudioStatus(`Deleted preset "${target.name}".`, true);
+function resetPrintPresetsToDefault() {
+  const key = `craftflow_print_presets_${printStudioActiveSheet}`;
+  try { localStorage.removeItem(key); } catch (e) { }
+  populatePrintPresetsDropdown(printStudioActiveSheet);
+  const presets = getPrintPresetsForSheet(printStudioActiveSheet);
+  if (presets.length > 0) {
+    applyPrintPreset(presets[0].id);
   }
+  showPrintStudioStatus("Reset presets & widths to factory defaults.", true);
+}
 
-  function resetPrintPresetsToDefault() {
-    const key = `craftflow_print_presets_${printStudioActiveSheet}`;
-    try { localStorage.removeItem(key); } catch (e) { }
-    populatePrintPresetsDropdown(printStudioActiveSheet);
-    const presets = getPrintPresetsForSheet(printStudioActiveSheet);
-    if (presets.length > 0) {
-      applyPrintPreset(presets[0].id);
-    }
-    showPrintStudioStatus("Reset presets & widths to factory defaults.", true);
-  }
+function renderPrintColumnControls() {
+  const container = document.getElementById("print-columns-list-container");
+  if (!container) return;
 
-  function renderPrintColumnControls() {
-    const container = document.getElementById("print-columns-list-container");
-    if (!container) return;
+  const activeCols = printStudioColumns.filter(c => c.enabled);
+  const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
+  const badge = document.getElementById("preview-col-count-badge");
+  if (badge) badge.textContent = `${activeCols.length} Columns Selected`;
 
-    const activeCols = printStudioColumns.filter(c => c.enabled);
-    const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
-    const badge = document.getElementById("preview-col-count-badge");
-    if (badge) badge.textContent = `${activeCols.length} Columns Selected`;
-
-    container.innerHTML = printStudioColumns.map((col, idx) => {
-      const pct = col.enabled ? Math.round(((Number(col.currentWidth) || 0) / totalWidth) * 100) : 0;
-      return `
+  container.innerHTML = printStudioColumns.map((col, idx) => {
+    const pct = col.enabled ? Math.round(((Number(col.currentWidth) || 0) / totalWidth) * 100) : 0;
+    return `
       <div class="print-col-item ${col.enabled ? "" : "is-disabled"}">
         <div class="print-col-meta">
           <input type="checkbox" id="pcol-chk-${idx}" ${col.enabled ? "checked" : ""} onchange="togglePrintStudioColumn(${idx}, this.checked)">
@@ -11982,160 +12078,160 @@ function saveActivePrintPreset() {
         </div>
       </div>
     `;
-    }).join("");
+  }).join("");
+}
+
+window.togglePrintStudioColumn = function (idx, checked) {
+  if (!printStudioColumns[idx]) return;
+  printStudioColumns[idx].enabled = Boolean(checked);
+  renderPrintColumnControls();
+  renderLiveA4Preview();
+};
+
+window.togglePrintStudioColBold = function (idx) {
+  if (!printStudioColumns[idx]) return;
+  printStudioColumns[idx].bold = !Boolean(printStudioColumns[idx].bold);
+  renderPrintColumnControls();
+  renderLiveA4Preview();
+};
+
+window.updatePrintStudioColWidth = function (idx, val) {
+  if (!printStudioColumns[idx]) return;
+  const num = Math.max(3, Math.min(40, parseInt(val, 10) || printStudioColumns[idx].defaultWidth));
+  printStudioColumns[idx].currentWidth = num;
+  renderPrintColumnControls();
+  renderLiveA4Preview();
+};
+
+function updatePreviewZoom() {
+  const previewPaper = document.getElementById("a4-sheet-preview");
+  const viewport = document.getElementById("preview-paper-viewport");
+  const zoomSel = document.getElementById("preview-zoom-select");
+  if (!previewPaper || !zoomSel) return;
+
+  const val = zoomSel.value;
+  let scale = 0.9;
+  if (val === "fit" && viewport) {
+    const availW = Math.max(320, viewport.clientWidth - 48);
+    const paperW = previewPaper.offsetWidth || 1000;
+    scale = Math.min(1, +(availW / paperW).toFixed(2));
+  } else {
+    scale = parseFloat(val) || 0.9;
   }
+  previewPaper.style.transform = `scale(${scale})`;
+}
 
-  window.togglePrintStudioColumn = function (idx, checked) {
-    if (!printStudioColumns[idx]) return;
-    printStudioColumns[idx].enabled = Boolean(checked);
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  };
+function getPrintStudioSheetData(sheetType) {
+  const numericCols = new Set([
+    "cut_qty", "received_qty", "balance_from_stock", "balance_stock",
+    "dispatch_from_hemb", "dispatch_hemb", "balance_from_hemb", "balance_hemb",
+    "total_balance", "pcs_qty", "rate", "total", "prod_pcs_qty", "carigar_rate", "commission", "rate_total"
+  ]);
+  const totals = {};
+  let rows = [];
 
-  window.togglePrintStudioColBold = function (idx) {
-    if (!printStudioColumns[idx]) return;
-    printStudioColumns[idx].bold = !Boolean(printStudioColumns[idx].bold);
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  };
-
-  window.updatePrintStudioColWidth = function (idx, val) {
-    if (!printStudioColumns[idx]) return;
-    const num = Math.max(3, Math.min(40, parseInt(val, 10) || printStudioColumns[idx].defaultWidth));
-    printStudioColumns[idx].currentWidth = num;
-    renderPrintColumnControls();
-    renderLiveA4Preview();
-  };
-
-  function updatePreviewZoom() {
-    const previewPaper = document.getElementById("a4-sheet-preview");
-    const viewport = document.getElementById("preview-paper-viewport");
-    const zoomSel = document.getElementById("preview-zoom-select");
-    if (!previewPaper || !zoomSel) return;
-
-    const val = zoomSel.value;
-    let scale = 0.9;
-    if (val === "fit" && viewport) {
-      const availW = Math.max(320, viewport.clientWidth - 48);
-      const paperW = previewPaper.offsetWidth || 1000;
-      scale = Math.min(1, +(availW / paperW).toFixed(2));
-    } else {
-      scale = parseFloat(val) || 0.9;
-    }
-    previewPaper.style.transform = `scale(${scale})`;
-  }
-
-  function getPrintStudioSheetData(sheetType) {
-    const numericCols = new Set([
-      "cut_qty", "received_qty", "balance_from_stock", "balance_stock",
-      "dispatch_from_hemb", "dispatch_hemb", "balance_from_hemb", "balance_hemb",
-      "total_balance", "pcs_qty", "rate", "total", "prod_pcs_qty", "carigar_rate", "commission", "rate_total"
-    ]);
-    const totals = {};
-    let rows = [];
-
-    if (sheetType === "master") {
-      const list = (typeof getFilteredMasterInventory === "function")
-        ? getFilteredMasterInventory()
-        : (window.db?.getMasterInventory ? window.db.getMasterInventory() : []);
-      rows = list.map((m, i) => ({
-        sr_no: m.sr_no || (i + 1),
-        style_code: m.style_code || "",
-        category: m.category || "",
-        cut_qty: Number(m.cut_qty) || 0,
-        received_qty: Number(m.received_qty) || 0,
-        balance_from_stock: Number(m.balance_from_stock) || 0,
-        date_receive: m.date_receive || "-",
-        challan_rec: m.challan_rec || "-",
-        dispatch_from_hemb: Number(m.dispatch_from_hemb) || 0,
-        balance_from_hemb: Number(m.balance_from_hemb) || 0,
-        total_balance: Number(m.total_balance) || 0,
-        date_dispatch: m.date_dispatch || "-",
-        challan_dis: m.challan_dis || "-"
-      }));
-    } else if (sheetType === "distribution") {
-      const activePeriod = (typeof getActiveDistributionPeriod === "function") ? getActiveDistributionPeriod() : "all";
-      let list = window.db?.getWorkDistribution ? window.db.getWorkDistribution() : [];
-      if (activePeriod && activePeriod !== "all") {
-        list = list.filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-      }
-      rows = list.map((w, i) => ({
-        sr_no: w.sr_no || (i + 1),
-        style_code: w.style_code || "",
-        contractor_name: w.contractor_name || "-",
-        pcs_qty: Number(w.pcs_qty) || 0,
-        rate: Number(w.rate) || 0,
-        item: w.item || "SHIRT",
-        floor: w.floor || "-",
-        total: Number(w.total_amount != null ? w.total_amount : ((Number(w.pcs_qty) || 0) * (Number(w.rate) || 0))),
-        period: w.period || "-",
-        remarks: w.remarks || "-"
-      }));
-    } else if (sheetType === "payment") {
-      const activePeriod = (typeof getActiveRateApprovalPeriod === "function") ? getActiveRateApprovalPeriod() : "all";
-      let list = window.db?.getPaymentSheets ? window.db.getPaymentSheets() : [];
-      if (activePeriod && activePeriod !== "all") {
-        list = list.filter(p => (p.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-      }
-      rows = list.map((p, i) => ({
-        sr_no: p.sr_no || (i + 1),
-        style_code: p.style_code || "",
-        working: p.working || p.category || "SHIRT",
-        contractor_name: p.contractor_name || "-",
-        rate: Number(p.rate_per_pc || p.fix_rate || p.rate || 0),
-        cut_qty: Number(p.cut_qty) || 0,
-        prod_pcs_qty: Number(p.prod_pcs_qty) || 0,
-        carigar_rate: Number(p.carigar_rate) || 0,
-        commission: Number(p.commission) || 0,
-        rate_total: Number(p.rate_total || 0),
-        remarks: p.remarks_1 || p.remarks || "-",
-        balance_stock: Number(p.balance_from_stock || 0),
-        balance_hemb: Number(p.balance_from_hemb || 0),
-        total_balance: Number(p.total_balance || 0),
-        period: p.period || "-"
-      }));
-    } else {
-      const list = window.db?.getFinalStyles ? window.db.getFinalStyles() : [];
-      rows = list.map((f, i) => ({
-        sr_no: f.s_no || (i + 1),
-        style_code: f.style_code || "",
-        category: f.category || "Shirt",
-        contractor: f.contractor_name || "-",
-        cut_qty: Number(f.cut_qty) || 0,
-        received_qty: Number(f.received_qty) || 0,
-        balance_stock: Number(f.balance_from_stock) || 0,
-        dispatch_hemb: Number(f.dispatch_from_hemb) || 0,
-        balance_hemb: Number(f.balance_from_hemb) || 0,
-        remarks: f.time_remarks || "-"
-      }));
-    }
-
-    numericCols.forEach(colId => {
-      if (rows.some(r => r[colId] !== undefined)) {
-        totals[colId] = rows.reduce((sum, r) => sum + (Number(r[colId]) || 0), 0);
-      }
-    });
-
-    return { rows, totals, numericCols };
-  }
-
-  function renderLiveA4Preview() {
-    const previewContainer = document.getElementById("a4-sheet-preview");
-    if (!previewContainer) return;
-
-    const sheetCfg = PRINT_STUDIO_DEFAULTS[printStudioActiveSheet] || PRINT_STUDIO_DEFAULTS.daily;
-    const activeCols = printStudioColumns.filter(c => c.enabled);
-    const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
-    const colsWithEffectiveWidth = activeCols.map(c => ({
-      ...c,
-      effectiveWidth: printStudioAutoFit ? (((Number(c.currentWidth) || 0) / totalWidth) * 100).toFixed(2) : (Number(c.currentWidth) || 10)
+  if (sheetType === "master") {
+    const list = (typeof getFilteredMasterInventory === "function")
+      ? getFilteredMasterInventory()
+      : (window.db?.getMasterInventory ? window.db.getMasterInventory() : []);
+    rows = list.map((m, i) => ({
+      sr_no: m.sr_no || (i + 1),
+      style_code: m.style_code || "",
+      category: m.category || "",
+      cut_qty: Number(m.cut_qty) || 0,
+      received_qty: Number(m.received_qty) || 0,
+      balance_from_stock: Number(m.balance_from_stock) || 0,
+      date_receive: m.date_receive || "-",
+      challan_rec: m.challan_rec || "-",
+      dispatch_from_hemb: Number(m.dispatch_from_hemb) || 0,
+      balance_from_hemb: Number(m.balance_from_hemb) || 0,
+      total_balance: Number(m.total_balance) || 0,
+      date_dispatch: m.date_dispatch || "-",
+      challan_dis: m.challan_dis || "-"
     }));
+  } else if (sheetType === "distribution") {
+    const activePeriod = (typeof getActiveDistributionPeriod === "function") ? getActiveDistributionPeriod() : "all";
+    let list = window.db?.getWorkDistribution ? window.db.getWorkDistribution() : [];
+    if (activePeriod && activePeriod !== "all") {
+      list = list.filter(e => (e.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+    }
+    rows = list.map((w, i) => ({
+      sr_no: w.sr_no || (i + 1),
+      style_code: w.style_code || "",
+      contractor_name: w.contractor_name || "-",
+      pcs_qty: Number(w.pcs_qty) || 0,
+      rate: Number(w.rate) || 0,
+      item: w.item || "SHIRT",
+      floor: w.floor || "-",
+      total: Number(w.total_amount != null ? w.total_amount : ((Number(w.pcs_qty) || 0) * (Number(w.rate) || 0))),
+      period: w.period || "-",
+      remarks: w.remarks || "-"
+    }));
+  } else if (sheetType === "payment") {
+    const activePeriod = (typeof getActiveRateApprovalPeriod === "function") ? getActiveRateApprovalPeriod() : "all";
+    let list = window.db?.getPaymentSheets ? window.db.getPaymentSheets() : [];
+    if (activePeriod && activePeriod !== "all") {
+      list = list.filter(p => (p.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
+    }
+    rows = list.map((p, i) => ({
+      sr_no: p.sr_no || (i + 1),
+      style_code: p.style_code || "",
+      working: p.working || p.category || "SHIRT",
+      contractor_name: p.contractor_name || "-",
+      rate: Number(p.rate_per_pc || p.fix_rate || p.rate || 0),
+      cut_qty: Number(p.cut_qty) || 0,
+      prod_pcs_qty: Number(p.prod_pcs_qty) || 0,
+      carigar_rate: Number(p.carigar_rate) || 0,
+      commission: Number(p.commission) || 0,
+      rate_total: Number(p.rate_total || 0),
+      remarks: p.remarks_1 || p.remarks || "-",
+      balance_stock: Number(p.balance_from_stock || 0),
+      balance_hemb: Number(p.balance_from_hemb || 0),
+      total_balance: Number(p.total_balance || 0),
+      period: p.period || "-"
+    }));
+  } else {
+    const list = window.db?.getFinalStyles ? window.db.getFinalStyles() : [];
+    rows = list.map((f, i) => ({
+      sr_no: f.s_no || (i + 1),
+      style_code: f.style_code || "",
+      category: f.category || "Shirt",
+      contractor: f.contractor_name || "-",
+      cut_qty: Number(f.cut_qty) || 0,
+      received_qty: Number(f.received_qty) || 0,
+      balance_stock: Number(f.balance_from_stock) || 0,
+      dispatch_hemb: Number(f.dispatch_from_hemb) || 0,
+      balance_hemb: Number(f.balance_from_hemb) || 0,
+      remarks: f.time_remarks || "-"
+    }));
+  }
 
-    const { rows, totals, numericCols } = getPrintStudioSheetData(printStudioActiveSheet);
-    const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    const dateStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+  numericCols.forEach(colId => {
+    if (rows.some(r => r[colId] !== undefined)) {
+      totals[colId] = rows.reduce((sum, r) => sum + (Number(r[colId]) || 0), 0);
+    }
+  });
 
-    const headerHtml = `
+  return { rows, totals, numericCols };
+}
+
+function renderLiveA4Preview() {
+  const previewContainer = document.getElementById("a4-sheet-preview");
+  if (!previewContainer) return;
+
+  const sheetCfg = PRINT_STUDIO_DEFAULTS[printStudioActiveSheet] || PRINT_STUDIO_DEFAULTS.daily;
+  const activeCols = printStudioColumns.filter(c => c.enabled);
+  const totalWidth = activeCols.reduce((s, c) => s + (Number(c.currentWidth) || 0), 0) || 1;
+  const colsWithEffectiveWidth = activeCols.map(c => ({
+    ...c,
+    effectiveWidth: printStudioAutoFit ? (((Number(c.currentWidth) || 0) / totalWidth) * 100).toFixed(2) : (Number(c.currentWidth) || 10)
+  }));
+
+  const { rows, totals, numericCols } = getPrintStudioSheetData(printStudioActiveSheet);
+  const nowStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const dateStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+  const headerHtml = `
     <div class="print-strip-header">
       <div style="font-size: 8.5pt; font-weight: 700;">Time: ${escapeHtml(nowStr)}</div>
       <div style="font-size: 11.5pt; font-weight: 900; text-transform: uppercase; letter-spacing: 0.04em;">Hand Embroidery — ${escapeHtml(sheetCfg.title)}</div>
@@ -12143,9 +12239,9 @@ function saveActivePrintPreset() {
     </div>
   `;
 
-    const headerStyle = `font-size: ${printStudioHeaderFontSize}pt !important; font-weight: ${printStudioHeaderBold ? "900" : "600"}; padding: ${printStudioHeaderPadding}px 3px !important;`;
+  const headerStyle = `font-size: ${printStudioHeaderFontSize}pt !important; font-weight: ${printStudioHeaderBold ? "900" : "600"}; padding: ${printStudioHeaderPadding}px 3px !important;`;
 
-    const tableHtml = `
+  const tableHtml = `
     <table class="print-render-table">
       <thead>
         <tr>
@@ -12156,261 +12252,261 @@ function saveActivePrintPreset() {
         ${rows.map((row, rIdx) => `
           <tr>
             ${colsWithEffectiveWidth.map(col => {
-      const align = printStudioTextAlign === "auto" ? (col.align || "left") : printStudioTextAlign;
-      const isNum = numericCols.has(col.id);
-      const fw = col.bold ? "800" : (isNum ? "600" : "500");
-      const extraStyle = `text-align: ${align}; font-weight: ${fw}; ${isNum ? "font-family: monospace;" : ""}`;
-      const rawVal = row[col.id];
-      const cellContent = (col.id === "sr_no")
-        ? (rawVal || (rIdx + 1))
-        : (isNum ? Number(rawVal || 0).toLocaleString() : escapeHtml(rawVal != null && rawVal !== "" ? String(rawVal) : "-"));
+    const align = printStudioTextAlign === "auto" ? (col.align || "left") : printStudioTextAlign;
+    const isNum = numericCols.has(col.id);
+    const fw = col.bold ? "800" : (isNum ? "600" : "500");
+    const extraStyle = `text-align: ${align}; font-weight: ${fw}; ${isNum ? "font-family: monospace;" : ""}`;
+    const rawVal = row[col.id];
+    const cellContent = (col.id === "sr_no")
+      ? (rawVal || (rIdx + 1))
+      : (isNum ? Number(rawVal || 0).toLocaleString() : escapeHtml(rawVal != null && rawVal !== "" ? String(rawVal) : "-"));
 
-      if (col.id === "remarks") {
-        const rawText = String(rawVal || "").trim();
-        if (!rawText || rawText === "-") {
-          return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
-        }
+    if (col.id === "remarks") {
+      const rawText = String(rawVal || "").trim();
+      if (!rawText || rawText === "-") {
+        return `<td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">-</td>`;
+      }
 
-        // Check if text is multiple lines or long enough to wrap into 2 lines
-        const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
-        const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
+      // Check if text is multiple lines or long enough to wrap into 2 lines
+      const isDoubleLine = rawText.includes("\n") || rawText.includes("\r") || rawText.length > 16;
+      const formattedHtml = escapeHtml(rawText).replace(/\r?\n/g, "<br>");
 
-        if (isDoubleLine) {
-          // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
-          const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
-          return `
+      if (isDoubleLine) {
+        // Text spans double lines: scale font down so 2 lines fit in the exact same physical height as 1 regular line
+        const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
+        return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} padding: 0px 3px !important; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       <div class="print-remarks-container" style="font-size: ${compactFontSize}pt !important; line-height: 0.92 !important; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 100%; word-break: break-word;">
                         ${formattedHtml}
                       </div>
                     </td>
                   `;
-        } else {
-          return `
+      } else {
+        return `
                     <td class="print-remarks-td" data-col="remarks" style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">
                       ${formattedHtml}
                     </td>
                   `;
-        }
       }
+    }
 
-      return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
-    }).join("")}
+    return `<td style="${extraStyle} font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioRowPadding}px 3px !important; line-height: 1.15; border: 1px solid #475569; color: #000000; background: #ffffff; vertical-align: middle;">${cellContent}</td>`;
+  }).join("")}
           </tr>
         `).join("")}
       </tbody>
       <tfoot>
         <tr class="print-total-row">
           ${colsWithEffectiveWidth.map((col, idx) => {
-      const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
-      const isColBold = Boolean(col.bold);
-      const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
-      if (idx === 0) {
-        return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
-      }
-      if (col.id === "style_code") {
-        return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
-      }
-      if (totals[col.id] != null) {
-        const formattedVal = (col.id === "total")
-          ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
-          : totals[col.id].toLocaleString();
-        return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
-      }
-      return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
-    }).join("")}
+    const totAlign = printStudioTextAlign === 'auto' ? (idx === 0 ? 'center' : col.align) : printStudioTextAlign;
+    const isColBold = Boolean(col.bold);
+    const fontWeight = (idx === 0) ? '800' : (isColBold ? '900' : '500');
+    if (idx === 0) {
+      return `<td style="text-align: ${totAlign}; font-weight: 800; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">TOTAL</td>`;
+    }
+    if (col.id === "style_code") {
+      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${rows.length} Styles</td>`;
+    }
+    if (totals[col.id] != null) {
+      const formattedVal = (col.id === "total")
+        ? `Rs. ${Math.round(totals[col.id]).toLocaleString()}`
+        : totals[col.id].toLocaleString();
+      return `<td style="text-align: ${totAlign}; font-weight: ${fontWeight}; font-family: monospace; font-size: ${printStudioBodyFontSize}pt !important; padding: ${printStudioTotalPadding}px 4px !important; border: 1.5px solid #000000; background: #e2e8f0; color: #000000;">${formattedVal}</td>`;
+    }
+    return `<td style="border: 1.5px solid #000000; background: #e2e8f0; padding: ${printStudioTotalPadding}px 4px !important;"></td>`;
+  }).join("")}
         </tr>
       </tfoot>
     </table>
   `;
 
-    // Only the single-line header strip and the table! No extra text above or below!
-    previewContainer.innerHTML = headerHtml + tableHtml;
+  // Only the single-line header strip and the table! No extra text above or below!
+  previewContainer.innerHTML = headerHtml + tableHtml;
 
-    // Post-render remarks auto-fit guard: ensure no remarks cell stretches row height beyond single-line height
-    adjustRemarksRowHeights(previewContainer);
-  }
+  // Post-render remarks auto-fit guard: ensure no remarks cell stretches row height beyond single-line height
+  adjustRemarksRowHeights(previewContainer);
+}
 
-  function adjustRemarksRowHeights(container) {
-    if (!container) return;
-    const rows = container.querySelectorAll(".print-render-table tbody tr");
-    rows.forEach(tr => {
-      const remarksTd = tr.querySelector(".print-remarks-td");
-      if (!remarksTd) return;
+function adjustRemarksRowHeights(container) {
+  if (!container) return;
+  const rows = container.querySelectorAll(".print-render-table tbody tr");
+  rows.forEach(tr => {
+    const remarksTd = tr.querySelector(".print-remarks-td");
+    if (!remarksTd) return;
 
-      const remarksDiv = remarksTd.querySelector(".print-remarks-container");
-      const refTd = tr.querySelector("td:not(.print-remarks-td)");
-      if (!refTd) return;
+    const remarksDiv = remarksTd.querySelector(".print-remarks-container");
+    const refTd = tr.querySelector("td:not(.print-remarks-td)");
+    if (!refTd) return;
 
-      const targetHeight = refTd.clientHeight || refTd.offsetHeight;
+    const targetHeight = refTd.clientHeight || refTd.offsetHeight;
 
-      // If remarks cell does not have container yet, but its height is taller than reference cell, convert it
-      if (!remarksDiv && remarksTd.textContent.trim() && remarksTd.clientHeight > (targetHeight + 2)) {
-        const text = remarksTd.innerHTML;
-        const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
-        remarksTd.style.setProperty("padding", "0px 3px", "important");
-        remarksTd.innerHTML = `
+    // If remarks cell does not have container yet, but its height is taller than reference cell, convert it
+    if (!remarksDiv && remarksTd.textContent.trim() && remarksTd.clientHeight > (targetHeight + 2)) {
+      const text = remarksTd.innerHTML;
+      const compactFontSize = Math.max(4.5, +(printStudioBodyFontSize * 0.62).toFixed(1));
+      remarksTd.style.setProperty("padding", "0px 3px", "important");
+      remarksTd.innerHTML = `
         <div class="print-remarks-container" style="font-size: ${compactFontSize}pt !important; line-height: 0.92 !important; letter-spacing: -0.01em; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; max-height: 100%; word-break: break-word;">
           ${text}
         </div>
       `;
-      }
-
-      // If it has remarksDiv, ensure it does not expand the row height
-      const activeDiv = remarksTd.querySelector(".print-remarks-container");
-      if (activeDiv) {
-        let currentPt = parseFloat(activeDiv.style.fontSize) || +(printStudioBodyFontSize * 0.62).toFixed(1);
-        let count = 0;
-        while (count < 5 && tr.clientHeight > (targetHeight + 2) && currentPt > 4.2) {
-          currentPt = +(currentPt - 0.4).toFixed(1);
-          activeDiv.style.setProperty("font-size", `${currentPt}pt`, "important");
-          count++;
-        }
-      }
-    });
-  }
-
-  function executeStudioPrint() {
-    const previewContent = document.getElementById("a4-sheet-preview")?.innerHTML;
-    const printRoot = document.getElementById("print-studio-paper-root");
-    if (!previewContent || !printRoot) {
-      showToast("Unable to generate print document.", "error");
-      return;
-    }
-    printRoot.innerHTML = previewContent;
-    window.print();
-  }
-  let currentTrashFilterType = "all";
-
-  function renderTrashView() {
-    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-
-    // Update KPI counters
-    let receivingCount = 0;
-    let dispatchCount = 0;
-    let masterDailyCount = 0;
-    let paymentDistCount = 0;
-
-    allTrash.forEach(item => {
-      const t = item.entity_type;
-      if (t === "receiving") receivingCount++;
-      else if (t === "dispatch") dispatchCount++;
-      else if (t === "master" || t === "final_style") masterDailyCount++;
-      else if (t === "payment" || t === "distribution" || t === "period" || t === "distribution_period") paymentDistCount++;
-    });
-
-    const totalEl = document.getElementById("trash-kpi-total");
-    if (totalEl) totalEl.textContent = allTrash.length;
-    const recEl = document.getElementById("trash-kpi-receiving");
-    if (recEl) recEl.textContent = receivingCount;
-    const disEl = document.getElementById("trash-kpi-dispatch");
-    if (disEl) disEl.textContent = dispatchCount;
-    const mdEl = document.getElementById("trash-kpi-master-daily");
-    if (mdEl) mdEl.textContent = masterDailyCount;
-    const pdEl = document.getElementById("trash-kpi-payment-dist");
-    if (pdEl) pdEl.textContent = paymentDistCount;
-    const badgeEl = document.getElementById("trash-kpi-count-badge");
-    if (badgeEl) badgeEl.textContent = `${allTrash.length} Items`;
-
-    // Search and Module Filter
-    const query = (document.getElementById("trash-search-input")?.value || document.getElementById("input-trash-search")?.value || "").toLowerCase().trim();
-    const modFilter = document.getElementById("filter-trash-type")?.value || document.getElementById("filter-trash-module")?.value || "all";
-    currentTrashFilterType = modFilter;
-
-    let filtered = allTrash.filter(item => {
-      if (modFilter && modFilter !== "all") {
-        if (modFilter === "period") {
-          if (item.entity_type !== "period" && item.entity_type !== "distribution_period") return false;
-        } else if (item.entity_type !== modFilter) {
-          return false;
-        }
-      }
-      if (!query) return true;
-      const matchTitle = (item.title || "").toLowerCase().includes(query);
-      const matchSub = (item.subtitle || "").toLowerCase().includes(query);
-      const matchUser = (item.deleted_by || "").toLowerCase().includes(query);
-      const matchType = (item.entity_type || "").toLowerCase().includes(query);
-      const d = item.data || item.item_data || {};
-      const matchStyle = (d.style_code || "").toLowerCase().includes(query);
-      const matchContractor = (d.contractor_name || "").toLowerCase().includes(query);
-      const matchChallanRec = (d.challan_rec || "").toLowerCase().includes(query);
-      const matchChallanDis = (d.challan_dis || "").toLowerCase().includes(query);
-      const matchChallanDs = (d.challan_no || "").toLowerCase().includes(query);
-      return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis || matchChallanDs;
-    });
-
-    const tbody = document.getElementById("trash-table-body");
-    const emptyState = document.getElementById("trash-empty-state");
-    const tableEl = document.getElementById("table-trash-items");
-
-    if (!tbody) return;
-
-    if (filtered.length === 0) {
-      tbody.innerHTML = "";
-      if (emptyState) emptyState.style.display = "block";
-      if (tableEl) tableEl.style.display = (allTrash.length === 0) ? "none" : "";
-      return;
     }
 
-    if (emptyState) emptyState.style.display = "none";
-    if (tableEl) tableEl.style.display = "";
-
-    const canDestroy = window.db.canUserPerformAction("can_destroy_trash");
-
-    tbody.innerHTML = filtered.map(item => {
-      // Determine friendly badge
-      let badgeClass = "badge-trash-receiving";
-      let badgeLabel = "📥 Receiving";
-
-      if (item.entity_type === "dispatch") {
-        badgeClass = "badge-trash-dispatch";
-        badgeLabel = "📤 Dispatch";
-      } else if (item.entity_type === "designer_sample") {
-        badgeClass = "badge-trash-dispatch";
-        badgeLabel = "🎨 Designer Pcs";
-      } else if (item.entity_type === "master") {
-        badgeClass = "badge-trash-master";
-        badgeLabel = "📦 Master Style";
-      } else if (item.entity_type === "final_style") {
-        badgeClass = "badge-trash-final";
-        badgeLabel = "📋 Daily Sheet";
-      } else if (item.entity_type === "distribution") {
-        badgeClass = "badge-trash-distribution";
-        badgeLabel = "📑 Work Dist.";
-      } else if (item.entity_type === "payment") {
-        badgeClass = "badge-trash-payment";
-        badgeLabel = "💰 Payment";
-      } else if (item.entity_type === "period") {
-        badgeClass = "badge-trash-period";
-        badgeLabel = "🗓️ Sheet Period";
-      } else if (item.entity_type === "distribution_period") {
-        badgeClass = "badge-trash-period";
-        badgeLabel = "🗓️ Dist. Period";
-      } else if (item.entity_type === "user") {
-        badgeClass = "badge-trash-user";
-        badgeLabel = "👤 User";
-      } else if (item.entity_type === "contractor") {
-        badgeClass = "badge-trash-master";
-        badgeLabel = "👷 Contractor";
+    // If it has remarksDiv, ensure it does not expand the row height
+    const activeDiv = remarksTd.querySelector(".print-remarks-container");
+    if (activeDiv) {
+      let currentPt = parseFloat(activeDiv.style.fontSize) || +(printStudioBodyFontSize * 0.62).toFixed(1);
+      let count = 0;
+      while (count < 5 && tr.clientHeight > (targetHeight + 2) && currentPt > 4.2) {
+        currentPt = +(currentPt - 0.4).toFixed(1);
+        activeDiv.style.setProperty("font-size", `${currentPt}pt`, "important");
+        count++;
       }
+    }
+  });
+}
 
-      // Format deletion date
-      let dateStr = "";
-      if (item.deleted_at) {
-        try {
-          const d = new Date(item.deleted_at);
-          dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-            ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        } catch (e) {
-          dateStr = item.deleted_at;
-        }
+function executeStudioPrint() {
+  const previewContent = document.getElementById("a4-sheet-preview")?.innerHTML;
+  const printRoot = document.getElementById("print-studio-paper-root");
+  if (!previewContent || !printRoot) {
+    showToast("Unable to generate print document.", "error");
+    return;
+  }
+  printRoot.innerHTML = previewContent;
+  window.print();
+}
+let currentTrashFilterType = "all";
+
+function renderTrashView() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+
+  // Update KPI counters
+  let receivingCount = 0;
+  let dispatchCount = 0;
+  let masterDailyCount = 0;
+  let paymentDistCount = 0;
+
+  allTrash.forEach(item => {
+    const t = item.entity_type;
+    if (t === "receiving") receivingCount++;
+    else if (t === "dispatch") dispatchCount++;
+    else if (t === "master" || t === "final_style") masterDailyCount++;
+    else if (t === "payment" || t === "distribution" || t === "period" || t === "distribution_period") paymentDistCount++;
+  });
+
+  const totalEl = document.getElementById("trash-kpi-total");
+  if (totalEl) totalEl.textContent = allTrash.length;
+  const recEl = document.getElementById("trash-kpi-receiving");
+  if (recEl) recEl.textContent = receivingCount;
+  const disEl = document.getElementById("trash-kpi-dispatch");
+  if (disEl) disEl.textContent = dispatchCount;
+  const mdEl = document.getElementById("trash-kpi-master-daily");
+  if (mdEl) mdEl.textContent = masterDailyCount;
+  const pdEl = document.getElementById("trash-kpi-payment-dist");
+  if (pdEl) pdEl.textContent = paymentDistCount;
+  const badgeEl = document.getElementById("trash-kpi-count-badge");
+  if (badgeEl) badgeEl.textContent = `${allTrash.length} Items`;
+
+  // Search and Module Filter
+  const query = (document.getElementById("trash-search-input")?.value || document.getElementById("input-trash-search")?.value || "").toLowerCase().trim();
+  const modFilter = document.getElementById("filter-trash-type")?.value || document.getElementById("filter-trash-module")?.value || "all";
+  currentTrashFilterType = modFilter;
+
+  let filtered = allTrash.filter(item => {
+    if (modFilter && modFilter !== "all") {
+      if (modFilter === "period") {
+        if (item.entity_type !== "period" && item.entity_type !== "distribution_period") return false;
+      } else if (item.entity_type !== modFilter) {
+        return false;
       }
+    }
+    if (!query) return true;
+    const matchTitle = (item.title || "").toLowerCase().includes(query);
+    const matchSub = (item.subtitle || "").toLowerCase().includes(query);
+    const matchUser = (item.deleted_by || "").toLowerCase().includes(query);
+    const matchType = (item.entity_type || "").toLowerCase().includes(query);
+    const d = item.data || item.item_data || {};
+    const matchStyle = (d.style_code || "").toLowerCase().includes(query);
+    const matchContractor = (d.contractor_name || "").toLowerCase().includes(query);
+    const matchChallanRec = (d.challan_rec || "").toLowerCase().includes(query);
+    const matchChallanDis = (d.challan_dis || "").toLowerCase().includes(query);
+    const matchChallanDs = (d.challan_no || "").toLowerCase().includes(query);
+    return matchTitle || matchSub || matchUser || matchType || matchStyle || matchContractor || matchChallanRec || matchChallanDis || matchChallanDs;
+  });
 
-      const safeTitle = escapeHtml(item.title || "Deleted Record");
-      const safeSubtitle = escapeHtml(item.subtitle || "");
-      const safeUser = escapeHtml(item.deleted_by || "Admin");
+  const tbody = document.getElementById("trash-table-body");
+  const emptyState = document.getElementById("trash-empty-state");
+  const tableEl = document.getElementById("table-trash-items");
 
-      return `
+  if (!tbody) return;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = "";
+    if (emptyState) emptyState.style.display = "block";
+    if (tableEl) tableEl.style.display = (allTrash.length === 0) ? "none" : "";
+    return;
+  }
+
+  if (emptyState) emptyState.style.display = "none";
+  if (tableEl) tableEl.style.display = "";
+
+  const canDestroy = window.db.canUserPerformAction("can_destroy_trash");
+
+  tbody.innerHTML = filtered.map(item => {
+    // Determine friendly badge
+    let badgeClass = "badge-trash-receiving";
+    let badgeLabel = "📥 Receiving";
+
+    if (item.entity_type === "dispatch") {
+      badgeClass = "badge-trash-dispatch";
+      badgeLabel = "📤 Dispatch";
+    } else if (item.entity_type === "designer_sample") {
+      badgeClass = "badge-trash-dispatch";
+      badgeLabel = "🎨 Designer Pcs";
+    } else if (item.entity_type === "master") {
+      badgeClass = "badge-trash-master";
+      badgeLabel = "📦 Master Style";
+    } else if (item.entity_type === "final_style") {
+      badgeClass = "badge-trash-final";
+      badgeLabel = "📋 Daily Sheet";
+    } else if (item.entity_type === "distribution") {
+      badgeClass = "badge-trash-distribution";
+      badgeLabel = "📑 Work Dist.";
+    } else if (item.entity_type === "payment") {
+      badgeClass = "badge-trash-payment";
+      badgeLabel = "💰 Payment";
+    } else if (item.entity_type === "period") {
+      badgeClass = "badge-trash-period";
+      badgeLabel = "🗓️ Sheet Period";
+    } else if (item.entity_type === "distribution_period") {
+      badgeClass = "badge-trash-period";
+      badgeLabel = "🗓️ Dist. Period";
+    } else if (item.entity_type === "user") {
+      badgeClass = "badge-trash-user";
+      badgeLabel = "👤 User";
+    } else if (item.entity_type === "contractor") {
+      badgeClass = "badge-trash-master";
+      badgeLabel = "👷 Contractor";
+    }
+
+    // Format deletion date
+    let dateStr = "";
+    if (item.deleted_at) {
+      try {
+        const d = new Date(item.deleted_at);
+        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        dateStr = item.deleted_at;
+      }
+    }
+
+    const safeTitle = escapeHtml(item.title || "Deleted Record");
+    const safeSubtitle = escapeHtml(item.subtitle || "");
+    const safeUser = escapeHtml(item.deleted_by || "Admin");
+
+    return `
       <tr class="trash-item-row" data-id="${item.id}">
         <td>
           <span class="badge-trash-type ${badgeClass}">${badgeLabel}</span>
@@ -12439,31 +12535,31 @@ function saveActivePrintPreset() {
         </td>
       </tr>
     `;
-    }).join("");
-  }
+  }).join("");
+}
 
-  function openTrashDetailsModal(id) {
-    const item = window.db.getTrashItemById(id);
-    if (!item) return;
+function openTrashDetailsModal(id) {
+  const item = window.db.getTrashItemById(id);
+  if (!item) return;
 
-    const metaBox = document.getElementById("trash-detail-meta-box") || document.getElementById("trash-detail-meta");
-    const grid = document.getElementById("trash-detail-grid");
-    const btnRestore = document.getElementById("btn-trash-detail-restore");
-    const btnDestroy = document.getElementById("btn-trash-detail-destroy");
+  const metaBox = document.getElementById("trash-detail-meta-box") || document.getElementById("trash-detail-meta");
+  const grid = document.getElementById("trash-detail-grid");
+  const btnRestore = document.getElementById("btn-trash-detail-restore");
+  const btnDestroy = document.getElementById("btn-trash-detail-destroy");
 
-    if (metaBox) {
-      let dateStr = "";
-      if (item.deleted_at) {
-        try {
-          const d = new Date(item.deleted_at);
-          dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
-            ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-        } catch (e) {
-          dateStr = item.deleted_at;
-        }
+  if (metaBox) {
+    let dateStr = "";
+    if (item.deleted_at) {
+      try {
+        const d = new Date(item.deleted_at);
+        dateStr = d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) +
+          ", " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      } catch (e) {
+        dateStr = item.deleted_at;
       }
+    }
 
-      metaBox.innerHTML = `
+    metaBox.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
         <span style="font-weight: 800; font-size: 0.95rem; color: var(--text-main);">${escapeHtml(item.title)}</span>
         <span class="badge-tag" style="background: rgba(244, 63, 94, 0.15); color: var(--accent-rose); font-weight: 700;">${item.entity_type.toUpperCase()}</span>
@@ -12472,205 +12568,205 @@ function saveActivePrintPreset() {
         📅 <strong>Deleted On:</strong> ${dateStr} &nbsp;|&nbsp; 👤 <strong>Deleted By:</strong> ${escapeHtml(item.deleted_by || "Admin")}
       </div>
     `;
-    }
+  }
 
-    if (grid) {
-      const data = item.data || {};
-      const entries = Object.entries(data);
-      if (entries.length === 0) {
-        grid.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No additional data fields recorded.</div>`;
-      } else {
-        grid.innerHTML = entries.map(([k, v]) => {
-          let valStr = "";
-          if (typeof v === "object" && v !== null) {
-            valStr = JSON.stringify(v);
-          } else {
-            valStr = String(v !== undefined && v !== null ? v : "—");
-          }
-          return `
+  if (grid) {
+    const data = item.data || {};
+    const entries = Object.entries(data);
+    if (entries.length === 0) {
+      grid.innerHTML = `<div style="padding: 1rem; color: var(--text-muted);">No additional data fields recorded.</div>`;
+    } else {
+      grid.innerHTML = entries.map(([k, v]) => {
+        let valStr = "";
+        if (typeof v === "object" && v !== null) {
+          valStr = JSON.stringify(v);
+        } else {
+          valStr = String(v !== undefined && v !== null ? v : "—");
+        }
+        return `
           <div class="trash-detail-card">
             <span class="trash-detail-label">${escapeHtml(k.replace(/_/g, " "))}</span>
             <span class="trash-detail-val">${escapeHtml(valStr)}</span>
           </div>
         `;
-        }).join("");
-      }
-    }
-
-    if (btnRestore) {
-      btnRestore.onclick = () => {
-        restoreTrashItem(item.id);
-        closeModal("modal-trash-details");
-      };
-    }
-
-    if (btnDestroy) {
-      btnDestroy.onclick = () => {
-        destroyTrashItem(item.id);
-      };
-    }
-
-    openModal("modal-trash-details");
-  }
-
-  async function restoreTrashItem(id) {
-    if (!id) return;
-    try {
-      const item = window.db.getTrashItemById(id);
-      const title = item ? item.title : "record";
-      showToast(`Restoring ${title}...`, "info");
-      await window.db.restoreFromTrash(id);
-      showToast(`✓ Successfully restored: ${title}`, "success");
-      renderTrashView();
-      if (typeof refreshAllViews === "function") refreshAllViews();
-      else if (typeof renderAll === "function") renderAll();
-    } catch (err) {
-      console.error("restoreTrashItem error:", err);
-      showToast(`✕ Error restoring item: ${err.message || err}`, "error");
+      }).join("");
     }
   }
 
-  async function destroyTrashItem(id) {
-    if (!id) return;
-    const item = window.db.getTrashItemById(id);
-    const title = item ? item.title : "this item";
-    if (!confirm(`Are you sure you want to permanently destroy "${title}"?\nThis action cannot be undone.`)) {
-      return;
-    }
-    try {
-      showToast(`Permanently deleting...`, "info");
-      await window.db.destroyFromTrash(id);
-      showToast(`✓ Item permanently destroyed.`, "success");
+  if (btnRestore) {
+    btnRestore.onclick = () => {
+      restoreTrashItem(item.id);
       closeModal("modal-trash-details");
-      renderTrashView();
-    } catch (err) {
-      console.error("destroyTrashItem error:", err);
-      showToast(`✕ Error destroying item: ${err.message || err}`, "error");
-    }
+    };
   }
 
-  async function restoreAllTrashAction() {
-    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-    if (allTrash.length === 0) {
-      showToast("Trash is already empty.", "info");
-      return;
-    }
-    if (!confirm(`Restore all ${allTrash.length} items from trash?`)) {
-      return;
-    }
-    try {
-      showToast("Restoring all items...", "info");
-      const res = await window.db.restoreAllTrash(currentTrashFilterType);
-      showToast(`✓ Restored ${(res && res.restoredCount) || allTrash.length} items successfully!`, "success");
-      renderTrashView();
-      if (typeof refreshAllViews === "function") refreshAllViews();
-      else if (typeof renderAll === "function") renderAll();
-    } catch (err) {
-      console.error("restoreAllTrashAction error:", err);
-      showToast(`✕ Error restoring all: ${err.message || err}`, "error");
-    }
+  if (btnDestroy) {
+    btnDestroy.onclick = () => {
+      destroyTrashItem(item.id);
+    };
   }
 
-  async function emptyTrashAction() {
-    const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
-    if (allTrash.length === 0) {
-      showToast("Trash is already empty.", "info");
-      return;
-    }
-    if (!confirm(`⚠️ PERMANENT DESTRUCTION WARNING!\n\nAre you sure you want to permanently empty the trash (${allTrash.length} items)?\nThis cannot be undone.`)) {
-      return;
-    }
-    try {
-      showToast("Emptying trash...", "info");
-      await window.db.emptyTrash();
-      showToast("✓ Trash has been emptied completely.", "success");
-      renderTrashView();
-    } catch (err) {
-      console.error("emptyTrashAction error:", err);
-      showToast(`✕ Error emptying trash: ${err.message || err}`, "error");
-    }
-  }
+  openModal("modal-trash-details");
+}
 
-  function initTrashView() {
-    const btnRestoreAll = document.getElementById("btn-trash-restore-all");
-    if (btnRestoreAll) btnRestoreAll.onclick = restoreAllTrashAction;
-
-    const btnEmpty = document.getElementById("btn-trash-empty");
-    if (btnEmpty) btnEmpty.onclick = emptyTrashAction;
-
-    const searchInp = document.getElementById("trash-search-input") || document.getElementById("input-trash-search");
-    if (searchInp) searchInp.oninput = renderTrashView;
-
-    const typeFilter = document.getElementById("filter-trash-type") || document.getElementById("filter-trash-module");
-    if (typeFilter) typeFilter.onchange = renderTrashView;
-
+async function restoreTrashItem(id) {
+  if (!id) return;
+  try {
+    const item = window.db.getTrashItemById(id);
+    const title = item ? item.title : "record";
+    showToast(`Restoring ${title}...`, "info");
+    await window.db.restoreFromTrash(id);
+    showToast(`✓ Successfully restored: ${title}`, "success");
     renderTrashView();
+    if (typeof refreshAllViews === "function") refreshAllViews();
+    else if (typeof renderAll === "function") renderAll();
+  } catch (err) {
+    console.error("restoreTrashItem error:", err);
+    showToast(`✕ Error restoring item: ${err.message || err}`, "error");
+  }
+}
+
+async function destroyTrashItem(id) {
+  if (!id) return;
+  const item = window.db.getTrashItemById(id);
+  const title = item ? item.title : "this item";
+  if (!confirm(`Are you sure you want to permanently destroy "${title}"?\nThis action cannot be undone.`)) {
+    return;
+  }
+  try {
+    showToast(`Permanently deleting...`, "info");
+    await window.db.destroyFromTrash(id);
+    showToast(`✓ Item permanently destroyed.`, "success");
+    closeModal("modal-trash-details");
+    renderTrashView();
+  } catch (err) {
+    console.error("destroyTrashItem error:", err);
+    showToast(`✕ Error destroying item: ${err.message || err}`, "error");
+  }
+}
+
+async function restoreAllTrashAction() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+  if (!confirm(`Restore all ${allTrash.length} items from trash?`)) {
+    return;
+  }
+  try {
+    showToast("Restoring all items...", "info");
+    const res = await window.db.restoreAllTrash(currentTrashFilterType);
+    showToast(`✓ Restored ${(res && res.restoredCount) || allTrash.length} items successfully!`, "success");
+    renderTrashView();
+    if (typeof refreshAllViews === "function") refreshAllViews();
+    else if (typeof renderAll === "function") renderAll();
+  } catch (err) {
+    console.error("restoreAllTrashAction error:", err);
+    showToast(`✕ Error restoring all: ${err.message || err}`, "error");
+  }
+}
+
+async function emptyTrashAction() {
+  const allTrash = (window.db && typeof window.db.getTrashItems === "function") ? window.db.getTrashItems() : [];
+  if (allTrash.length === 0) {
+    showToast("Trash is already empty.", "info");
+    return;
+  }
+  if (!confirm(`⚠️ PERMANENT DESTRUCTION WARNING!\n\nAre you sure you want to permanently empty the trash (${allTrash.length} items)?\nThis cannot be undone.`)) {
+    return;
+  }
+  try {
+    showToast("Emptying trash...", "info");
+    await window.db.emptyTrash();
+    showToast("✓ Trash has been emptied completely.", "success");
+    renderTrashView();
+  } catch (err) {
+    console.error("emptyTrashAction error:", err);
+    showToast(`✕ Error emptying trash: ${err.message || err}`, "error");
+  }
+}
+
+function initTrashView() {
+  const btnRestoreAll = document.getElementById("btn-trash-restore-all");
+  if (btnRestoreAll) btnRestoreAll.onclick = restoreAllTrashAction;
+
+  const btnEmpty = document.getElementById("btn-trash-empty");
+  if (btnEmpty) btnEmpty.onclick = emptyTrashAction;
+
+  const searchInp = document.getElementById("trash-search-input") || document.getElementById("input-trash-search");
+  if (searchInp) searchInp.oninput = renderTrashView;
+
+  const typeFilter = document.getElementById("filter-trash-type") || document.getElementById("filter-trash-module");
+  if (typeFilter) typeFilter.onchange = renderTrashView;
+
+  renderTrashView();
+}
+
+window.initTrashView = initTrashView;
+window.openTrashDetailsModal = openTrashDetailsModal;
+window.restoreTrashItem = restoreTrashItem;
+window.destroyTrashItem = destroyTrashItem;
+window.restoreAllTrashAction = restoreAllTrashAction;
+window.emptyTrashAction = emptyTrashAction;
+window.renderTrashView = renderTrashView;
+window.renderTrashTable = renderTrashView;
+
+// ====================================================================
+// FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
+// ====================================================================
+function renderDashboardOverdueAlerts() {
+  const container = document.getElementById("dash-overdue-list-container");
+  if (!container) return;
+
+  const summary = (window.db && typeof window.db.getOverdueStylesSummary === "function")
+    ? window.db.getOverdueStylesSummary()
+    : { overdueList: [], dueSoonList: [], onScheduleList: [], totalOverdueCount: 0, totalOverduePieces: 0, totalDueSoonCount: 0, totalDueSoonPieces: 0, totalOnScheduleCount: 0 };
+
+  const badgeCount = document.getElementById("dash-overdue-badge-count");
+  if (badgeCount) {
+    badgeCount.textContent = `${summary.totalOverdueCount} Overdue`;
+    badgeCount.className = summary.totalOverdueCount > 0 ? "badge-tag rose inline" : "badge-tag inline";
   }
 
-  window.initTrashView = initTrashView;
-  window.openTrashDetailsModal = openTrashDetailsModal;
-  window.restoreTrashItem = restoreTrashItem;
-  window.destroyTrashItem = destroyTrashItem;
-  window.restoreAllTrashAction = restoreAllTrashAction;
-  window.emptyTrashAction = emptyTrashAction;
-  window.renderTrashView = renderTrashView;
-  window.renderTrashTable = renderTrashView;
+  const elOverdueCount = document.getElementById("dash-overdue-count");
+  if (elOverdueCount) elOverdueCount.textContent = `${summary.totalOverdueCount} Style${summary.totalOverdueCount === 1 ? '' : 's'}`;
 
-  // ====================================================================
-  // FLOOR DELIVERY DEADLINES & OVERDUE ALERT SYSTEM
-  // ====================================================================
-  function renderDashboardOverdueAlerts() {
-    const container = document.getElementById("dash-overdue-list-container");
-    if (!container) return;
+  const elOverduePcs = document.getElementById("dash-overdue-pcs");
+  if (elOverduePcs) elOverduePcs.textContent = `${summary.totalOverduePieces.toLocaleString()} pcs pending`;
 
-    const summary = (window.db && typeof window.db.getOverdueStylesSummary === "function")
-      ? window.db.getOverdueStylesSummary()
-      : { overdueList: [], dueSoonList: [], onScheduleList: [], totalOverdueCount: 0, totalOverduePieces: 0, totalDueSoonCount: 0, totalDueSoonPieces: 0, totalOnScheduleCount: 0 };
+  const elDueSoonCount = document.getElementById("dash-due-soon-count");
+  if (elDueSoonCount) elDueSoonCount.textContent = `${summary.totalDueSoonCount} Style${summary.totalDueSoonCount === 1 ? '' : 's'}`;
 
-    const badgeCount = document.getElementById("dash-overdue-badge-count");
-    if (badgeCount) {
-      badgeCount.textContent = `${summary.totalOverdueCount} Overdue`;
-      badgeCount.className = summary.totalOverdueCount > 0 ? "badge-tag rose inline" : "badge-tag inline";
-    }
+  const elDueSoonPcs = document.getElementById("dash-due-soon-pcs");
+  if (elDueSoonPcs) elDueSoonPcs.textContent = `${summary.totalDueSoonPieces.toLocaleString()} pcs pending`;
 
-    const elOverdueCount = document.getElementById("dash-overdue-count");
-    if (elOverdueCount) elOverdueCount.textContent = `${summary.totalOverdueCount} Style${summary.totalOverdueCount === 1 ? '' : 's'}`;
+  const elOnTrack = document.getElementById("dash-on-track-count");
+  if (elOnTrack) elOnTrack.textContent = `${summary.totalOnScheduleCount} Style${summary.totalOnScheduleCount === 1 ? '' : 's'}`;
 
-    const elOverduePcs = document.getElementById("dash-overdue-pcs");
-    if (elOverduePcs) elOverduePcs.textContent = `${summary.totalOverduePieces.toLocaleString()} pcs pending`;
+  const combinedAlerts = [...summary.overdueList, ...summary.dueSoonList];
 
-    const elDueSoonCount = document.getElementById("dash-due-soon-count");
-    if (elDueSoonCount) elDueSoonCount.textContent = `${summary.totalDueSoonCount} Style${summary.totalDueSoonCount === 1 ? '' : 's'}`;
-
-    const elDueSoonPcs = document.getElementById("dash-due-soon-pcs");
-    if (elDueSoonPcs) elDueSoonPcs.textContent = `${summary.totalDueSoonPieces.toLocaleString()} pcs pending`;
-
-    const elOnTrack = document.getElementById("dash-on-track-count");
-    if (elOnTrack) elOnTrack.textContent = `${summary.totalOnScheduleCount} Style${summary.totalOnScheduleCount === 1 ? '' : 's'}`;
-
-    const combinedAlerts = [...summary.overdueList, ...summary.dueSoonList];
-
-    if (combinedAlerts.length === 0) {
-      container.innerHTML = `
+  if (combinedAlerts.length === 0) {
+    container.innerHTML = `
       <div style="text-align: center; padding: 2rem 1rem; color: var(--text-muted); background: var(--bg-surface); border: 1.5px dashed var(--border-color); border-radius: var(--radius-md);">
         <div style="font-size: 2rem; margin-bottom: 0.35rem;">🎉</div>
         <strong style="color: var(--text-main); font-size: 0.95rem;">All Embroidery Floor Orders Are On Schedule!</strong>
         <p style="font-size: 0.775rem; margin-top: 0.25rem;">Zero styles currently exceeding delivery target dates. Great job team!</p>
       </div>
     `;
-      return;
-    }
+    return;
+  }
 
-    container.innerHTML = combinedAlerts.slice(0, 8).map(item => {
-      const isLate = (item.status === "overdue");
-      const rowClass = isLate ? "is-late" : "is-due-soon";
-      const badgeTag = isLate
-        ? `<span class="badge-tag rose inline" style="font-weight: 800;">🚨 ${item.daysLate} Day${item.daysLate === 1 ? '' : 's'} Late</span>`
-        : `<span class="badge-tag amber inline" style="font-weight: 800;">⏳ Due in ${item.daysLeft} Day${item.daysLeft === 1 ? '' : 's'}</span>`;
+  container.innerHTML = combinedAlerts.slice(0, 8).map(item => {
+    const isLate = (item.status === "overdue");
+    const rowClass = isLate ? "is-late" : "is-due-soon";
+    const badgeTag = isLate
+      ? `<span class="badge-tag rose inline" style="font-weight: 800;">🚨 ${item.daysLate} Day${item.daysLate === 1 ? '' : 's'} Late</span>`
+      : `<span class="badge-tag amber inline" style="font-weight: 800;">⏳ Due in ${item.daysLeft} Day${item.daysLeft === 1 ? '' : 's'}</span>`;
 
-      const targetFormatted = item.target_date || "No date set";
+    const targetFormatted = item.target_date || "No date set";
 
-      return `
+    return `
       <div class="overdue-item-row ${rowClass}">
         <div style="display: flex; align-items: center; gap: 0.65rem; min-width: 200px;">
           <div style="display: flex; flex-direction: column;">
@@ -12714,275 +12810,275 @@ function saveActivePrintPreset() {
         </div>
       </div>
     `;
-    }).join("");
+  }).join("");
+}
+
+function sendOverdueWhatsAppReminder(styleCode, category, contractor, balance, targetDate, daysLate, phone) {
+  let cleanPhone = (phone || "").replace(/[^0-9]/g, "");
+  if (cleanPhone.startsWith("0")) {
+    cleanPhone = "92" + cleanPhone.substring(1);
   }
 
-  function sendOverdueWhatsAppReminder(styleCode, category, contractor, balance, targetDate, daysLate, phone) {
-    let cleanPhone = (phone || "").replace(/[^0-9]/g, "");
-    if (cleanPhone.startsWith("0")) {
-      cleanPhone = "92" + cleanPhone.substring(1);
-    }
+  let delayNotice = daysLate > 0 ? `jo ${daysLate} din pehle guzar chuki hai` : `aaj hai`;
+  const message = `*URGENT: CRAFTFLOW HAND EMBROIDERY FLOOR REMINDER*\n` +
+    `---------------------------------------\n` +
+    `Salam *${contractor}* bhai,\n\n` +
+    `Aap k paas Style *${styleCode}* (*${category}*) k *${Number(balance).toLocaleString()} pieces* pending hain.\n` +
+    `Is order ki target delivery date *${targetDate}* thi (${delayNotice}).\n\n` +
+    `Garment unit dispatch aur finishing k liye yeh maal foran darkar hai. Meharbani farma kar aaj hi finished pieces adday se dispatch karwayen.\n\n` +
+    `Shukriya,\n*Hand Embroidery Department*`;
 
-    let delayNotice = daysLate > 0 ? `jo ${daysLate} din pehle guzar chuki hai` : `aaj hai`;
-    const message = `*URGENT: CRAFTFLOW HAND EMBROIDERY FLOOR REMINDER*\n` +
-      `---------------------------------------\n` +
-      `Salam *${contractor}* bhai,\n\n` +
-      `Aap k paas Style *${styleCode}* (*${category}*) k *${Number(balance).toLocaleString()} pieces* pending hain.\n` +
-      `Is order ki target delivery date *${targetDate}* thi (${delayNotice}).\n\n` +
-      `Garment unit dispatch aur finishing k liye yeh maal foran darkar hai. Meharbani farma kar aaj hi finished pieces adday se dispatch karwayen.\n\n` +
-      `Shukriya,\n*Hand Embroidery Department*`;
+  const encoded = encodeURIComponent(message);
+  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  window.open(url, "_blank");
+}
 
-    const encoded = encodeURIComponent(message);
-    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-    window.open(url, "_blank");
+function openUpdateDeadlineModal(masterId) {
+  const master = window.db.getMasterInventory();
+  const item = master.find(m => Number(m.id) === Number(masterId));
+  if (!item) {
+    showToast("Style record not found", "error");
+    return;
   }
 
-  function openUpdateDeadlineModal(masterId) {
-    const master = window.db.getMasterInventory();
-    const item = master.find(m => Number(m.id) === Number(masterId));
-    if (!item) {
-      showToast("Style record not found", "error");
-      return;
-    }
+  document.getElementById("deadline-style-id").value = item.id;
+  document.getElementById("deadline-summary-code").textContent = item.style_code;
+  document.getElementById("deadline-summary-cat").textContent = item.category;
+  document.getElementById("deadline-summary-cont").textContent = item.contractor_name || "Unassigned";
+  document.getElementById("deadline-summary-wip").textContent = `${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs`;
 
-    document.getElementById("deadline-style-id").value = item.id;
-    document.getElementById("deadline-summary-code").textContent = item.style_code;
-    document.getElementById("deadline-summary-cat").textContent = item.category;
-    document.getElementById("deadline-summary-cont").textContent = item.contractor_name || "Unassigned";
-    document.getElementById("deadline-summary-wip").textContent = `${(item.balance_from_hemb || item.total_balance || 0).toLocaleString()} pcs`;
+  const odInfo = item.overdue_info || { badgeText: "On Schedule" };
+  document.getElementById("deadline-summary-status").textContent = odInfo.badgeText;
 
-    const odInfo = item.overdue_info || { badgeText: "On Schedule" };
-    document.getElementById("deadline-summary-status").textContent = odInfo.badgeText;
-
-    const dateInput = document.getElementById("deadline-date-input");
-    if (item.target_date) {
-      dateInput.value = item.target_date;
-    } else {
-      const defaultDate = new Date();
-      defaultDate.setDate(defaultDate.getDate() + 7);
-      dateInput.value = defaultDate.toISOString().split("T")[0];
-    }
-
-    openModal("modal-update-deadline");
+  const dateInput = document.getElementById("deadline-date-input");
+  if (item.target_date) {
+    dateInput.value = item.target_date;
+  } else {
+    const defaultDate = new Date();
+    defaultDate.setDate(defaultDate.getDate() + 7);
+    dateInput.value = defaultDate.toISOString().split("T")[0];
   }
 
-  function initDeadlineModalEvents() {
-    const form = document.getElementById("form-update-deadline");
-    if (form) {
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const id = document.getElementById("deadline-style-id").value;
-        const targetDate = document.getElementById("deadline-date-input").value;
-        if (!id || !targetDate) return;
+  openModal("modal-update-deadline");
+}
 
-        window.db.updateMasterTargetDate(id, targetDate);
-        closeModal("modal-update-deadline");
-        showToast(`Target delivery date updated to ${targetDate}!`, "success");
+function initDeadlineModalEvents() {
+  const form = document.getElementById("form-update-deadline");
+  if (form) {
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const id = document.getElementById("deadline-style-id").value;
+      const targetDate = document.getElementById("deadline-date-input").value;
+      if (!id || !targetDate) return;
 
-        // Refresh views
-        if (typeof renderMasterInventory === "function") renderMasterInventory();
-        if (typeof renderDashboardView === "function") renderDashboardView();
-        if (typeof renderFinalStyleSheet === "function") renderFinalStyleSheet();
-      });
-    }
+      window.db.updateMasterTargetDate(id, targetDate);
+      closeModal("modal-update-deadline");
+      showToast(`Target delivery date updated to ${targetDate}!`, "success");
 
-    document.querySelectorAll(".btn-preset-deadline").forEach(btn => {
-      btn.addEventListener("click", () => {
-        const days = parseInt(btn.getAttribute("data-days"), 10) || 7;
-        const d = new Date();
-        d.setDate(d.getDate() + days);
-        const dateInput = document.getElementById("deadline-date-input");
-        if (dateInput) dateInput.value = d.toISOString().split("T")[0];
-      });
+      // Refresh views
+      if (typeof renderMasterInventory === "function") renderMasterInventory();
+      if (typeof renderDashboardView === "function") renderDashboardView();
+      if (typeof renderFinalStyleSheet === "function") renderFinalStyleSheet();
     });
   }
 
-  // ====================================================================
-  // AUTOMATIC CONTRACTOR PARCHA & BILLING SHEET CONTROLLER
-  // ====================================================================
-  let activeParchaData = null;
+  document.querySelectorAll(".btn-preset-deadline").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const days = parseInt(btn.getAttribute("data-days"), 10) || 7;
+      const d = new Date();
+      d.setDate(d.getDate() + days);
+      const dateInput = document.getElementById("deadline-date-input");
+      if (dateInput) dateInput.value = d.toISOString().split("T")[0];
+    });
+  });
+}
 
-  function openContractorParchaModal(contractorName = null, period = null) {
-    try {
-      const contractors = (window.db && typeof window.db.getContractors === "function")
-        ? window.db.getContractors()
-        : [];
+// ====================================================================
+// AUTOMATIC CONTRACTOR PARCHA & BILLING SHEET CONTROLLER
+// ====================================================================
+let activeParchaData = null;
 
-      if (!contractors || contractors.length === 0) {
-        showToast("No contractors registered yet. Add a contractor first.", "info");
-        return;
-      }
+function openContractorParchaModal(contractorName = null, period = null) {
+  try {
+    const contractors = (window.db && typeof window.db.getContractors === "function")
+      ? window.db.getContractors()
+      : [];
 
-      populateParchaDropdowns(contractorName, period);
-
-      // Set today's date
-      const dateInput = document.getElementById("parcha-date-input");
-      if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
-
-      // Reset inputs
-      const adv = document.getElementById("parcha-input-advance");
-      if (adv) adv.value = 0;
-      const ded = document.getElementById("parcha-input-deduction");
-      if (ded) ded.value = 0;
-      const bon = document.getElementById("parcha-input-bonus");
-      if (bon) bon.value = 0;
-      const nts = document.getElementById("parcha-input-notes");
-      if (nts) nts.value = "Payment cleared on inspection.";
-
-      // Open modal FIRST so user sees instant feedback
-      openModal("modal-contractor-parcha");
-
-      try { renderContractorParchaPreview(); } catch (err) { console.error("Parcha preview render error:", err); }
-      try { renderParchaHistoryList(); } catch (err) { console.error("Parcha history render error:", err); }
-    } catch (e) {
-      console.error("openContractorParchaModal error:", e);
-      showToast("Error opening Contractor Parcha: " + (e.message || e), "error");
+    if (!contractors || contractors.length === 0) {
+      showToast("No contractors registered yet. Add a contractor first.", "info");
+      return;
     }
+
+    populateParchaDropdowns(contractorName, period);
+
+    // Set today's date
+    const dateInput = document.getElementById("parcha-date-input");
+    if (dateInput) dateInput.value = new Date().toISOString().split("T")[0];
+
+    // Reset inputs
+    const adv = document.getElementById("parcha-input-advance");
+    if (adv) adv.value = 0;
+    const ded = document.getElementById("parcha-input-deduction");
+    if (ded) ded.value = 0;
+    const bon = document.getElementById("parcha-input-bonus");
+    if (bon) bon.value = 0;
+    const nts = document.getElementById("parcha-input-notes");
+    if (nts) nts.value = "Payment cleared on inspection.";
+
+    // Open modal FIRST so user sees instant feedback
+    openModal("modal-contractor-parcha");
+
+    try { renderContractorParchaPreview(); } catch (err) { console.error("Parcha preview render error:", err); }
+    try { renderParchaHistoryList(); } catch (err) { console.error("Parcha history render error:", err); }
+  } catch (e) {
+    console.error("openContractorParchaModal error:", e);
+    showToast("Error opening Contractor Parcha: " + (e.message || e), "error");
   }
+}
 
-  function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
-    const contSelect = document.getElementById("parcha-select-contractor");
-    if (contSelect) {
-      const contractors = (window.db && typeof window.db.getContractors === "function")
-        ? window.db.getContractors()
-        : [];
-      const distList = (window.db && typeof window.db.getWorkDistribution === "function")
-        ? window.db.getWorkDistribution()
-        : [];
+function populateParchaDropdowns(selectedCont = null, selectedPeriod = null) {
+  const contSelect = document.getElementById("parcha-select-contractor");
+  if (contSelect) {
+    const contractors = (window.db && typeof window.db.getContractors === "function")
+      ? window.db.getContractors()
+      : [];
+    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+      ? window.db.getWorkDistribution()
+      : [];
 
-      const contMap = new Map();
-      contractors.forEach(c => {
-        if (c && c.name && c.name.trim()) {
-          const cleanKey = c.name.trim().toLowerCase();
-          contMap.set(cleanKey, { name: toProperCase(c.name.trim()), phone: c.phone || "" });
+    const contMap = new Map();
+    contractors.forEach(c => {
+      if (c && c.name && c.name.trim()) {
+        const cleanKey = c.name.trim().toLowerCase();
+        contMap.set(cleanKey, { name: toProperCase(c.name.trim()), phone: c.phone || "" });
+      }
+    });
+
+    distList.forEach(w => {
+      if (w && w.contractor_name && w.contractor_name.trim()) {
+        const cleanKey = w.contractor_name.trim().toLowerCase();
+        if (!contMap.has(cleanKey)) {
+          contMap.set(cleanKey, { name: w.contractor_name.trim(), phone: "" });
         }
-      });
+      }
+    });
 
-      distList.forEach(w => {
-        if (w && w.contractor_name && w.contractor_name.trim()) {
-          const cleanKey = w.contractor_name.trim().toLowerCase();
-          if (!contMap.has(cleanKey)) {
-            contMap.set(cleanKey, { name: w.contractor_name.trim(), phone: "" });
-          }
-        }
-      });
-
-      const allConts = Array.from(contMap.values());
-      contSelect.innerHTML = allConts.map(c => `
+    const allConts = Array.from(contMap.values());
+    contSelect.innerHTML = allConts.map(c => `
       <option value="${escapeHtml(c.name)}">${escapeHtml(c.name)} ${c.phone ? `(${escapeHtml(c.phone)})` : ''}</option>
     `).join("");
 
-      if (selectedCont) {
-        const match = allConts.find(c => c.name.toLowerCase() === selectedCont.trim().toLowerCase());
-        if (match) contSelect.value = match.name;
-      } else if (allConts.length > 0) {
-        contSelect.value = allConts[0].name;
-      }
-    }
-
-    const periodSelect = document.getElementById("parcha-select-period");
-    if (periodSelect) {
-      const distPeriods = (window.db && typeof window.db.getDistributionPeriods === "function")
-        ? window.db.getDistributionPeriods()
-        : [];
-      const distList = (window.db && typeof window.db.getWorkDistribution === "function")
-        ? window.db.getWorkDistribution()
-        : [];
-
-      const periodSet = new Set();
-      distPeriods.forEach(p => {
-        if (p && p.period_name && p.period_name.trim()) periodSet.add(p.period_name.trim());
-      });
-      distList.forEach(w => {
-        if (w && w.period && w.period.trim()) periodSet.add(w.period.trim());
-      });
-
-      const uniquePeriods = Array.from(periodSet);
-      let periodOptions = "";
-      uniquePeriods.forEach(p => {
-        periodOptions += `<option value="${escapeHtml(p)}">📅 ${escapeHtml(p)}</option>`;
-      });
-      periodOptions += `<option value="all">⚡ All Production Cycles</option>`;
-      periodSelect.innerHTML = periodOptions;
-
-      const activeP = (typeof getActiveDistributionPeriod === "function")
-        ? getActiveDistributionPeriod()
-        : (uniquePeriods[0] || "all");
-
-      if (selectedPeriod && (selectedPeriod === "all" || uniquePeriods.some(p => p.toLowerCase() === selectedPeriod.toLowerCase()))) {
-        const match = uniquePeriods.find(p => p.toLowerCase() === selectedPeriod.toLowerCase());
-        periodSelect.value = match || selectedPeriod;
-      } else if (uniquePeriods.some(p => p.toLowerCase() === (activeP || "").toLowerCase())) {
-        const match = uniquePeriods.find(p => p.toLowerCase() === activeP.toLowerCase());
-        periodSelect.value = match;
-      } else if (uniquePeriods.length > 0) {
-        periodSelect.value = uniquePeriods[0];
-      } else {
-        periodSelect.value = "all";
-      }
+    if (selectedCont) {
+      const match = allConts.find(c => c.name.toLowerCase() === selectedCont.trim().toLowerCase());
+      if (match) contSelect.value = match.name;
+    } else if (allConts.length > 0) {
+      contSelect.value = allConts[0].name;
     }
   }
 
-  function renderContractorParchaPreview() {
-    const contSelect = document.getElementById("parcha-select-contractor");
-    const periodSelect = document.getElementById("parcha-select-period");
-    const dateInput = document.getElementById("parcha-date-input");
+  const periodSelect = document.getElementById("parcha-select-period");
+  if (periodSelect) {
+    const distPeriods = (window.db && typeof window.db.getDistributionPeriods === "function")
+      ? window.db.getDistributionPeriods()
+      : [];
+    const distList = (window.db && typeof window.db.getWorkDistribution === "function")
+      ? window.db.getWorkDistribution()
+      : [];
 
-    let contractorName = contSelect ? contSelect.value : "";
-    if (!contractorName && contSelect && contSelect.options && contSelect.options.length > 0) {
-      contractorName = contSelect.options[0].value;
-      contSelect.value = contractorName;
+    const periodSet = new Set();
+    distPeriods.forEach(p => {
+      if (p && p.period_name && p.period_name.trim()) periodSet.add(p.period_name.trim());
+    });
+    distList.forEach(w => {
+      if (w && w.period && w.period.trim()) periodSet.add(w.period.trim());
+    });
+
+    const uniquePeriods = Array.from(periodSet);
+    let periodOptions = "";
+    uniquePeriods.forEach(p => {
+      periodOptions += `<option value="${escapeHtml(p)}">📅 ${escapeHtml(p)}</option>`;
+    });
+    periodOptions += `<option value="all">⚡ All Production Cycles</option>`;
+    periodSelect.innerHTML = periodOptions;
+
+    const activeP = (typeof getActiveDistributionPeriod === "function")
+      ? getActiveDistributionPeriod()
+      : (uniquePeriods[0] || "all");
+
+    if (selectedPeriod && (selectedPeriod === "all" || uniquePeriods.some(p => p.toLowerCase() === selectedPeriod.toLowerCase()))) {
+      const match = uniquePeriods.find(p => p.toLowerCase() === selectedPeriod.toLowerCase());
+      periodSelect.value = match || selectedPeriod;
+    } else if (uniquePeriods.some(p => p.toLowerCase() === (activeP || "").toLowerCase())) {
+      const match = uniquePeriods.find(p => p.toLowerCase() === activeP.toLowerCase());
+      periodSelect.value = match;
+    } else if (uniquePeriods.length > 0) {
+      periodSelect.value = uniquePeriods[0];
+    } else {
+      periodSelect.value = "all";
     }
-    const period = periodSelect ? periodSelect.value : "all";
-    const slipDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
+  }
+}
 
-    if (!contractorName) return;
+function renderContractorParchaPreview() {
+  const contSelect = document.getElementById("parcha-select-contractor");
+  const periodSelect = document.getElementById("parcha-select-period");
+  const dateInput = document.getElementById("parcha-date-input");
 
-    const data = (window.db && typeof window.db.generateContractorParchaData === "function")
-      ? window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period)
-      : null;
+  let contractorName = contSelect ? contSelect.value : "";
+  if (!contractorName && contSelect && contSelect.options && contSelect.options.length > 0) {
+    contractorName = contSelect.options[0].value;
+    contSelect.value = contractorName;
+  }
+  const period = periodSelect ? periodSelect.value : "all";
+  const slipDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
 
-    if (!data) return;
-    data.slip_date = slipDate;
+  if (!contractorName) return;
 
-    // Read overrides from inputs
-    const advance = Number(document.getElementById("parcha-input-advance")?.value) || 0;
-    const deduction = Number(document.getElementById("parcha-input-deduction")?.value) || 0;
-    const bonus = Number(document.getElementById("parcha-input-bonus")?.value) || 0;
-    const notes = document.getElementById("parcha-input-notes")?.value || "";
+  const data = (window.db && typeof window.db.generateContractorParchaData === "function")
+    ? window.db.generateContractorParchaData(contractorName, period === "all" ? "" : period)
+    : null;
 
-    data.advance_amount = advance;
-    data.deduction_amount = deduction;
-    data.bonus_amount = bonus;
-    data.net_payable = Math.max(0, (data.gross_amount || 0) - advance - deduction + bonus);
-    data.notes = notes;
+  if (!data) return;
+  data.slip_date = slipDate;
 
-    activeParchaData = data;
+  // Read overrides from inputs
+  const advance = Number(document.getElementById("parcha-input-advance")?.value) || 0;
+  const deduction = Number(document.getElementById("parcha-input-deduction")?.value) || 0;
+  const bonus = Number(document.getElementById("parcha-input-bonus")?.value) || 0;
+  const notes = document.getElementById("parcha-input-notes")?.value || "";
 
-    // Helper for safe DOM text updates
-    const setTxt = (id, txt) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = txt;
-    };
+  data.advance_amount = advance;
+  data.deduction_amount = deduction;
+  data.bonus_amount = bonus;
+  data.net_payable = Math.max(0, (data.gross_amount || 0) - advance - deduction + bonus);
+  data.notes = notes;
 
-    setTxt("parcha-paper-no", data.parcha_no || "PCH-0000");
-    setTxt("parcha-paper-cont-name", data.contractor_name || "—");
-    setTxt("parcha-paper-cont-phone", data.contractor_phone || "Not recorded");
-    setTxt("parcha-paper-date", data.slip_date || slipDate);
-    setTxt("parcha-paper-period", data.period || "All Production Records");
+  activeParchaData = data;
 
-    const tbody = document.getElementById("parcha-paper-tbody");
-    if (tbody) {
-      if (!data.items || data.items.length === 0) {
-        tbody.innerHTML = `
+  // Helper for safe DOM text updates
+  const setTxt = (id, txt) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = txt;
+  };
+
+  setTxt("parcha-paper-no", data.parcha_no || "PCH-0000");
+  setTxt("parcha-paper-cont-name", data.contractor_name || "—");
+  setTxt("parcha-paper-cont-phone", data.contractor_phone || "Not recorded");
+  setTxt("parcha-paper-date", data.slip_date || slipDate);
+  setTxt("parcha-paper-period", data.period || "All Production Records");
+
+  const tbody = document.getElementById("parcha-paper-tbody");
+  if (tbody) {
+    if (!data.items || data.items.length === 0) {
+      tbody.innerHTML = `
         <tr>
           <td colspan="6" style="text-align: center; padding: 2rem; color: #64748b;">
             No dispatched or finished pieces found for <strong>${escapeHtml(data.contractor_name)}</strong> in this period.
           </td>
         </tr>
       `;
-      } else {
-        tbody.innerHTML = data.items.map(item => `
+    } else {
+      tbody.innerHTML = data.items.map(item => `
         <tr>
           <td style="text-align: center; font-family: var(--font-mono); font-weight: 700; color: #64748b;">${item.sr}</td>
           <td><strong style="color: #0f172a; font-family: var(--font-mono);">${escapeHtml(item.style_code)}</strong></td>
@@ -12992,164 +13088,164 @@ function saveActivePrintPreset() {
           <td style="text-align: right; font-weight: 800; font-family: var(--font-mono); color: #0f172a;">Rs. ${(item.total_amount || 0).toLocaleString()}</td>
         </tr>
       `).join("");
-      }
     }
-
-    setTxt("parcha-paper-total-pcs", (data.total_pieces || 0).toLocaleString());
-    setTxt("parcha-paper-gross-total", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
-
-    setTxt("parcha-paper-calc-gross", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
-    setTxt("parcha-paper-calc-advance", `- Rs. ${advance.toLocaleString()}`);
-    setTxt("parcha-paper-calc-deduction", `- Rs. ${deduction.toLocaleString()}`);
-    setTxt("parcha-paper-calc-bonus", `+ Rs. ${bonus.toLocaleString()}`);
-    setTxt("parcha-paper-net-payable", `Rs. ${(data.net_payable || 0).toLocaleString()}`);
-
-    setTxt("parcha-paper-words", numberToWordsUrduEnglish(data.net_payable || 0));
-    setTxt("parcha-paper-notes-text", `Notes: ${data.notes || "None"}`);
   }
 
-  function numberToWordsUrduEnglish(amount) {
-    const num = Math.round(Number(amount)) || 0;
-    if (num === 0) return "Rupees Zero Only";
+  setTxt("parcha-paper-total-pcs", (data.total_pieces || 0).toLocaleString());
+  setTxt("parcha-paper-gross-total", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
 
-    const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-    const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  setTxt("parcha-paper-calc-gross", `Rs. ${(data.gross_amount || 0).toLocaleString()}`);
+  setTxt("parcha-paper-calc-advance", `- Rs. ${advance.toLocaleString()}`);
+  setTxt("parcha-paper-calc-deduction", `- Rs. ${deduction.toLocaleString()}`);
+  setTxt("parcha-paper-calc-bonus", `+ Rs. ${bonus.toLocaleString()}`);
+  setTxt("parcha-paper-net-payable", `Rs. ${(data.net_payable || 0).toLocaleString()}`);
 
-    function convertChunk(n) {
-      let str = "";
-      if (n >= 100) {
-        str += ones[Math.floor(n / 100)] + " Hundred ";
-        n %= 100;
-      }
-      if (n >= 20) {
-        str += tens[Math.floor(n / 10)] + " ";
-        n %= 10;
-      }
-      if (n > 0) {
-        str += ones[n] + " ";
-      }
-      return str.trim();
-    }
+  setTxt("parcha-paper-words", numberToWordsUrduEnglish(data.net_payable || 0));
+  setTxt("parcha-paper-notes-text", `Notes: ${data.notes || "None"}`);
+}
 
-    let words = "";
-    if (num >= 10000000) {
-      const crore = Math.floor(num / 10000000);
-      words += convertChunk(crore) + " Crore ";
-      num %= 10000000;
-    }
-    if (num >= 100000) {
-      const lakh = Math.floor(num / 100000);
-      words += convertChunk(lakh) + " Lakh ";
-      num %= 100000;
-    }
-    if (num >= 1000) {
-      const thousand = Math.floor(num / 1000);
-      words += convertChunk(thousand) + " Thousand ";
-      num %= 1000;
-    }
-    if (num > 0) {
-      words += convertChunk(num);
-    }
+function numberToWordsUrduEnglish(amount) {
+  const num = Math.round(Number(amount)) || 0;
+  if (num === 0) return "Rupees Zero Only";
 
-    return `Rupees ${words.trim()} Only`;
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function convertChunk(n) {
+    let str = "";
+    if (n >= 100) {
+      str += ones[Math.floor(n / 100)] + " Hundred ";
+      n %= 100;
+    }
+    if (n >= 20) {
+      str += tens[Math.floor(n / 10)] + " ";
+      n %= 10;
+    }
+    if (n > 0) {
+      str += ones[n] + " ";
+    }
+    return str.trim();
   }
 
-  function printContractorParcha() {
-    if (!activeParchaData) {
-      showToast("No active parcha to print", "error");
-      return;
-    }
+  let words = "";
+  if (num >= 10000000) {
+    const crore = Math.floor(num / 10000000);
+    words += convertChunk(crore) + " Crore ";
+    num %= 10000000;
+  }
+  if (num >= 100000) {
+    const lakh = Math.floor(num / 100000);
+    words += convertChunk(lakh) + " Lakh ";
+    num %= 100000;
+  }
+  if (num >= 1000) {
+    const thousand = Math.floor(num / 1000);
+    words += convertChunk(thousand) + " Thousand ";
+    num %= 1000;
+  }
+  if (num > 0) {
+    words += convertChunk(num);
+  }
 
-    const paperElement = document.getElementById("contractor-parcha-paper");
-    const printRoot = document.getElementById("printable-contractor-parcha-root");
-    if (!paperElement || !printRoot) return;
+  return `Rupees ${words.trim()} Only`;
+}
 
-    printRoot.innerHTML = paperElement.outerHTML;
-    document.body.classList.add("is-printing-parcha");
+function printContractorParcha() {
+  if (!activeParchaData) {
+    showToast("No active parcha to print", "error");
+    return;
+  }
 
+  const paperElement = document.getElementById("contractor-parcha-paper");
+  const printRoot = document.getElementById("printable-contractor-parcha-root");
+  if (!paperElement || !printRoot) return;
+
+  printRoot.innerHTML = paperElement.outerHTML;
+  document.body.classList.add("is-printing-parcha");
+
+  setTimeout(() => {
+    window.print();
     setTimeout(() => {
-      window.print();
-      setTimeout(() => {
-        document.body.classList.remove("is-printing-parcha");
-        printRoot.innerHTML = "";
-      }, 1000);
-    }, 100);
+      document.body.classList.remove("is-printing-parcha");
+      printRoot.innerHTML = "";
+    }, 1000);
+  }, 100);
+}
+
+function sendContractorParchaWhatsApp() {
+  if (!activeParchaData) {
+    showToast("No parcha data available", "error");
+    return;
   }
 
-  function sendContractorParchaWhatsApp() {
-    if (!activeParchaData) {
-      showToast("No parcha data available", "error");
-      return;
-    }
-
-    const d = activeParchaData;
-    let cleanPhone = (d.contractor_phone || "").replace(/[^0-9]/g, "");
-    if (cleanPhone.startsWith("0")) {
-      cleanPhone = "92" + cleanPhone.substring(1);
-    }
-
-    let itemsSummary = "";
-    d.items.forEach(i => {
-      itemsSummary += `• ${i.style_code} (${i.category}): ${i.pieces.toLocaleString()} pcs @ Rs. ${i.rate} = Rs. ${i.total_amount.toLocaleString()}\n`;
-    });
-
-    const msg = `*CRAFTFLOW - CONTRACTOR PAYMENT PARCHA*\n` +
-      `*Parcha No:* ${d.parcha_no}\n` +
-      `*Date:* ${d.slip_date}\n` +
-      `*Contractor:* ${d.contractor_name}\n` +
-      `*Cycle:* ${d.period}\n` +
-      `---------------------------------------\n` +
-      `*WORK BREAKDOWN:*\n` +
-      itemsSummary +
-      `---------------------------------------\n` +
-      `*Total Finished Pieces:* ${d.total_pieces.toLocaleString()} pcs\n` +
-      `*Gross Amount:* Rs. ${d.gross_amount.toLocaleString()}\n` +
-      (d.advance_amount > 0 ? `*Advance (Peshgi):* - Rs. ${d.advance_amount.toLocaleString()}\n` : ``) +
-      (d.deduction_amount > 0 ? `*Alter / Kaat:* - Rs. ${d.deduction_amount.toLocaleString()}\n` : ``) +
-      (d.bonus_amount > 0 ? `*Bonus / Extra:* + Rs. ${d.bonus_amount.toLocaleString()}\n` : ``) +
-      `*NET PAYABLE (SAAF RAQAM): Rs. ${d.net_payable.toLocaleString()}*\n` +
-      `*In Words:* ${numberToWordsUrduEnglish(d.net_payable)}\n` +
-      `---------------------------------------\n` +
-      `*Hand Embroidery Department*`;
-
-    const encoded = encodeURIComponent(msg);
-    const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
-    window.open(url, "_blank");
+  const d = activeParchaData;
+  let cleanPhone = (d.contractor_phone || "").replace(/[^0-9]/g, "");
+  if (cleanPhone.startsWith("0")) {
+    cleanPhone = "92" + cleanPhone.substring(1);
   }
 
-  function saveContractorParchaAction() {
-    if (!activeParchaData) {
-      showToast("No parcha data to save", "error");
-      return;
-    }
+  let itemsSummary = "";
+  d.items.forEach(i => {
+    itemsSummary += `• ${i.style_code} (${i.category}): ${i.pieces.toLocaleString()} pcs @ Rs. ${i.rate} = Rs. ${i.total_amount.toLocaleString()}\n`;
+  });
 
-    const saved = window.db.saveContractorParcha(activeParchaData);
-    if (saved) {
-      showToast(`Parcha #${saved.parcha_no} saved successfully in history!`, "success");
-      renderParchaHistoryList();
-    }
+  const msg = `*CRAFTFLOW - CONTRACTOR PAYMENT PARCHA*\n` +
+    `*Parcha No:* ${d.parcha_no}\n` +
+    `*Date:* ${d.slip_date}\n` +
+    `*Contractor:* ${d.contractor_name}\n` +
+    `*Cycle:* ${d.period}\n` +
+    `---------------------------------------\n` +
+    `*WORK BREAKDOWN:*\n` +
+    itemsSummary +
+    `---------------------------------------\n` +
+    `*Total Finished Pieces:* ${d.total_pieces.toLocaleString()} pcs\n` +
+    `*Gross Amount:* Rs. ${d.gross_amount.toLocaleString()}\n` +
+    (d.advance_amount > 0 ? `*Advance (Peshgi):* - Rs. ${d.advance_amount.toLocaleString()}\n` : ``) +
+    (d.deduction_amount > 0 ? `*Alter / Kaat:* - Rs. ${d.deduction_amount.toLocaleString()}\n` : ``) +
+    (d.bonus_amount > 0 ? `*Bonus / Extra:* + Rs. ${d.bonus_amount.toLocaleString()}\n` : ``) +
+    `*NET PAYABLE (SAAF RAQAM): Rs. ${d.net_payable.toLocaleString()}*\n` +
+    `*In Words:* ${numberToWordsUrduEnglish(d.net_payable)}\n` +
+    `---------------------------------------\n` +
+    `*Hand Embroidery Department*`;
+
+  const encoded = encodeURIComponent(msg);
+  const url = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encoded}` : `https://wa.me/?text=${encoded}`;
+  window.open(url, "_blank");
+}
+
+function saveContractorParchaAction() {
+  if (!activeParchaData) {
+    showToast("No parcha data to save", "error");
+    return;
   }
 
-  function toggleParchaHistoryPanel() {
-    const panel = document.getElementById("parcha-history-panel");
-    if (!panel) return;
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  const saved = window.db.saveContractorParcha(activeParchaData);
+  if (saved) {
+    showToast(`Parcha #${saved.parcha_no} saved successfully in history!`, "success");
+    renderParchaHistoryList();
+  }
+}
+
+function toggleParchaHistoryPanel() {
+  const panel = document.getElementById("parcha-history-panel");
+  if (!panel) return;
+  panel.style.display = panel.style.display === "none" ? "block" : "none";
+}
+
+function renderParchaHistoryList() {
+  const container = document.getElementById("parcha-history-list");
+  const countBadge = document.getElementById("parcha-history-count");
+  if (!container) return;
+
+  const list = window.db.getContractorParchas();
+  if (countBadge) countBadge.textContent = `${list.length} Saved`;
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem;">No saved parchay yet.</div>`;
+    return;
   }
 
-  function renderParchaHistoryList() {
-    const container = document.getElementById("parcha-history-list");
-    const countBadge = document.getElementById("parcha-history-count");
-    if (!container) return;
-
-    const list = window.db.getContractorParchas();
-    if (countBadge) countBadge.textContent = `${list.length} Saved`;
-
-    if (list.length === 0) {
-      container.innerHTML = `<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 0.5rem;">No saved parchay yet.</div>`;
-      return;
-    }
-
-    container.innerHTML = list.slice(0, 10).map(p => `
+  container.innerHTML = list.slice(0, 10).map(p => `
     <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.4rem 0.6rem; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 4px; font-size: 0.75rem;">
       <div>
         <strong style="color: var(--primary); font-family: var(--font-mono);">${escapeHtml(p.parcha_no)}</strong>
@@ -13163,1179 +13259,1247 @@ function saveActivePrintPreset() {
       </div>
     </div>
   `).join("");
-  }
+}
 
-  function loadParchaFromHistory(id) {
-    const p = window.db.getContractorParchaById(id);
-    if (!p) return;
+function loadParchaFromHistory(id) {
+  const p = window.db.getContractorParchaById(id);
+  if (!p) return;
 
-    activeParchaData = p;
+  activeParchaData = p;
 
-    const contSelect = document.getElementById("parcha-select-contractor");
-    if (contSelect) contSelect.value = p.contractor_name;
+  const contSelect = document.getElementById("parcha-select-contractor");
+  if (contSelect) contSelect.value = p.contractor_name;
 
-    const dateInput = document.getElementById("parcha-date-input");
-    if (dateInput) dateInput.value = p.slip_date;
+  const dateInput = document.getElementById("parcha-date-input");
+  if (dateInput) dateInput.value = p.slip_date;
 
-    document.getElementById("parcha-input-advance").value = p.advance_amount || 0;
-    document.getElementById("parcha-input-deduction").value = p.deduction_amount || 0;
-    document.getElementById("parcha-input-bonus").value = p.bonus_amount || 0;
-    document.getElementById("parcha-input-notes").value = p.notes || "";
+  document.getElementById("parcha-input-advance").value = p.advance_amount || 0;
+  document.getElementById("parcha-input-deduction").value = p.deduction_amount || 0;
+  document.getElementById("parcha-input-bonus").value = p.bonus_amount || 0;
+  document.getElementById("parcha-input-notes").value = p.notes || "";
 
-    renderContractorParchaPreview();
-    showToast(`Loaded Parcha #${p.parcha_no}`, "info");
-  }
+  renderContractorParchaPreview();
+  showToast(`Loaded Parcha #${p.parcha_no}`, "info");
+}
 
-  function deleteParchaHistoryItem(id) {
-    window.db.deleteContractorParcha(id);
-    renderParchaHistoryList();
-    showToast("Parcha deleted from history", "info");
-  }
+function deleteParchaHistoryItem(id) {
+  window.db.deleteContractorParcha(id);
+  renderParchaHistoryList();
+  showToast("Parcha deleted from history", "info");
+}
 
-  function initParchaEventListeners() {
-    document.getElementById("btn-open-contractor-parcha")?.addEventListener("click", () => openContractorParchaModal());
-    document.getElementById("btn-open-parcha-from-payment")?.addEventListener("click", () => openContractorParchaModal());
+function initParchaEventListeners() {
+  document.getElementById("btn-open-contractor-parcha")?.addEventListener("click", () => openContractorParchaModal());
+  document.getElementById("btn-open-parcha-from-payment")?.addEventListener("click", () => openContractorParchaModal());
 
-    document.getElementById("btn-parcha-refresh")?.addEventListener("click", renderContractorParchaPreview);
-    document.getElementById("btn-toggle-parcha-history")?.addEventListener("click", toggleParchaHistoryPanel);
+  document.getElementById("btn-parcha-refresh")?.addEventListener("click", renderContractorParchaPreview);
+  document.getElementById("btn-toggle-parcha-history")?.addEventListener("click", toggleParchaHistoryPanel);
 
-    document.getElementById("parcha-select-contractor")?.addEventListener("change", renderContractorParchaPreview);
-    document.getElementById("parcha-select-period")?.addEventListener("change", renderContractorParchaPreview);
-    document.getElementById("parcha-date-input")?.addEventListener("change", renderContractorParchaPreview);
+  document.getElementById("parcha-select-contractor")?.addEventListener("change", renderContractorParchaPreview);
+  document.getElementById("parcha-select-period")?.addEventListener("change", renderContractorParchaPreview);
+  document.getElementById("parcha-date-input")?.addEventListener("change", renderContractorParchaPreview);
 
-    ["parcha-input-advance", "parcha-input-deduction", "parcha-input-bonus", "parcha-input-notes"].forEach(id => {
-      document.getElementById(id)?.addEventListener("input", renderContractorParchaPreview);
-    });
+  ["parcha-input-advance", "parcha-input-deduction", "parcha-input-bonus", "parcha-input-notes"].forEach(id => {
+    document.getElementById(id)?.addEventListener("input", renderContractorParchaPreview);
+  });
 
-    document.getElementById("btn-print-parcha")?.addEventListener("click", printContractorParcha);
-    document.getElementById("btn-whatsapp-parcha")?.addEventListener("click", sendContractorParchaWhatsApp);
-    document.getElementById("btn-save-parcha")?.addEventListener("click", saveContractorParchaAction);
+  document.getElementById("btn-print-parcha")?.addEventListener("click", printContractorParcha);
+  document.getElementById("btn-whatsapp-parcha")?.addEventListener("click", sendContractorParchaWhatsApp);
+  document.getElementById("btn-save-parcha")?.addEventListener("click", saveContractorParchaAction);
 
-    initDeadlineModalEvents();
+  initDeadlineModalEvents();
 
-    // Filter deadline listener in Master Inventory
-    document.getElementById("filter-master-deadline")?.addEventListener("change", () => {
-      if (typeof renderMasterInventory === "function") renderMasterInventory();
-    });
-  }
+  // Filter deadline listener in Master Inventory
+  document.getElementById("filter-master-deadline")?.addEventListener("change", () => {
+    if (typeof renderMasterInventory === "function") renderMasterInventory();
+  });
+}
 
-  // Global window exposure for reliable HTML inline onclick access
-  window.openContractorParchaModal = openContractorParchaModal;
-  window.openUpdateDeadlineModal = openUpdateDeadlineModal;
-  window.renderContractorParchaPreview = renderContractorParchaPreview;
-  window.toggleParchaHistoryPanel = toggleParchaHistoryPanel;
-  window.saveContractorParchaAction = saveContractorParchaAction;
-  window.printContractorParcha = printContractorParcha;
-  window.sendContractorParchaWhatsApp = sendContractorParchaWhatsApp;
+// Global window exposure for reliable HTML inline onclick access
+window.openContractorParchaModal = openContractorParchaModal;
+window.openUpdateDeadlineModal = openUpdateDeadlineModal;
+window.renderContractorParchaPreview = renderContractorParchaPreview;
+window.toggleParchaHistoryPanel = toggleParchaHistoryPanel;
+window.saveContractorParchaAction = saveContractorParchaAction;
+window.printContractorParcha = printContractorParcha;
+window.sendContractorParchaWhatsApp = sendContractorParchaWhatsApp;
 
-  // ====================================================================
-  // WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
-  // 2x Retina Canvas Engine • Custom Column Picker • LocalStorage Persistence
-  // Direct Clipboard Copy (Ctrl+V into WhatsApp) • Contractor Tailored Sharing
-  // ====================================================================
+// ====================================================================
+// WHATSAPP TABLE IMAGE EXPORTER & CUSTOM COLUMN CONTROLLER
+// 2x Retina Canvas Engine • Custom Column Picker • LocalStorage Persistence
+// Direct Clipboard Copy (Ctrl+V into WhatsApp) • Contractor Tailored Sharing
+// ====================================================================
 
-  let currentWhatsAppSheet = "daily";
-  let currentWhatsAppContractor = "all";
-  let whatsappControllerInitialized = false;
+let currentWhatsAppSheet = "daily";
+let currentWhatsAppContractor = "all";
+let whatsappControllerInitialized = false;
 
-  const WHATSAPP_SHEET_DEFS = {
-    daily: {
-      id: "daily",
-      title: "DAILY RUNNING STYLE STATUS SHEET",
-      subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
-      getDatePeriod() {
-        const el = document.getElementById("daily-sheet-date");
-        if (el && el.value) {
-          const parts = el.value.split("-");
-          if (parts.length === 3) {
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-            const m = months[parseInt(parts[1], 10) - 1] || parts[1];
-            return `${parts[2]}-${m}-${parts[0]}`;
-          }
-          return el.value;
+const WHATSAPP_SHEET_DEFS = {
+  daily: {
+    id: "daily",
+    title: "DAILY RUNNING STYLE STATUS SHEET",
+    subtitle: "Daily Inward / Outward Embroidery Floor Tracking",
+    getDatePeriod() {
+      const el = document.getElementById("daily-sheet-date");
+      if (el && el.value) {
+        const parts = el.value.split("-");
+        if (parts.length === 3) {
+          const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+          const m = months[parseInt(parts[1], 10) - 1] || parts[1];
+          return `${parts[2]}-${m}-${parts[0]}`;
         }
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
-        const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-        const set = new Set();
-        finalStyles.forEach(item => {
-          const match = master.find(m =>
-            (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
-            (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
-          );
-          const name = (match ? match.contractor_name : item.contractor_name) || "";
-          if (name && name.trim() && name !== "-") set.add(name.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
-        const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-
-        let rows = finalStyles.map((item, idx) => {
-          const match = master.find(m =>
-            (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
-            (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
-          );
-          const cont = (match ? match.contractor_name : item.contractor_name) || "-";
-          const cut = match ? (Number(match.cut_qty) || 0) : 0;
-          const rec = match ? (Number(match.received_qty) || 0) : 0;
-          const stock = match ? (Number(match.balance_from_stock) || 0) : 0;
-          const dis = match ? (Number(match.dispatch_from_hemb) || 0) : (Number(item.dispatch_from_hemb) || 0);
-          const hemb = match ? (Number(match.balance_from_hemb) || 0) : 0;
-
-          return {
-            sr_no: idx + 1,
-            style_code: item.style_code || "",
-            category: item.category || "SHIRT",
-            contractor: cont,
-            cut_qty: cut,
-            received_qty: rec,
-            balance_stock: stock,
-            dispatch_hemb: dis,
-            balance_hemb: hemb,
-            remarks: item.remarks || (match ? match.remarks || "" : "")
-          };
-        });
-
-        const filterParts = [];
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          rows = rows.filter(r => (r.contractor || "").toLowerCase() === contractorFilter.toLowerCase());
-          rows.forEach((r, i) => { r.sr_no = i + 1; });
-        }
-
-        const totals = {
-          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-          received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
-          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-          dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
-          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
-        };
-
-        return { rows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "S NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-        { id: "contractor", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor },
-        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
-        { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
-        { id: "dispatch_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_hemb },
-        { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
-        { id: "remarks", label: "REMARKS / STATUS", default: true, align: "left", width: 180, get: (r) => r.remarks || "-" }
-      ]
+        return el.value;
+      }
+      return new Date().toLocaleDateString("en-GB");
     },
-
-    distribution: {
-      id: "distribution",
-      title: "WORK DISTRIBUTION SHEET",
-      subtitle: "Bi-Monthly Contractor Garment Allocation",
-      getDatePeriod() {
-        if (typeof getActiveDistributionPeriod === "function") {
-          const p = getActiveDistributionPeriod();
-          if (p && p !== "all") return p;
-        }
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
-        const set = new Set();
-        list.forEach(i => {
-          const name = i.contractor_name || "";
-          if (name && name.trim() && name !== "-") set.add(name.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        let list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-
-        const query = syncWithPage ? (document.getElementById("search-dist-input")?.value || "").toLowerCase().trim() : "";
-        const contFilterVal = syncWithPage ? (document.getElementById("filter-dist-contractor")?.value || "").toLowerCase().trim() : "";
-        const floorFilterVal = syncWithPage ? (document.getElementById("filter-dist-floor")?.value || "").toLowerCase().trim() : "";
-        const itemFilterVal = syncWithPage ? (document.getElementById("filter-dist-item")?.value || "").toLowerCase().trim() : "";
-
-        const filterParts = [];
-        if (query) filterParts.push(`Search: "${query}"`);
-        if (contFilterVal) filterParts.push(`Cont: ${contFilterVal}`);
-        if (floorFilterVal) filterParts.push(`Floor: ${floorFilterVal}`);
-        if (itemFilterVal) filterParts.push(`Item: ${itemFilterVal}`);
-
-        if (!query && typeof getActiveDistributionPeriod === "function") {
-          const activePeriod = getActiveDistributionPeriod();
-          if (activePeriod && activePeriod !== "all") {
-            list = list.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
-          }
-        }
-
-        if (syncWithPage && (query || contFilterVal || floorFilterVal || itemFilterVal)) {
-          list = list.filter(item => {
-            const qMatch = !query ||
-              (item.style_code || "").toLowerCase().includes(query) ||
-              (item.contractor_name || "").toLowerCase().includes(query) ||
-              (item.item || "").toLowerCase().includes(query) ||
-              (item.floor || "").toLowerCase().includes(query) ||
-              (item.period || "").toLowerCase().includes(query) ||
-              (item.remarks || "").toLowerCase().includes(query);
-
-            let cMatch = true;
-            if (contFilterVal) {
-              if (contFilterVal === "joint") cMatch = (item.contractor_name || "").includes("/");
-              else cMatch = (item.contractor_name || "").toLowerCase().includes(contFilterVal);
-            }
-            const fMatch = !floorFilterVal || (item.floor || "").toLowerCase() === floorFilterVal;
-            const iMatch = !itemFilterVal || (item.item || "").toLowerCase() === itemFilterVal;
-            return qMatch && cMatch && fMatch && iMatch;
-          });
-        }
-
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-        }
-
-        const rows = list.map((item, idx) => {
-          const qty = parseInt(item.pcs_qty, 10) || 0;
-          const rate = parseFloat(item.rate) || 0;
-          const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
-            ? Number(item.total_amount)
-            : (qty * rate);
-
-          return {
-            sr_no: item.sr_no || (idx + 1),
-            style_code: item.style_code || "",
-            contractor_name: item.contractor_name || "-",
-            pcs_qty: qty,
-            rate: rate > 0 ? rate : "-",
-            item: item.item || "SHIRT",
-            floor: item.floor || "-",
-            total: total > 0 ? Math.round(total) : 0,
-            period: item.period || "-",
-            remarks: item.remarks || "-"
-          };
-        });
-
-        const totals = {
-          pcs_qty: rows.reduce((s, r) => s + (Number(r.pcs_qty) || 0), 0),
-          total: rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
-        };
-
-        return { rows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-        { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-        { id: "pcs_qty", label: "PCS QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.pcs_qty },
-        { id: "rate", label: "RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
-        { id: "item", label: "ITEM / CAT", default: true, align: "center", width: 95, get: (r) => r.item },
-        { id: "floor", label: "FLOOR", default: true, align: "center", width: 85, get: (r) => r.floor },
-        { id: "total", label: "TOTAL (PKR)", default: true, align: "right", width: 110, isNumeric: true, get: (r) => r.total },
-        { id: "period", label: "TIME PERIOD", default: true, align: "center", width: 125, get: (r) => r.period },
-        { id: "remarks", label: "REMARKS", default: false, align: "left", width: 140, get: (r) => r.remarks }
-      ]
+    getContractors() {
+      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const set = new Set();
+      finalStyles.forEach(item => {
+        const match = master.find(m =>
+          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+        );
+        const name = (match ? match.contractor_name : item.contractor_name) || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
     },
+    getData(contractorFilter = "all") {
+      const finalStyles = (window.db && window.db.getFinalStyles) ? window.db.getFinalStyles() : [];
+      const master = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
 
-    payment: {
-      id: "payment",
-      title: "RATE APPROVAL & PAYMENT RECONCILIATION SHEET",
-      subtitle: "Bi-Monthly Contractor Production & Payment Audit",
-      getDatePeriod() {
-        const p = (document.getElementById("filter-payment-period")?.value || "").trim();
-        if (p && p !== "all") return p;
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
-        const set = new Set();
-        list.forEach(i => {
-          const name = i.contractor_name || "";
-          if (name && name.trim() && name !== "-") set.add(name.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        let list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      let rows = finalStyles.map((item, idx) => {
+        const match = master.find(m =>
+          (m.style_code || "").toLowerCase() === (item.style_code || "").toLowerCase() &&
+          (m.category || "").toLowerCase() === (item.category || "").toLowerCase()
+        );
+        const cont = (match ? match.contractor_name : item.contractor_name) || "-";
+        const cut = match ? (Number(match.cut_qty) || 0) : 0;
+        const rec = match ? (Number(match.received_qty) || 0) : 0;
+        const stock = match ? (Number(match.balance_from_stock) || 0) : 0;
+        const dis = match ? (Number(match.dispatch_from_hemb) || 0) : (Number(item.dispatch_from_hemb) || 0);
+        const hemb = match ? (Number(match.balance_from_hemb) || 0) : 0;
 
-        const query = syncWithPage ? (document.getElementById("payment-search-input")?.value || "").toLowerCase().trim() : "";
-        const channelFilter = syncWithPage ? (document.getElementById("filter-payment-channel")?.value || "") : "";
-        const statusFilter = syncWithPage ? (document.getElementById("filter-payment-status")?.value || "") : "";
-        const contractorPageFilter = syncWithPage ? (document.getElementById("filter-payment-contractor")?.value || "").toLowerCase().trim() : "";
-        const periodFilter = (typeof getActiveRateApprovalPeriod === "function" ? getActiveRateApprovalPeriod() : (document.getElementById("filter-payment-period")?.value || "")).trim();
-
-        const filterParts = [];
-        if (query) filterParts.push(`Search: "${query}"`);
-        if (channelFilter) filterParts.push(`Channel: ${channelFilter}`);
-        if (statusFilter) filterParts.push(`Status: ${statusFilter}`);
-        if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
-
-        if (!query && periodFilter && periodFilter !== "all") {
-          list = list.filter(item => {
-            const itemPeriod = (item.period || "").trim().toLowerCase();
-            const activePeriod = periodFilter.trim().toLowerCase();
-            if (itemPeriod === activePeriod) return true;
-            const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-            const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
-            if (itemStart && activeStart && itemStart === activeStart) return true;
-            return false;
-          });
-        }
-
-        if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
-          list = list.filter(item => {
-            const qMatch = !query ||
-              (item.style_code || "").toLowerCase().includes(query) ||
-              (item.contractor_name || "").toLowerCase().includes(query) ||
-              (item.working || item.category || "").toLowerCase().includes(query) ||
-              (item.remarks_1 || item.remarks || "").toLowerCase().includes(query) ||
-              (item.remarks_2 || item.status_remarks || "").toLowerCase().includes(query) ||
-              (item.target_floor || "").toLowerCase().includes(query) ||
-              (item.period || "").toLowerCase().includes(query);
-
-            const cMatch = !channelFilter || item.payment_channel === channelFilter;
-
-            let sMatch = true;
-            const rem2 = (item.remarks_2 || item.status_remarks || item.status || "").toLowerCase();
-            const totBal = item.total_balance != null ? item.total_balance : 0;
-            if (statusFilter === "close") sMatch = rem2.includes("close") || totBal === 0;
-            else if (statusFilter === "deduction") sMatch = rem2.includes("deduction");
-            else if (statusFilter === "balance") sMatch = totBal > 0;
-
-            const contMatch = !contractorPageFilter || (item.contractor_name || "").toLowerCase() === contractorPageFilter;
-
-            return qMatch && cMatch && sMatch && contMatch;
-          });
-        }
-
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-        }
-
-        const rows = list.map((item, idx) => {
-          const rawCut = Number(item.cut_qty || item.total_pcs || 0);
-          const deduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
-          const baseProd = (item.base_prod_pcs != null)
-            ? Number(item.base_prod_pcs)
-            : ((Number(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs) || 0) + (deduction > 0 && item.base_prod_pcs == null ? deduction : 0));
-          const netProd = Math.max(0, baseProd - deduction);
-
-          return {
-            sr_no: idx + 1,
-            style_code: item.style_code || "",
-            working: item.working || item.category || "SHIRT",
-            contractor_name: item.contractor_name || "-",
-            rate: Number(item.rate_per_pc || item.rate) || 0,
-            cut_qty: rawCut,
-            deduction_pcs: deduction,
-            prod_pcs_qty: netProd,
-            carigar_rate: Number(item.carigar_rate) || 0,
-            commission: Number(item.commission) || 0,
-            rate_total: Number(item.rate_total) || 0,
-            remarks: item.remarks_1 || item.remarks || "-",
-            balance_stock: Number(item.balance_from_stock != null ? item.balance_from_stock : item.balance_stock) || 0,
-            balance_hemb: Number(item.balance_from_hemb != null ? item.balance_from_hemb : item.balance_hemb) || 0,
-            total_balance: Number(item.total_balance != null ? item.total_balance : item.balance_pcs) || 0,
-            period: item.period || "-"
-          };
-        });
-
-        const totals = {
-          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-          deduction_pcs: rows.reduce((s, r) => s + (Number(r.deduction_pcs) || 0), 0),
-          prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
-          rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
-          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0),
-          total_balance: rows.reduce((s, r) => s + (Number(r.total_balance) || 0), 0)
-        };
-
-        return { rows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "S.NO", default: true, align: "center", width: 50, get: (r) => r.sr_no },
-        { id: "style_code", label: "STYLE NAME", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-        { id: "working", label: "WORKING", default: true, align: "center", width: 85, get: (r) => r.working },
-        { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
-        { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
-        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
-        { id: "deduction_pcs", label: "KAAT", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.deduction_pcs },
-        { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
-        { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
-        { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },
-        { id: "rate_total", label: "TOTAL (PKR)", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.rate_total },
-        { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
-        { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
-        { id: "total_balance", label: "TOTAL BAL", default: true, align: "right", width: 90, isNumeric: true, isBalance: true, get: (r) => r.total_balance },
-        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 120, get: (r) => r.remarks },
-        { id: "period", label: "TIME PERIOD", default: false, align: "center", width: 115, get: (r) => r.period }
-      ]
-    },
-
-    receiving: {
-      id: "receiving",
-      title: "INWARD RECEIVING CHALLAN LOG",
-      subtitle: "Incoming Fabric & Garment Challans from Cutting / Stock",
-      getDatePeriod() {
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
-        const set = new Set();
-        list.forEach(i => {
-          const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
-            ? i.contractor_name.trim()
-            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
-          if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        let list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
-
-        // Sort latest first (descending by SR or ID, matching the UI table)
-        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
-
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-        const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
-        const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
-        const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
-        const dateFromVal = syncWithPage ? (document.getElementById("filter-rec-date-from")?.value || "") : "";
-        const dateToVal = syncWithPage ? (document.getElementById("filter-rec-date-to")?.value || "") : "";
-
-        const filterParts = [];
-        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-        if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
-        if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
-        if (dateFromVal) {
-          filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
-        }
-
-        if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
-          list = list.filter(item => {
-            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-            const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
-            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-            const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-            const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
-            const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
-
-            const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
-            const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
-            const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
-
-            return queryPassed && catPassed && contPassed && datePassed;
-          });
-        }
-
-        const rows = list.map((item, idx) => {
-          const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
-            ? item.contractor_name.trim()
-            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
-
-          return {
-            sr_no: item.sr_no || item.id || (idx + 1),
-            date_receive: item.date_receive || item.date_received || "-",
-            challan_rec: item.challan_rec || item.challan_no || "-",
-            style_code: item.style_code || "",
-            category: item.category || "SHIRT",
-            contractor_name: cont,
-            cut_qty: Number(item.cut_qty != null ? item.cut_qty : item.cut_order_qty) || 0,
-            received_qty: Number(item.received_qty) || 0,
-            remarks: item.remarks || "-"
-          };
-        });
-
-        let filteredRows = rows;
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-        }
-
-        const totals = {
-          cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-          received_qty: filteredRows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0)
-        };
-
-        return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "date_receive", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_receive },
-        { id: "challan_rec", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_rec },
-        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-        { id: "cut_qty", label: "CUT ORDER", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.cut_qty },
-        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.received_qty },
-        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 140, get: (r) => r.remarks }
-      ]
-    },
-
-    dispatch: {
-      id: "dispatch",
-      title: "OUTWARD DISPATCH CHALLAN LOG",
-      subtitle: "Finished Hand Embroidery Dispatched to Unit / Finishing",
-      getDatePeriod() {
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
-        const set = new Set();
-        list.forEach(i => {
-          const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
-            ? i.contractor_name.trim()
-            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
-          if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        let list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
-
-        // Sort latest first (descending by SR or ID, matching the UI table)
-        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
-
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-        const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
-        const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
-        const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
-        const dateFromVal = syncWithPage ? (document.getElementById("filter-dis-date-from")?.value || "") : "";
-        const dateToVal = syncWithPage ? (document.getElementById("filter-dis-date-to")?.value || "") : "";
-
-        const filterParts = [];
-        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-        if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
-        if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
-        if (dateFromVal) {
-          filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
-        }
-
-        if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
-          list = list.filter(item => {
-            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-            const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
-            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-            const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
-            const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
-            const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
-
-            const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
-            const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
-            const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
-
-            return queryPassed && catPassed && contPassed && datePassed;
-          });
-        }
-
-        const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-
-        const rows = list.map((item, idx) => {
-          const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
-            ? item.contractor_name.trim()
-            : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
-
-          const mMatch = masterList.find(m =>
-            (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
-            (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
-          );
-          const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
-
-          return {
-            sr_no: item.sr_no || item.id || (idx + 1),
-            date_dispatch: item.date_dispatch || item.date_dispatched || "-",
-            challan_dis: item.challan_dis || item.challan_no || "-",
-            style_code: item.style_code || "",
-            category: item.category || "SHIRT",
-            contractor_name: cont,
-            cut_qty: cutQty,
-            dispatch_qty: Number(item.dispatch_qty) || 0,
-            remarks: item.remarks || "-"
-          };
-        });
-
-        let filteredRows = rows;
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-        }
-
-        const totals = {
-          cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-          dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
-        };
-
-        return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "date_dispatch", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_dispatch },
-        { id: "challan_dis", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_dis },
-        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-        { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
-        { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
-      ]
-    },
-
-    designer: {
-      id: "designer",
-      title: "DESIGNER PCS & STOCK TRANSFER",
-      subtitle: "Designer Sample Pieces & Stock Movement Status",
-      getDatePeriod() {
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        return [];
-      },
-      getData() {
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-        let list = syncWithPage
-          ? getFilteredDesignerSamples().list
-          : (window.db && window.db.getDesignerSamples ? [...window.db.getDesignerSamples()] : []);
-
-        list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
-
-        const rows = list.map((item, idx) => ({
-          sr_no: item.sr_no || item.id || (idx + 1),
-          entry_date: item.entry_date || "-",
-          challan_no: item.challan_no || "-",
-          style_code: item.style_code || "",
-          item_type: item.item_type || "Shirt",
-          qty: parseInt(item.qty, 10) || 1,
-          stock_status: item.moved_to_stock ? "✅ Moved to Stock" : "⏳ Pending",
-          remarks: item.remarks || "Designer Sample"
-        }));
-
-        const totals = {
-          qty: rows.reduce((s, r) => s + (Number(r.qty) || 0), 0)
-        };
-
-        return { rows, totals, filterDesc: "" };
-      },
-      columns: [
-        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "entry_date", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.entry_date },
-        { id: "challan_no", label: "CHALLAN #", default: true, align: "center", width: 95, get: (r) => r.challan_no },
-        { id: "style_code", label: "STYLE NO", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
-        { id: "item_type", label: "ITEM", default: true, align: "center", width: 90, get: (r) => r.item_type },
-        { id: "qty", label: "QTY", default: true, align: "right", width: 70, isNumeric: true, get: (r) => r.qty },
-        { id: "stock_status", label: "STOCK STATUS", default: true, align: "center", width: 135, get: (r) => r.stock_status },
-        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 160, get: (r) => r.remarks }
-      ]
-    },
-
-    master: {
-      id: "master",
-      title: "MASTER INVENTORY & ACTIVE STYLES",
-      subtitle: "Complete Hand Embroidery Style Production Balances",
-      getDatePeriod() {
-        return new Date().toLocaleDateString("en-GB");
-      },
-      getContractors() {
-        const list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-        const set = new Set();
-        list.forEach(i => {
-          const name = i.contractor_name || "";
-          if (name && name.trim() && name !== "-") set.add(name.trim());
-        });
-        return Array.from(set).sort();
-      },
-      getData(contractorFilter = "all") {
-        let list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
-        const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
-
-        const searchQuery = syncWithPage ? (document.getElementById("master-search-input")?.value || "").toLowerCase().trim() : "";
-        const selectedContractor = syncWithPage ? (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim() : "";
-        const selectedCategory = syncWithPage ? (document.getElementById("filter-category")?.value || "").toLowerCase().trim() : "";
-        const selectedBalance = syncWithPage ? (document.getElementById("filter-balance-status")?.value || "").trim() : "";
-
-        const filterParts = [];
-        if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
-        if (selectedContractor) filterParts.push(`Cont: ${selectedContractor}`);
-        if (selectedCategory) filterParts.push(`Cat: ${selectedCategory.toUpperCase()}`);
-        if (selectedBalance) filterParts.push(`Bal: ${selectedBalance}`);
-
-        if (syncWithPage && (searchQuery || selectedContractor || selectedCategory || selectedBalance)) {
-          list = list.filter(item => {
-            const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
-            const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
-            const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
-            const challanRecMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
-            const challanDisMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
-            const dateRecMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
-            const dateDisMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
-            const queryPassed = !searchQuery || codeMatch || catMatch || contMatch || challanRecMatch || challanDisMatch || dateRecMatch || dateDisMatch;
-
-            const contractorPassed = !selectedContractor || (item.contractor_name || "").toLowerCase() === selectedContractor;
-            const categoryPassed = !selectedCategory || (item.category || "").toLowerCase() === selectedCategory;
-
-            let balancePassed = true;
-            if (selectedBalance === "pending_hemb") balancePassed = item.balance_from_hemb > 0;
-            if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
-            if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
-
-            return queryPassed && contractorPassed && categoryPassed && balancePassed;
-          });
-        }
-
-        if (contractorFilter && contractorFilter !== "all") {
-          filterParts.push(`Contractor: ${contractorFilter}`);
-          list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
-        }
-
-        const rows = list.map((item, idx) => ({
-          sr_no: item.sr_no || (idx + 1),
+        return {
+          sr_no: idx + 1,
           style_code: item.style_code || "",
           category: item.category || "SHIRT",
-          contractor_name: item.contractor_name || "-",
-          cut_qty: Number(item.cut_qty) || 0,
-          received_qty: Number(item.received_qty) || 0,
-          balance_from_stock: Number(item.balance_from_stock) || 0,
-          dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
-          balance_from_hemb: Number(item.balance_from_hemb) || 0,
-          status: item.status || "ACTIVE",
-          remarks: item.remarks || "-"
-        }));
-
-        const totals = {
-          cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
-          received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
-          balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
-          dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
-          balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+          contractor: cont,
+          cut_qty: cut,
+          received_qty: rec,
+          balance_stock: stock,
+          dispatch_hemb: dis,
+          balance_hemb: hemb,
+          remarks: item.remarks || (match ? match.remarks || "" : "")
         };
-
-        return { rows, totals, filterDesc: filterParts.join(" • ") };
-      },
-      columns: [
-        { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
-        { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
-        { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
-        { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
-        { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
-        { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
-        { id: "balance_from_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_stock },
-        { id: "dispatch_from_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_from_hemb },
-        { id: "balance_from_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_hemb },
-        { id: "status", label: "STATUS", default: false, align: "center", width: 85, get: (r) => r.status },
-        { id: "remarks", label: "REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
-      ]
-    }
-  };
-
-  function getSavedWhatsAppColumns(sheetKey) {
-    const key = `craftflow_whatsapp_cols_${sheetKey}`;
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      try {
-        let parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          // Map legacy column IDs to current column IDs
-          parsed = parsed.map(id => {
-            if (id === "date_received") return "date_receive";
-            if (id === "date_dispatched") return "date_dispatch";
-            if (id === "challan_no") return sheetKey === "dispatch" ? "challan_dis" : "challan_rec";
-            if (id === "cut_order_qty") return "cut_qty";
-            return id;
-          });
-          return parsed;
-        }
-      } catch (e) {
-        console.warn("Failed reading saved whatsapp cols:", e);
-      }
-    }
-    return null;
-  }
-
-  function saveWhatsAppColumns(sheetKey, colIds) {
-    const key = `craftflow_whatsapp_cols_${sheetKey}`;
-    try {
-      localStorage.setItem(key, JSON.stringify(colIds));
-      return true;
-    } catch (e) {
-      console.error("Failed saving whatsapp cols:", e);
-      return false;
-    }
-  }
-
-  function resetSavedWhatsAppColumns(sheetKey) {
-    const key = `craftflow_whatsapp_cols_${sheetKey}`;
-    try {
-      localStorage.removeItem(key);
-    } catch (e) {
-      console.error("Failed clearing saved cols:", e);
-    }
-  }
-
-  function initWhatsAppTableController() {
-    if (whatsappControllerInitialized) return;
-    whatsappControllerInitialized = true;
-
-    // Global click delegate for any button opening WhatsApp Image modal
-    document.addEventListener("click", (e) => {
-      const btn = e.target.closest(".btn-open-table-whatsapp-img");
-      if (btn) {
-        const sheet = btn.getAttribute("data-sheet") || "daily";
-        openWhatsAppTableImageModal(sheet);
-      }
-    });
-
-    // Sheet change listener
-    document.getElementById("whatsapp-sheet-select")?.addEventListener("change", (e) => {
-      switchWhatsAppSheet(e.target.value);
-    });
-
-    // Contractor change listener
-    document.getElementById("whatsapp-contractor-select")?.addEventListener("change", (e) => {
-      currentWhatsAppContractor = e.target.value;
-      renderWhatsAppTableImage();
-    });
-
-    // Summary toggle
-    document.getElementById("whatsapp-include-totals-toggle")?.addEventListener("change", () => {
-      renderWhatsAppTableImage();
-    });
-
-    // Bulk column buttons
-    document.getElementById("btn-whatsapp-cols-all")?.addEventListener("click", () => {
-      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-      checkboxes.forEach(cb => { cb.checked = true; });
-      renderWhatsAppTableImage();
-    });
-
-    document.getElementById("btn-whatsapp-cols-none")?.addEventListener("click", () => {
-      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-      checkboxes.forEach((cb, idx) => { cb.checked = (idx === 0 || idx === 1); });
-      renderWhatsAppTableImage();
-    });
-
-    document.getElementById("btn-whatsapp-cols-reset")?.addEventListener("click", () => {
-      const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
-      if (!def) return;
-      const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
-      checkboxes.forEach(cb => {
-        const colId = cb.getAttribute("data-col-id");
-        const cDef = def.columns.find(c => c.id === colId);
-        cb.checked = cDef ? Boolean(cDef.default) : true;
       });
-      renderWhatsAppTableImage();
-    });
 
-    // Save Column Preferences Button
-    document.getElementById("btn-whatsapp-save-cols")?.addEventListener("click", () => {
-      const selected = getActiveWhatsAppSelectedColIds();
-      if (selected.length === 0) {
-        showToast("Please select at least 1 column before saving.", "error");
-        return;
+      const filterParts = [];
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        rows = rows.filter(r => (r.contractor || "").toLowerCase() === contractorFilter.toLowerCase());
+        rows.forEach((r, i) => { r.sr_no = i + 1; });
       }
-      const ok = saveWhatsAppColumns(currentWhatsAppSheet, selected);
-      if (ok) {
-        const badge = document.getElementById("whatsapp-saved-settings-badge");
-        if (badge) badge.style.display = "inline";
-        const fb = document.getElementById("whatsapp-save-feedback");
-        if (fb) {
-          fb.style.display = "block";
-          setTimeout(() => { fb.style.display = "none"; }, 3500);
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "S NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+      { id: "dispatch_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_hemb },
+      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+      { id: "remarks", label: "REMARKS / STATUS", default: true, align: "left", width: 180, get: (r) => r.remarks || "-" }
+    ]
+  },
+
+  distribution: {
+    id: "distribution",
+    title: "WORK DISTRIBUTION SHEET",
+    subtitle: "Bi-Monthly Contractor Garment Allocation",
+    getDatePeriod() {
+      if (typeof getActiveDistributionPeriod === "function") {
+        const p = getActiveDistributionPeriod();
+        if (p && p !== "all") return p;
+      }
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getWorkDistribution) ? window.db.getWorkDistribution() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const query = syncWithPage ? (document.getElementById("search-dist-input")?.value || "").toLowerCase().trim() : "";
+      const contFilterVal = syncWithPage ? (document.getElementById("filter-dist-contractor")?.value || "").toLowerCase().trim() : "";
+      const floorFilterVal = syncWithPage ? (document.getElementById("filter-dist-floor")?.value || "").toLowerCase().trim() : "";
+      const itemFilterVal = syncWithPage ? (document.getElementById("filter-dist-item")?.value || "").toLowerCase().trim() : "";
+
+      const filterParts = [];
+      if (query) filterParts.push(`Search: "${query}"`);
+      if (contFilterVal) filterParts.push(`Cont: ${contFilterVal}`);
+      if (floorFilterVal) filterParts.push(`Floor: ${floorFilterVal}`);
+      if (itemFilterVal) filterParts.push(`Item: ${itemFilterVal}`);
+
+      if (!query && typeof getActiveDistributionPeriod === "function") {
+        const activePeriod = getActiveDistributionPeriod();
+        if (activePeriod && activePeriod !== "all") {
+          list = list.filter(item => (item.period || "").trim().toLowerCase() === activePeriod.trim().toLowerCase());
         }
-        showToast("Column preferences saved! CraftFlow will remember your columns.", "success");
       }
-    });
 
-    // Reset Saved Preferences Button
-    document.getElementById("btn-whatsapp-reset-saved-cols")?.addEventListener("click", () => {
-      resetSavedWhatsAppColumns(currentWhatsAppSheet);
-      const badge = document.getElementById("whatsapp-saved-settings-badge");
-      if (badge) badge.style.display = "none";
-      document.getElementById("btn-whatsapp-cols-reset")?.click();
-      showToast("Preferences reset to default.", "info");
-    });
+      if (syncWithPage && (query || contFilterVal || floorFilterVal || itemFilterVal)) {
+        list = list.filter(item => {
+          const qMatch = !query ||
+            (item.style_code || "").toLowerCase().includes(query) ||
+            (item.contractor_name || "").toLowerCase().includes(query) ||
+            (item.item || "").toLowerCase().includes(query) ||
+            (item.floor || "").toLowerCase().includes(query) ||
+            (item.period || "").toLowerCase().includes(query) ||
+            (item.remarks || "").toLowerCase().includes(query);
 
-    // Active table filter sync toggle
-    document.getElementById("whatsapp-sync-filters-toggle")?.addEventListener("change", () => {
-      renderWhatsAppTableImage();
-    });
+          let cMatch = true;
+          if (contFilterVal) {
+            if (contFilterVal === "joint") cMatch = (item.contractor_name || "").includes("/");
+            else cMatch = (item.contractor_name || "").toLowerCase().includes(contFilterVal);
+          }
+          const fMatch = !floorFilterVal || (item.floor || "").toLowerCase() === floorFilterVal;
+          const iMatch = !itemFilterVal || (item.item || "").toLowerCase() === itemFilterVal;
+          return qMatch && cMatch && fMatch && iMatch;
+        });
+      }
 
-    // Fit to screen / 100% Zoom toggle
-    document.getElementById("btn-whatsapp-toggle-zoom")?.addEventListener("click", () => {
-      const viewport = document.getElementById("whatsapp-preview-viewport");
-      const zoomText = document.getElementById("whatsapp-zoom-text");
-      const zoomIcon = document.getElementById("whatsapp-zoom-icon");
-      if (!viewport) return;
-      const isFit = viewport.classList.toggle("fit-to-screen");
-      if (zoomText) zoomText.textContent = isFit ? "100% Full View" : "Fit to Screen";
-      if (zoomIcon) zoomIcon.textContent = isFit ? "🔍" : "↔️";
-    });
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
 
-    // Action Buttons: Copy, Download, WhatsApp Web
-    document.getElementById("btn-whatsapp-copy-clipboard")?.addEventListener("click", copyWhatsAppTableImageToClipboard);
-    document.getElementById("btn-whatsapp-download-image")?.addEventListener("click", downloadWhatsAppTableImage);
-    document.getElementById("btn-whatsapp-open-web")?.addEventListener("click", () => {
-      window.open("https://web.whatsapp.com", "_blank");
-    });
+      const rows = list.map((item, idx) => {
+        const qty = parseInt(item.pcs_qty, 10) || 0;
+        const rate = parseFloat(item.rate) || 0;
+        const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
+          ? Number(item.total_amount)
+          : (qty * rate);
 
-    // Print Studio connector
-    document.getElementById("btn-studio-whatsapp-image")?.addEventListener("click", () => {
-      if (typeof closeModal === "function") closeModal("modal-print-studio");
-      const active = (typeof printStudioActiveSheet !== "undefined" && printStudioActiveSheet) ? printStudioActiveSheet : "daily";
-      openWhatsAppTableImageModal(active);
-    });
+        return {
+          sr_no: item.sr_no || (idx + 1),
+          style_code: item.style_code || "",
+          contractor_name: item.contractor_name || "-",
+          pcs_qty: qty,
+          rate: rate > 0 ? rate : "-",
+          item: item.item || "SHIRT",
+          floor: item.floor || "-",
+          total: total > 0 ? Math.round(total) : 0,
+          period: item.period || "-",
+          remarks: item.remarks || "-"
+        };
+      });
+
+      const totals = {
+        pcs_qty: rows.reduce((s, r) => s + (Number(r.pcs_qty) || 0), 0),
+        total: rows.reduce((s, r) => s + (Number(r.total) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "pcs_qty", label: "PCS QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.pcs_qty },
+      { id: "rate", label: "RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+      { id: "item", label: "ITEM / CAT", default: true, align: "center", width: 95, get: (r) => r.item },
+      { id: "floor", label: "FLOOR", default: true, align: "center", width: 85, get: (r) => r.floor },
+      { id: "total", label: "TOTAL (PKR)", default: true, align: "right", width: 110, isNumeric: true, get: (r) => r.total },
+      { id: "period", label: "TIME PERIOD", default: true, align: "center", width: 125, get: (r) => r.period },
+      { id: "remarks", label: "REMARKS", default: false, align: "left", width: 140, get: (r) => r.remarks }
+    ]
+  },
+
+  payment: {
+    id: "payment",
+    title: "RATE APPROVAL & PAYMENT RECONCILIATION SHEET",
+    subtitle: "Bi-Monthly Contractor Production & Payment Audit",
+    getDatePeriod() {
+      const p = (document.getElementById("filter-payment-period")?.value || "").trim();
+      if (p && p !== "all") return p;
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getPaymentSheets) ? window.db.getPaymentSheets() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const query = syncWithPage ? (document.getElementById("payment-search-input")?.value || "").toLowerCase().trim() : "";
+      const channelFilter = syncWithPage ? (document.getElementById("filter-payment-channel")?.value || "") : "";
+      const statusFilter = syncWithPage ? (document.getElementById("filter-payment-status")?.value || "") : "";
+      const contractorPageFilter = syncWithPage ? (document.getElementById("filter-payment-contractor")?.value || "").toLowerCase().trim() : "";
+      const periodFilter = (typeof getActiveRateApprovalPeriod === "function" ? getActiveRateApprovalPeriod() : (document.getElementById("filter-payment-period")?.value || "")).trim();
+
+      const filterParts = [];
+      if (query) filterParts.push(`Search: "${query}"`);
+      if (channelFilter) filterParts.push(`Channel: ${channelFilter}`);
+      if (statusFilter) filterParts.push(`Status: ${statusFilter}`);
+      if (contractorPageFilter) filterParts.push(`Cont: ${contractorPageFilter}`);
+
+      if (!query && periodFilter && periodFilter !== "all") {
+        list = list.filter(item => {
+          const itemPeriod = (item.period || "").trim().toLowerCase();
+          const activePeriod = periodFilter.trim().toLowerCase();
+          if (itemPeriod === activePeriod) return true;
+          const itemStart = itemPeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+          const activeStart = activePeriod.split(/\s*(?:to|-)\s*/i)[0].replace(/[^0-9a-z]/gi, '');
+          if (itemStart && activeStart && itemStart === activeStart) return true;
+          return false;
+        });
+      }
+
+      if (syncWithPage && (query || channelFilter || statusFilter || contractorPageFilter)) {
+        list = list.filter(item => {
+          const qMatch = !query ||
+            (item.style_code || "").toLowerCase().includes(query) ||
+            (item.contractor_name || "").toLowerCase().includes(query) ||
+            (item.working || item.category || "").toLowerCase().includes(query) ||
+            (item.remarks_1 || item.remarks || "").toLowerCase().includes(query) ||
+            (item.remarks_2 || item.status_remarks || "").toLowerCase().includes(query) ||
+            (item.target_floor || "").toLowerCase().includes(query) ||
+            (item.period || "").toLowerCase().includes(query);
+
+          const cMatch = !channelFilter || item.payment_channel === channelFilter;
+
+          let sMatch = true;
+          const rem2 = (item.remarks_2 || item.status_remarks || item.status || "").toLowerCase();
+          const totBal = item.total_balance != null ? item.total_balance : 0;
+          if (statusFilter === "close") sMatch = rem2.includes("close") || totBal === 0;
+          else if (statusFilter === "deduction") sMatch = rem2.includes("deduction");
+          else if (statusFilter === "balance") sMatch = totBal > 0;
+
+          const contMatch = !contractorPageFilter || (item.contractor_name || "").toLowerCase() === contractorPageFilter;
+
+          return qMatch && cMatch && sMatch && contMatch;
+        });
+      }
+
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const rows = list.map((item, idx) => {
+        const rawCut = Number(item.cut_qty || item.total_pcs || 0);
+        const deduction = Number(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs) || 0;
+        const baseProd = (item.base_prod_pcs != null)
+          ? Number(item.base_prod_pcs)
+          : ((Number(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs) || 0) + (deduction > 0 && item.base_prod_pcs == null ? deduction : 0));
+        const netProd = Math.max(0, baseProd - deduction);
+
+        return {
+          sr_no: idx + 1,
+          style_code: item.style_code || "",
+          working: item.working || item.category || "SHIRT",
+          contractor_name: item.contractor_name || "-",
+          rate: Number(item.rate_per_pc || item.rate) || 0,
+          cut_qty: rawCut,
+          deduction_pcs: deduction,
+          prod_pcs_qty: netProd,
+          carigar_rate: Number(item.carigar_rate) || 0,
+          commission: Number(item.commission) || 0,
+          rate_total: Number(item.rate_total) || 0,
+          remarks: item.remarks_1 || item.remarks || "-",
+          balance_stock: Number(item.balance_from_stock != null ? item.balance_from_stock : item.balance_stock) || 0,
+          balance_hemb: Number(item.balance_from_hemb != null ? item.balance_from_hemb : item.balance_hemb) || 0,
+          total_balance: Number(item.total_balance != null ? item.total_balance : item.balance_pcs) || 0,
+          period: item.period || "-"
+        };
+      });
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        deduction_pcs: rows.reduce((s, r) => s + (Number(r.deduction_pcs) || 0), 0),
+        prod_pcs_qty: rows.reduce((s, r) => s + (Number(r.prod_pcs_qty) || 0), 0),
+        rate_total: rows.reduce((s, r) => s + (Number(r.rate_total) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0),
+        total_balance: rows.reduce((s, r) => s + (Number(r.total_balance) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "S.NO", default: true, align: "center", width: 50, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE NAME", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "working", label: "WORKING", default: true, align: "center", width: 85, get: (r) => r.working },
+      { id: "contractor_name", label: "CONT NAME", default: true, align: "left", width: 125, isContractor: true, get: (r) => r.contractor_name },
+      { id: "rate", label: "FIX RATE", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.rate },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 85, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "deduction_pcs", label: "KAAT", default: true, align: "right", width: 80, isNumeric: true, get: (r) => r.deduction_pcs },
+      { id: "prod_pcs_qty", label: "PROD PCS", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.prod_pcs_qty },
+      { id: "carigar_rate", label: "CARIGAR", default: false, align: "right", width: 80, isNumeric: true, get: (r) => r.carigar_rate },
+      { id: "commission", label: "COMM", default: false, align: "right", width: 75, isNumeric: true, get: (r) => r.commission },
+      { id: "rate_total", label: "TOTAL (PKR)", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.rate_total },
+      { id: "balance_stock", label: "BAL STOCK", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_stock },
+      { id: "balance_hemb", label: "BAL H-EMB", default: true, align: "right", width: 85, isNumeric: true, isBalance: true, get: (r) => r.balance_hemb },
+      { id: "total_balance", label: "TOTAL BAL", default: true, align: "right", width: 90, isNumeric: true, isBalance: true, get: (r) => r.total_balance },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 120, get: (r) => r.remarks },
+      { id: "period", label: "TIME PERIOD", default: false, align: "center", width: 115, get: (r) => r.period }
+    ]
+  },
+
+  receiving: {
+    id: "receiving",
+    title: "INWARD RECEIVING CHALLAN LOG",
+    subtitle: "Incoming Fabric & Garment Challans from Cutting / Stock",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+          ? i.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getReceivingLogs) ? window.db.getReceivingLogs() : [];
+
+      // Sort latest first (descending by SR or ID, matching the UI table)
+      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      const searchQuery = syncWithPage ? (document.getElementById("rec-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedCat = syncWithPage ? (document.getElementById("filter-rec-category")?.value || "").toLowerCase().trim() : "";
+      const selectedCont = syncWithPage ? (document.getElementById("filter-rec-contractor")?.value || "").toLowerCase().trim() : "";
+      const dateFromVal = syncWithPage ? (document.getElementById("filter-rec-date-from")?.value || "") : "";
+      const dateToVal = syncWithPage ? (document.getElementById("filter-rec-date-to")?.value || "") : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+      if (dateFromVal) {
+        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+      }
+
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const challanMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+          const dateTextMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+          const datePassed = matchesLogDateFilter(item.date_receive, dateFromVal, dateToVal);
+
+          return queryPassed && catPassed && contPassed && datePassed;
+        });
+      }
+
+      const rows = list.map((item, idx) => {
+        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+          ? item.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+        return {
+          sr_no: item.sr_no || item.id || (idx + 1),
+          date_receive: item.date_receive || item.date_received || "-",
+          challan_rec: item.challan_rec || item.challan_no || "-",
+          style_code: item.style_code || "",
+          category: item.category || "SHIRT",
+          contractor_name: cont,
+          cut_qty: Number(item.cut_qty != null ? item.cut_qty : item.cut_order_qty) || 0,
+          received_qty: Number(item.received_qty) || 0,
+          remarks: item.remarks || "-"
+        };
+      });
+
+      let filteredRows = rows;
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const totals = {
+        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: filteredRows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0)
+      };
+
+      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "date_receive", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_receive },
+      { id: "challan_rec", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_rec },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT ORDER", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 95, isNumeric: true, get: (r) => r.received_qty },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 140, get: (r) => r.remarks }
+    ]
+  },
+
+  dispatch: {
+    id: "dispatch",
+    title: "OUTWARD DISPATCH CHALLAN LOG",
+    subtitle: "Finished Hand Embroidery Dispatched to Unit / Finishing",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const cont = (i.contractor_name && i.contractor_name.trim() && i.contractor_name !== "-")
+          ? i.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(i.style_code, i.category)?.contractor_name : "");
+        if (cont && cont.trim() && cont !== "-") set.add(cont.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getDispatchLogs) ? window.db.getDispatchLogs() : [];
+
+      // Sort latest first (descending by SR or ID, matching the UI table)
+      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      const searchQuery = syncWithPage ? (document.getElementById("dis-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedCat = syncWithPage ? (document.getElementById("filter-dis-category")?.value || "").toLowerCase().trim() : "";
+      const selectedCont = syncWithPage ? (document.getElementById("filter-dis-contractor")?.value || "").toLowerCase().trim() : "";
+      const dateFromVal = syncWithPage ? (document.getElementById("filter-dis-date-from")?.value || "") : "";
+      const dateToVal = syncWithPage ? (document.getElementById("filter-dis-date-to")?.value || "") : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedCat) filterParts.push(`Cat: ${selectedCat.toUpperCase()}`);
+      if (selectedCont) filterParts.push(`Cont: ${selectedCont}`);
+      if (dateFromVal) {
+        filterParts.push(`Date: ${dateFromVal}${dateToVal && dateToVal !== dateFromVal ? ` to ${dateToVal}` : ""}`);
+      }
+
+      if (syncWithPage && (searchQuery || selectedCat || selectedCont || dateFromVal || dateToVal)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const challanMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const remarksMatch = (item.remarks || "").toLowerCase().includes(searchQuery);
+          const dateTextMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || challanMatch || contMatch || remarksMatch || dateTextMatch;
+
+          const catPassed = !selectedCat || (item.category || "").toLowerCase() === selectedCat;
+          const contPassed = !selectedCont || (item.contractor_name || "").toLowerCase() === selectedCont;
+          const datePassed = matchesLogDateFilter(item.date_dispatch, dateFromVal, dateToVal);
+
+          return queryPassed && catPassed && contPassed && datePassed;
+        });
+      }
+
+      const masterList = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+
+      const rows = list.map((item, idx) => {
+        const cont = (item.contractor_name && item.contractor_name.trim() && item.contractor_name !== "-")
+          ? item.contractor_name.trim()
+          : (window.db && window.db.getContractorForStyle ? window.db.getContractorForStyle(item.style_code, item.category)?.contractor_name : "") || "-";
+
+        const mMatch = masterList.find(m =>
+          (m.style_code || "").trim().toLowerCase() === (item.style_code || "").trim().toLowerCase() &&
+          (m.category || "").trim().toLowerCase() === (item.category || "").trim().toLowerCase()
+        );
+        const cutQty = (item.cut_qty != null && item.cut_qty !== "") ? Number(item.cut_qty) : (mMatch ? (mMatch.cut_qty || 0) : 0);
+
+        return {
+          sr_no: item.sr_no || item.id || (idx + 1),
+          date_dispatch: item.date_dispatch || item.date_dispatched || "-",
+          challan_dis: item.challan_dis || item.challan_no || "-",
+          style_code: item.style_code || "",
+          category: item.category || "SHIRT",
+          contractor_name: cont,
+          cut_qty: cutQty,
+          dispatch_qty: Number(item.dispatch_qty) || 0,
+          remarks: item.remarks || "-"
+        };
+      });
+
+      let filteredRows = rows;
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        filteredRows = rows.filter(r => (r.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const totals = {
+        cut_qty: filteredRows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        dispatch_qty: filteredRows.reduce((s, r) => s + (Number(r.dispatch_qty) || 0), 0)
+      };
+
+      return { rows: filteredRows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "date_dispatch", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.date_dispatch },
+      { id: "challan_dis", label: "CHALLAN #", default: true, align: "center", width: 100, get: (r) => r.challan_dis },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "dispatch_qty", label: "DISPATCH QTY", default: true, align: "right", width: 105, isNumeric: true, get: (r) => r.dispatch_qty },
+      { id: "remarks", label: "STATUS / REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+    ]
+  },
+
+  designer: {
+    id: "designer",
+    title: "DESIGNER PCS & STOCK TRANSFER",
+    subtitle: "Designer Sample Pieces & Stock Movement Status",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      return [];
+    },
+    getData() {
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+      let list = syncWithPage
+        ? getFilteredDesignerSamples().list
+        : (window.db && window.db.getDesignerSamples ? [...window.db.getDesignerSamples()] : []);
+
+      list = [...list].sort((a, b) => (parseInt(b.sr_no, 10) || parseInt(b.id, 10) || 0) - (parseInt(a.sr_no, 10) || parseInt(a.id, 10) || 0));
+
+      const rows = list.map((item, idx) => ({
+        sr_no: item.sr_no || item.id || (idx + 1),
+        entry_date: item.entry_date || "-",
+        challan_no: item.challan_no || "-",
+        style_code: item.style_code || "",
+        item_type: item.item_type || "Shirt",
+        qty: parseInt(item.qty, 10) || 1,
+        stock_status: item.moved_to_stock ? "✅ Moved to Stock" : "⏳ Pending",
+        remarks: item.remarks || "Designer Sample"
+      }));
+
+      const totals = {
+        qty: rows.reduce((s, r) => s + (Number(r.qty) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: "" };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "entry_date", label: "DATE", default: true, align: "center", width: 95, get: (r) => r.entry_date },
+      { id: "challan_no", label: "CHALLAN #", default: true, align: "center", width: 95, get: (r) => r.challan_no },
+      { id: "style_code", label: "STYLE NO", default: true, align: "left", width: 135, isStyleCode: true, get: (r) => r.style_code },
+      { id: "item_type", label: "ITEM", default: true, align: "center", width: 90, get: (r) => r.item_type },
+      { id: "qty", label: "QTY", default: true, align: "right", width: 70, isNumeric: true, get: (r) => r.qty },
+      { id: "stock_status", label: "STOCK STATUS", default: true, align: "center", width: 135, get: (r) => r.stock_status },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 160, get: (r) => r.remarks }
+    ]
+  },
+
+  master: {
+    id: "master",
+    title: "MASTER INVENTORY & ACTIVE STYLES",
+    subtitle: "Complete Hand Embroidery Style Production Balances",
+    getDatePeriod() {
+      return new Date().toLocaleDateString("en-GB");
+    },
+    getContractors() {
+      const list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const set = new Set();
+      list.forEach(i => {
+        const name = i.contractor_name || "";
+        if (name && name.trim() && name !== "-") set.add(name.trim());
+      });
+      return Array.from(set).sort();
+    },
+    getData(contractorFilter = "all") {
+      let list = (window.db && window.db.getMasterInventory) ? window.db.getMasterInventory() : [];
+      const syncWithPage = Boolean(document.getElementById("whatsapp-sync-filters-toggle")?.checked !== false);
+
+      const searchQuery = syncWithPage ? (document.getElementById("master-search-input")?.value || "").toLowerCase().trim() : "";
+      const selectedContractor = syncWithPage ? (document.getElementById("filter-contractor")?.value || "").toLowerCase().trim() : "";
+      const selectedCategory = syncWithPage ? (document.getElementById("filter-category")?.value || "").toLowerCase().trim() : "";
+      const selectedBalance = syncWithPage ? (document.getElementById("filter-balance-status")?.value || "").trim() : "";
+
+      const filterParts = [];
+      if (searchQuery) filterParts.push(`Search: "${searchQuery}"`);
+      if (selectedContractor) filterParts.push(`Cont: ${selectedContractor}`);
+      if (selectedCategory) filterParts.push(`Cat: ${selectedCategory.toUpperCase()}`);
+      if (selectedBalance) filterParts.push(`Bal: ${selectedBalance}`);
+
+      if (syncWithPage && (searchQuery || selectedContractor || selectedCategory || selectedBalance)) {
+        list = list.filter(item => {
+          const codeMatch = (item.style_code || "").toLowerCase().includes(searchQuery);
+          const catMatch = (item.category || "").toLowerCase().includes(searchQuery);
+          const contMatch = (item.contractor_name || "").toLowerCase().includes(searchQuery);
+          const challanRecMatch = (item.challan_rec || "").toLowerCase().includes(searchQuery);
+          const challanDisMatch = (item.challan_dis || "").toLowerCase().includes(searchQuery);
+          const dateRecMatch = (item.date_receive || "").toLowerCase().includes(searchQuery);
+          const dateDisMatch = (item.date_dispatch || "").toLowerCase().includes(searchQuery);
+          const queryPassed = !searchQuery || codeMatch || catMatch || contMatch || challanRecMatch || challanDisMatch || dateRecMatch || dateDisMatch;
+
+          const contractorPassed = !selectedContractor || (item.contractor_name || "").toLowerCase() === selectedContractor;
+          const categoryPassed = !selectedCategory || (item.category || "").toLowerCase() === selectedCategory;
+
+          let balancePassed = true;
+          if (selectedBalance === "pending_hemb") balancePassed = item.balance_from_hemb > 0;
+          if (selectedBalance === "pending_stock") balancePassed = item.balance_from_stock > 0;
+          if (selectedBalance === "completed") balancePassed = item.balance_from_hemb === 0 && item.balance_from_stock === 0;
+
+          return queryPassed && contractorPassed && categoryPassed && balancePassed;
+        });
+      }
+
+      if (contractorFilter && contractorFilter !== "all") {
+        filterParts.push(`Contractor: ${contractorFilter}`);
+        list = list.filter(item => (item.contractor_name || "").toLowerCase() === contractorFilter.toLowerCase());
+      }
+
+      const rows = list.map((item, idx) => ({
+        sr_no: item.sr_no || (idx + 1),
+        style_code: item.style_code || "",
+        category: item.category || "SHIRT",
+        contractor_name: item.contractor_name || "-",
+        cut_qty: Number(item.cut_qty) || 0,
+        received_qty: Number(item.received_qty) || 0,
+        balance_from_stock: Number(item.balance_from_stock) || 0,
+        dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+        balance_from_hemb: Number(item.balance_from_hemb) || 0,
+        status: item.status || "ACTIVE",
+        remarks: item.remarks || "-"
+      }));
+
+      const totals = {
+        cut_qty: rows.reduce((s, r) => s + (Number(r.cut_qty) || 0), 0),
+        received_qty: rows.reduce((s, r) => s + (Number(r.received_qty) || 0), 0),
+        balance_stock: rows.reduce((s, r) => s + (Number(r.balance_stock) || 0), 0),
+        dispatch_hemb: rows.reduce((s, r) => s + (Number(r.dispatch_hemb) || 0), 0),
+        balance_hemb: rows.reduce((s, r) => s + (Number(r.balance_hemb) || 0), 0)
+      };
+
+      return { rows, totals, filterDesc: filterParts.join(" • ") };
+    },
+    columns: [
+      { id: "sr_no", label: "SR NO", default: true, align: "center", width: 55, get: (r) => r.sr_no },
+      { id: "style_code", label: "STYLE CODE", default: true, align: "left", width: 140, isStyleCode: true, get: (r) => r.style_code },
+      { id: "category", label: "CATEGORY", default: true, align: "center", width: 95, get: (r) => r.category },
+      { id: "contractor_name", label: "CONTRACTOR", default: true, align: "left", width: 130, isContractor: true, get: (r) => r.contractor_name },
+      { id: "cut_qty", label: "CUT QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.cut_qty },
+      { id: "received_qty", label: "REC QTY", default: true, align: "right", width: 90, isNumeric: true, get: (r) => r.received_qty },
+      { id: "balance_from_stock", label: "BAL STOCK", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_stock },
+      { id: "dispatch_from_hemb", label: "DISPATCH H-EMB", default: true, align: "right", width: 115, isNumeric: true, get: (r) => r.dispatch_from_hemb },
+      { id: "balance_from_hemb", label: "BAL H-EMB", default: true, align: "right", width: 95, isNumeric: true, isBalance: true, get: (r) => r.balance_from_hemb },
+      { id: "status", label: "STATUS", default: false, align: "center", width: 85, get: (r) => r.status },
+      { id: "remarks", label: "REMARKS", default: true, align: "left", width: 150, get: (r) => r.remarks }
+    ]
   }
+};
 
-  function openWhatsAppTableImageModal(sheetKey = "daily") {
-    initWhatsAppTableController();
+function getSavedWhatsAppColumns(sheetKey) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  const stored = localStorage.getItem(key);
+  if (stored) {
+    try {
+      let parsed = JSON.parse(stored);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        // Map legacy column IDs to current column IDs
+        parsed = parsed.map(id => {
+          if (id === "date_received") return "date_receive";
+          if (id === "date_dispatched") return "date_dispatch";
+          if (id === "challan_no") return sheetKey === "dispatch" ? "challan_dis" : "challan_rec";
+          if (id === "cut_order_qty") return "cut_qty";
+          return id;
+        });
+        return parsed;
+      }
+    } catch (e) {
+      console.warn("Failed reading saved whatsapp cols:", e);
+    }
+  }
+  return null;
+}
 
-    // Reset zoom toggle UI state to match default fit-to-screen
+function saveWhatsAppColumns(sheetKey, colIds) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(colIds));
+    return true;
+  } catch (e) {
+    console.error("Failed saving whatsapp cols:", e);
+    return false;
+  }
+}
+
+function resetSavedWhatsAppColumns(sheetKey) {
+  const key = `craftflow_whatsapp_cols_${sheetKey}`;
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error("Failed clearing saved cols:", e);
+  }
+}
+
+function initWhatsAppTableController() {
+  if (whatsappControllerInitialized) return;
+  whatsappControllerInitialized = true;
+
+  // Global click delegate for any button opening WhatsApp Image modal
+  document.addEventListener("click", (e) => {
+    const btn = e.target.closest(".btn-open-table-whatsapp-img");
+    if (btn) {
+      const sheet = btn.getAttribute("data-sheet") || "daily";
+      openWhatsAppTableImageModal(sheet);
+    }
+  });
+
+  // Sheet change listener
+  document.getElementById("whatsapp-sheet-select")?.addEventListener("change", (e) => {
+    switchWhatsAppSheet(e.target.value);
+  });
+
+  // Contractor change listener
+  document.getElementById("whatsapp-contractor-select")?.addEventListener("change", (e) => {
+    currentWhatsAppContractor = e.target.value;
+    renderWhatsAppTableImage();
+  });
+
+  // Summary toggle
+  document.getElementById("whatsapp-include-totals-toggle")?.addEventListener("change", () => {
+    renderWhatsAppTableImage();
+  });
+
+  // Bulk column buttons
+  document.getElementById("btn-whatsapp-cols-all")?.addEventListener("click", () => {
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach(cb => { cb.checked = true; });
+    renderWhatsAppTableImage();
+  });
+
+  document.getElementById("btn-whatsapp-cols-none")?.addEventListener("click", () => {
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach((cb, idx) => { cb.checked = (idx === 0 || idx === 1); });
+    renderWhatsAppTableImage();
+  });
+
+  document.getElementById("btn-whatsapp-cols-reset")?.addEventListener("click", () => {
+    const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+    if (!def) return;
+    const checkboxes = document.querySelectorAll("#whatsapp-columns-container input[type='checkbox']");
+    checkboxes.forEach(cb => {
+      const colId = cb.getAttribute("data-col-id");
+      const cDef = def.columns.find(c => c.id === colId);
+      cb.checked = cDef ? Boolean(cDef.default) : true;
+    });
+    renderWhatsAppTableImage();
+  });
+
+  // Save Column Preferences Button
+  document.getElementById("btn-whatsapp-save-cols")?.addEventListener("click", () => {
+    const selected = getActiveWhatsAppSelectedColIds();
+    if (selected.length === 0) {
+      showToast("Please select at least 1 column before saving.", "error");
+      return;
+    }
+    const ok = saveWhatsAppColumns(currentWhatsAppSheet, selected);
+    if (ok) {
+      const badge = document.getElementById("whatsapp-saved-settings-badge");
+      if (badge) badge.style.display = "inline";
+      const fb = document.getElementById("whatsapp-save-feedback");
+      if (fb) {
+        fb.style.display = "block";
+        setTimeout(() => { fb.style.display = "none"; }, 3500);
+      }
+      showToast("Column preferences saved! CraftFlow will remember your columns.", "success");
+    }
+  });
+
+  // Reset Saved Preferences Button
+  document.getElementById("btn-whatsapp-reset-saved-cols")?.addEventListener("click", () => {
+    resetSavedWhatsAppColumns(currentWhatsAppSheet);
+    const badge = document.getElementById("whatsapp-saved-settings-badge");
+    if (badge) badge.style.display = "none";
+    document.getElementById("btn-whatsapp-cols-reset")?.click();
+    showToast("Preferences reset to default.", "info");
+  });
+
+  // Active table filter sync toggle
+  document.getElementById("whatsapp-sync-filters-toggle")?.addEventListener("change", () => {
+    renderWhatsAppTableImage();
+  });
+
+  // Fit to screen / 100% Zoom toggle
+  document.getElementById("btn-whatsapp-toggle-zoom")?.addEventListener("click", () => {
     const viewport = document.getElementById("whatsapp-preview-viewport");
     const zoomText = document.getElementById("whatsapp-zoom-text");
     const zoomIcon = document.getElementById("whatsapp-zoom-icon");
-    if (viewport) {
-      viewport.classList.add("fit-to-screen");
-      if (zoomText) zoomText.textContent = "100% Full View";
-      if (zoomIcon) zoomIcon.textContent = "🔍";
-    }
+    if (!viewport) return;
+    const isFit = viewport.classList.toggle("fit-to-screen");
+    if (zoomText) zoomText.textContent = isFit ? "100% Full View" : "Fit to Screen";
+    if (zoomIcon) zoomIcon.textContent = isFit ? "🔍" : "↔️";
+  });
 
-    // Ensure sync filters toggle is checked by default
-    const syncToggle = document.getElementById("whatsapp-sync-filters-toggle");
-    if (syncToggle) syncToggle.checked = true;
+  // Action Buttons: Copy, Download, WhatsApp Web
+  document.getElementById("btn-whatsapp-copy-clipboard")?.addEventListener("click", copyWhatsAppTableImageToClipboard);
+  document.getElementById("btn-whatsapp-download-image")?.addEventListener("click", downloadWhatsAppTableImage);
+  document.getElementById("btn-whatsapp-open-web")?.addEventListener("click", () => {
+    window.open("https://web.whatsapp.com", "_blank");
+  });
 
-    switchWhatsAppSheet(sheetKey);
-    if (typeof openModal === "function") {
-      openModal("modal-whatsapp-table-image");
-    }
+  // Print Studio connector
+  document.getElementById("btn-studio-whatsapp-image")?.addEventListener("click", () => {
+    if (typeof closeModal === "function") closeModal("modal-print-studio");
+    const active = (typeof printStudioActiveSheet !== "undefined" && printStudioActiveSheet) ? printStudioActiveSheet : "daily";
+    openWhatsAppTableImageModal(active);
+  });
+}
+
+function openWhatsAppTableImageModal(sheetKey = "daily") {
+  initWhatsAppTableController();
+
+  // Reset zoom toggle UI state to match default fit-to-screen
+  const viewport = document.getElementById("whatsapp-preview-viewport");
+  const zoomText = document.getElementById("whatsapp-zoom-text");
+  const zoomIcon = document.getElementById("whatsapp-zoom-icon");
+  if (viewport) {
+    viewport.classList.add("fit-to-screen");
+    if (zoomText) zoomText.textContent = "100% Full View";
+    if (zoomIcon) zoomIcon.textContent = "🔍";
   }
 
-  function switchWhatsAppSheet(sheetKey) {
-    if (!WHATSAPP_SHEET_DEFS[sheetKey]) sheetKey = "daily";
-    currentWhatsAppSheet = sheetKey;
-    currentWhatsAppContractor = "all";
+  // Ensure sync filters toggle is checked by default
+  const syncToggle = document.getElementById("whatsapp-sync-filters-toggle");
+  if (syncToggle) syncToggle.checked = true;
 
-    const sheetSelect = document.getElementById("whatsapp-sheet-select");
-    if (sheetSelect) sheetSelect.value = sheetKey;
+  switchWhatsAppSheet(sheetKey);
+  if (typeof openModal === "function") {
+    openModal("modal-whatsapp-table-image");
+  }
+}
 
-    populateWhatsAppContractorDropdown(sheetKey);
-    renderWhatsAppColumnCheckboxes(sheetKey);
-    renderWhatsAppTableImage();
+function switchWhatsAppSheet(sheetKey) {
+  if (!WHATSAPP_SHEET_DEFS[sheetKey]) sheetKey = "daily";
+  currentWhatsAppSheet = sheetKey;
+  currentWhatsAppContractor = "all";
+
+  const sheetSelect = document.getElementById("whatsapp-sheet-select");
+  if (sheetSelect) sheetSelect.value = sheetKey;
+
+  populateWhatsAppContractorDropdown(sheetKey);
+  renderWhatsAppColumnCheckboxes(sheetKey);
+  renderWhatsAppTableImage();
+}
+
+function populateWhatsAppContractorDropdown(sheetKey) {
+  const select = document.getElementById("whatsapp-contractor-select");
+  const countEl = document.getElementById("whatsapp-contractor-count");
+  if (!select) return;
+
+  const def = WHATSAPP_SHEET_DEFS[sheetKey];
+  const contractors = def ? def.getContractors() : [];
+
+  select.innerHTML = `<option value="all">👥 All Contractors (Whole Sheet)</option>` +
+    contractors.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+
+  select.value = "all";
+  if (countEl) {
+    countEl.textContent = `${contractors.length} active contractors`;
+  }
+}
+
+function renderWhatsAppColumnCheckboxes(sheetKey) {
+  const container = document.getElementById("whatsapp-columns-container");
+  const badge = document.getElementById("whatsapp-saved-settings-badge");
+  if (!container) return;
+
+  const def = WHATSAPP_SHEET_DEFS[sheetKey];
+  if (!def) return;
+
+  const savedCols = getSavedWhatsAppColumns(sheetKey);
+  if (badge) {
+    badge.style.display = savedCols ? "inline" : "none";
   }
 
-  function populateWhatsAppContractorDropdown(sheetKey) {
-    const select = document.getElementById("whatsapp-contractor-select");
-    const countEl = document.getElementById("whatsapp-contractor-count");
-    if (!select) return;
-
-    const def = WHATSAPP_SHEET_DEFS[sheetKey];
-    const contractors = def ? def.getContractors() : [];
-
-    select.innerHTML = `<option value="all">👥 All Contractors (Whole Sheet)</option>` +
-      contractors.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
-
-    select.value = "all";
-    if (countEl) {
-      countEl.textContent = `${contractors.length} active contractors`;
-    }
-  }
-
-  function renderWhatsAppColumnCheckboxes(sheetKey) {
-    const container = document.getElementById("whatsapp-columns-container");
-    const badge = document.getElementById("whatsapp-saved-settings-badge");
-    if (!container) return;
-
-    const def = WHATSAPP_SHEET_DEFS[sheetKey];
-    if (!def) return;
-
-    const savedCols = getSavedWhatsAppColumns(sheetKey);
-    if (badge) {
-      badge.style.display = savedCols ? "inline" : "none";
-    }
-
-    container.innerHTML = def.columns.map(col => {
-      const isChecked = savedCols ? savedCols.includes(col.id) : Boolean(col.default);
-      return `
+  container.innerHTML = def.columns.map(col => {
+    const isChecked = savedCols ? savedCols.includes(col.id) : Boolean(col.default);
+    return `
       <label class="whatsapp-col-checkbox-label">
         <input type="checkbox" data-col-id="${escapeHtml(col.id)}" ${isChecked ? "checked" : ""} style="accent-color: #25d366; width: 16px; height: 16px;">
         <span>${escapeHtml(col.label)}</span>
       </label>
     `;
-    }).join("");
+  }).join("");
 
-    // Attach live listener to checkboxes
-    const cbs = container.querySelectorAll("input[type='checkbox']");
-    cbs.forEach(cb => {
-      cb.addEventListener("change", () => {
-        renderWhatsAppTableImage();
-      });
+  // Attach live listener to checkboxes
+  const cbs = container.querySelectorAll("input[type='checkbox']");
+  cbs.forEach(cb => {
+    cb.addEventListener("change", () => {
+      renderWhatsAppTableImage();
     });
-  }
+  });
+}
 
-  function getActiveWhatsAppSelectedColIds() {
-    const container = document.getElementById("whatsapp-columns-container");
-    if (!container) return [];
-    const cbs = container.querySelectorAll("input[type='checkbox']:checked");
-    return Array.from(cbs).map(cb => cb.getAttribute("data-col-id"));
-  }
+function getActiveWhatsAppSelectedColIds() {
+  const container = document.getElementById("whatsapp-columns-container");
+  if (!container) return [];
+  const cbs = container.querySelectorAll("input[type='checkbox']:checked");
+  return Array.from(cbs).map(cb => cb.getAttribute("data-col-id"));
+}
 
-  function renderWhatsAppTableImage() {
-    const canvas = document.getElementById("whatsapp-table-canvas");
-    const badge = document.getElementById("whatsapp-preview-badge");
-    if (!canvas) return;
+function renderWhatsAppTableImage() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  const badge = document.getElementById("whatsapp-preview-badge");
+  if (!canvas) return;
 
-    const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
-    if (!def) return;
+  const def = WHATSAPP_SHEET_DEFS[currentWhatsAppSheet];
+  if (!def) return;
 
-    const selectedColIds = getActiveWhatsAppSelectedColIds();
-    const activeCols = def.columns.filter(c => selectedColIds.includes(c.id));
+  const selectedColIds = getActiveWhatsAppSelectedColIds();
+  const activeCols = def.columns.filter(c => selectedColIds.includes(c.id));
 
-    if (activeCols.length === 0) {
-      canvas.width = 600;
-      canvas.height = 180;
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "#64748b";
-      ctx.font = "bold 16px Inter, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("No columns selected! Please check at least 1 column on the left.", 300, 95);
-      if (badge) badge.textContent = "0 columns selected";
-      return;
-    }
-
-    const { rows, totals, filterDesc } = def.getData(currentWhatsAppContractor);
-    const includeTotals = Boolean(document.getElementById("whatsapp-include-totals-toggle")?.checked);
-    const datePeriodStr = def.getDatePeriod();
-
-    // Update filter hint in UI sidebar
-    const filterHintEl = document.getElementById("whatsapp-active-filter-hint");
-    if (filterHintEl) {
-      if (filterDesc) {
-        filterHintEl.style.display = "block";
-        filterHintEl.innerHTML = `🔍 <strong>Filter Synced:</strong> ${escapeHtml(filterDesc)} (${rows.length} rows)`;
-        filterHintEl.style.color = "#38bdf8";
-      } else {
-        filterHintEl.style.display = "block";
-        filterHintEl.innerHTML = `✓ <strong>Whole Table:</strong> Showing all ${rows.length} rows`;
-        filterHintEl.style.color = "#10b981";
-      }
-    }
-
-    // ------------------------------------------------------------------
-    // Layout Dimensions & Sizing
-    // ------------------------------------------------------------------
-    const SCALE = 2; // Ultra HD Retina
-    const PADDING_X = 24;
-    const HEADER_HEIGHT = 98;
-    const TABLE_HEADER_HEIGHT = 38;
-    const ROW_HEIGHT = 34;
-    const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
-    const FOOTER_HEIGHT = 32;
-
-    // Calculate dynamic column widths proportionally
-    const baseColWidths = activeCols.map(c => c.width || 100);
-    const totalBaseWidth = baseColWidths.reduce((a, b) => a + b, 0);
-
-    // Target minimum table width for crisp reading
-    const targetTableWidth = Math.max(900, Math.min(1400, totalBaseWidth + 100));
-    const colWidths = baseColWidths.map(w => Math.round((w / totalBaseWidth) * targetTableWidth));
-    const actualTableWidth = colWidths.reduce((a, b) => a + b, 0);
-
-    const logicalWidth = actualTableWidth + (PADDING_X * 2);
-    const effectiveRowsHeight = Math.max(rows.length * ROW_HEIGHT, rows.length === 0 ? 60 : 0);
-    const logicalHeight = HEADER_HEIGHT + TABLE_HEADER_HEIGHT + effectiveRowsHeight + TOTAL_HEIGHT + FOOTER_HEIGHT + 16;
-
-    canvas.width = Math.round(logicalWidth * SCALE);
-    canvas.height = Math.round(logicalHeight * SCALE);
-    canvas.style.width = `${logicalWidth}px`;
-    canvas.style.height = `${logicalHeight}px`;
-
+  if (activeCols.length === 0) {
+    canvas.width = 600;
+    canvas.height = 180;
     const ctx = canvas.getContext("2d");
-    ctx.save();
-    ctx.scale(SCALE, SCALE);
-
-    // Background Canvas
     ctx.fillStyle = "#ffffff";
-    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
-
-    // ------------------------------------------------------------------
-    // 1. TOP BRANDING & DETAILS BANNER
-    // ------------------------------------------------------------------
-    const bannerGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
-    bannerGrad.addColorStop(0, "#0f172a");
-    bannerGrad.addColorStop(0.5, "#1e293b");
-    bannerGrad.addColorStop(1, "#0f172a");
-    ctx.fillStyle = bannerGrad;
-    ctx.fillRect(0, 0, logicalWidth, HEADER_HEIGHT);
-
-    // Decorative Accent Bar
-    const accentGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
-    accentGrad.addColorStop(0, "#25d366");
-    accentGrad.addColorStop(0.5, "#38bdf8");
-    accentGrad.addColorStop(1, "#10b981");
-    ctx.fillStyle = accentGrad;
-    ctx.fillRect(0, HEADER_HEIGHT - 3.5, logicalWidth, 3.5);
-
-    // Brand Name
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "bold 10px Inter, -apple-system, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("CRAFTFLOW  •  HAND EMBROIDERY PRODUCTION SUITE", PADDING_X, 22);
-
-    // Sheet Title
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "800 17px Inter, -apple-system, sans-serif";
-    ctx.fillText(def.title, PADDING_X, 45);
-
-    // Subtitle & Badges
-    ctx.font = "600 11px Inter, -apple-system, sans-serif";
-
-    // Date Badge
-    const dateBadgeWidth = drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 70, "#38bdf8", "rgba(56, 189, 248, 0.18)");
-
-    // Contractor / Filter Badge
-    const contText = currentWhatsAppContractor !== "all"
-      ? `👤 Contractor: ${currentWhatsAppContractor}`
-      : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
-    const badgeX = PADDING_X + dateBadgeWidth + 10;
-    drawCanvasBadge(ctx, contText, badgeX, 70, "#25d366", "rgba(37, 211, 102, 0.18)");
-
-    // Record Count Badge (Right aligned)
-    const countText = filterDesc
-      ? `🔍 Filtered: ${rows.length} rows`
-      : `📦 All Records: ${rows.length}`;
-    ctx.fillStyle = filterDesc ? "#38bdf8" : "#cbd5e1";
-    ctx.font = "bold 11.5px Inter, -apple-system, sans-serif";
-    ctx.textAlign = "right";
-    ctx.fillText(countText, logicalWidth - PADDING_X, 45);
-
-    const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#64748b";
-    ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
-    ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 70);
+    ctx.font = "bold 16px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No columns selected! Please check at least 1 column on the left.", 300, 95);
+    if (badge) badge.textContent = "0 columns selected";
+    return;
+  }
 
-    // ------------------------------------------------------------------
-    // 2. TABLE HEADER ROW
-    // ------------------------------------------------------------------
-    let curY = HEADER_HEIGHT + 10;
-    ctx.fillStyle = "#1e293b";
-    ctx.fillRect(PADDING_X, curY, actualTableWidth, TABLE_HEADER_HEIGHT);
+  const { rows, totals, filterDesc } = def.getData(currentWhatsAppContractor);
+  const includeTotals = Boolean(document.getElementById("whatsapp-include-totals-toggle")?.checked);
+  const datePeriodStr = def.getDatePeriod();
 
-    let curX = PADDING_X;
+  // Update filter hint in UI sidebar
+  const filterHintEl = document.getElementById("whatsapp-active-filter-hint");
+  if (filterHintEl) {
+    if (filterDesc) {
+      filterHintEl.style.display = "block";
+      filterHintEl.innerHTML = `🔍 <strong>Filter Synced:</strong> ${escapeHtml(filterDesc)} (${rows.length} rows)`;
+      filterHintEl.style.color = "#38bdf8";
+    } else {
+      filterHintEl.style.display = "block";
+      filterHintEl.innerHTML = `✓ <strong>Whole Table:</strong> Showing all ${rows.length} rows`;
+      filterHintEl.style.color = "#10b981";
+    }
+  }
+
+  // ------------------------------------------------------------------
+  // Layout Dimensions & Sizing
+  // ------------------------------------------------------------------
+  const SCALE = 2; // Ultra HD Retina
+  const PADDING_X = 24;
+  const HEADER_HEIGHT = 98;
+  const TABLE_HEADER_HEIGHT = 38;
+  const ROW_HEIGHT = 34;
+  const TOTAL_HEIGHT = (includeTotals && rows.length > 0) ? 38 : 0;
+  const FOOTER_HEIGHT = 32;
+
+  // Calculate dynamic column widths proportionally
+  const baseColWidths = activeCols.map(c => c.width || 100);
+  const totalBaseWidth = baseColWidths.reduce((a, b) => a + b, 0);
+
+  // Target minimum table width for crisp reading
+  const targetTableWidth = Math.max(900, Math.min(1400, totalBaseWidth + 100));
+  const colWidths = baseColWidths.map(w => Math.round((w / totalBaseWidth) * targetTableWidth));
+  const actualTableWidth = colWidths.reduce((a, b) => a + b, 0);
+
+  const logicalWidth = actualTableWidth + (PADDING_X * 2);
+  const effectiveRowsHeight = Math.max(rows.length * ROW_HEIGHT, rows.length === 0 ? 60 : 0);
+  const logicalHeight = HEADER_HEIGHT + TABLE_HEADER_HEIGHT + effectiveRowsHeight + TOTAL_HEIGHT + FOOTER_HEIGHT + 16;
+
+  canvas.width = Math.round(logicalWidth * SCALE);
+  canvas.height = Math.round(logicalHeight * SCALE);
+  canvas.style.width = `${logicalWidth}px`;
+  canvas.style.height = `${logicalHeight}px`;
+
+  const ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.scale(SCALE, SCALE);
+
+  // Background Canvas
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, logicalWidth, logicalHeight);
+
+  // ------------------------------------------------------------------
+  // 1. TOP BRANDING & DETAILS BANNER
+  // ------------------------------------------------------------------
+  const bannerGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+  bannerGrad.addColorStop(0, "#0f172a");
+  bannerGrad.addColorStop(0.5, "#1e293b");
+  bannerGrad.addColorStop(1, "#0f172a");
+  ctx.fillStyle = bannerGrad;
+  ctx.fillRect(0, 0, logicalWidth, HEADER_HEIGHT);
+
+  // Decorative Accent Bar
+  const accentGrad = ctx.createLinearGradient(0, 0, logicalWidth, 0);
+  accentGrad.addColorStop(0, "#25d366");
+  accentGrad.addColorStop(0.5, "#38bdf8");
+  accentGrad.addColorStop(1, "#10b981");
+  ctx.fillStyle = accentGrad;
+  ctx.fillRect(0, HEADER_HEIGHT - 3.5, logicalWidth, 3.5);
+
+  // Brand Name
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "bold 10px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("CRAFTFLOW  •  HAND EMBROIDERY PRODUCTION SUITE", PADDING_X, 22);
+
+  // Sheet Title
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 17px Inter, -apple-system, sans-serif";
+  ctx.fillText(def.title, PADDING_X, 45);
+
+  // Subtitle & Badges
+  ctx.font = "600 11px Inter, -apple-system, sans-serif";
+
+  // Date Badge
+  const dateBadgeWidth = drawCanvasBadge(ctx, `📅 ${datePeriodStr}`, PADDING_X, 70, "#38bdf8", "rgba(56, 189, 248, 0.18)");
+
+  // Contractor / Filter Badge
+  const contText = currentWhatsAppContractor !== "all"
+    ? `👤 Contractor: ${currentWhatsAppContractor}`
+    : (filterDesc ? `🔍 Filter: ${filterDesc}` : "👥 All Contractors (Whole Sheet)");
+  const badgeX = PADDING_X + dateBadgeWidth + 10;
+  drawCanvasBadge(ctx, contText, badgeX, 70, "#25d366", "rgba(37, 211, 102, 0.18)");
+
+  // Record Count Badge (Right aligned)
+  const countText = filterDesc
+    ? `🔍 Filtered: ${rows.length} rows`
+    : `📦 All Records: ${rows.length}`;
+  ctx.fillStyle = filterDesc ? "#38bdf8" : "#cbd5e1";
+  ctx.font = "bold 11.5px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "right";
+  ctx.fillText(countText, logicalWidth - PADDING_X, 45);
+
+  const timeStr = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  ctx.fillStyle = "#64748b";
+  ctx.font = "600 10.5px Inter, -apple-system, sans-serif";
+  ctx.fillText(`Generated: ${timeStr}`, logicalWidth - PADDING_X, 70);
+
+  // ------------------------------------------------------------------
+  // 2. TABLE HEADER ROW
+  // ------------------------------------------------------------------
+  let curY = HEADER_HEIGHT + 10;
+  ctx.fillStyle = "#1e293b";
+  ctx.fillRect(PADDING_X, curY, actualTableWidth, TABLE_HEADER_HEIGHT);
+
+  let curX = PADDING_X;
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "800 10.5px Inter, -apple-system, sans-serif";
+
+  activeCols.forEach((col, idx) => {
+    const colW = colWidths[idx];
+    ctx.strokeStyle = "#334155";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(curX, curY, colW, TABLE_HEADER_HEIGHT);
+
+    let textX = curX + (colW / 2);
+    ctx.textAlign = "center";
+    if (col.align === "left") {
+      textX = curX + 10;
+      ctx.textAlign = "left";
+    } else if (col.align === "right") {
+      textX = curX + colW - 10;
+      ctx.textAlign = "right";
+    }
+
     ctx.fillStyle = "#ffffff";
-    ctx.font = "800 10.5px Inter, -apple-system, sans-serif";
+    drawTextWithTruncate(ctx, col.label, textX, curY + 23, colW - 16, col.align);
+    curX += colW;
+  });
 
-    activeCols.forEach((col, idx) => {
-      const colW = colWidths[idx];
-      ctx.strokeStyle = "#334155";
+  curY += TABLE_HEADER_HEIGHT;
+
+  // Empty state handling if no records match
+  if (rows.length === 0) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, 60);
+    ctx.strokeStyle = "#e2e8f0";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PADDING_X, curY, actualTableWidth, 60);
+    ctx.fillStyle = "#64748b";
+    ctx.font = "italic 12px Inter, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No table records match active search or filters.", PADDING_X + (actualTableWidth / 2), curY + 35);
+    curY += 60;
+  }
+
+  // ------------------------------------------------------------------
+  // 3. DATA ROWS (Zebra Striping & Balance Highlights)
+  // ------------------------------------------------------------------
+  rows.forEach((row, rIdx) => {
+    const isEven = rIdx % 2 === 0;
+    const rowBg = isEven ? "#ffffff" : "#f8fafc";
+
+    ctx.fillStyle = rowBg;
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, ROW_HEIGHT);
+
+    curX = PADDING_X;
+    activeCols.forEach((col, cIdx) => {
+      const colW = colWidths[cIdx];
+      const rawVal = col.get(row, rIdx);
+      const isNum = Boolean(col.isNumeric);
+      const numVal = isNum ? (Number(rawVal) || 0) : 0;
+      const isBalHighlight = Boolean(col.isBalance) && numVal > 0;
+
+      // Highlight cell if pending balance > 0
+      if (isBalHighlight) {
+        ctx.fillStyle = "#ffe4e6"; // soft rose
+        ctx.fillRect(curX, curY, colW, ROW_HEIGHT);
+      }
+
+      // Border
+      ctx.strokeStyle = "#e2e8f0";
       ctx.lineWidth = 1;
-      ctx.strokeRect(curX, curY, colW, TABLE_HEADER_HEIGHT);
+      ctx.strokeRect(curX, curY, colW, ROW_HEIGHT);
+
+      // Text Formatting
+      let displayStr = "";
+      if (isNum) {
+        displayStr = numVal.toLocaleString("en-US");
+      } else {
+        displayStr = String(rawVal != null ? rawVal : "-");
+      }
 
       let textX = curX + (colW / 2);
       ctx.textAlign = "center";
@@ -14347,316 +14511,248 @@ function saveActivePrintPreset() {
         ctx.textAlign = "right";
       }
 
-      ctx.fillStyle = "#ffffff";
-      drawTextWithTruncate(ctx, col.label, textX, curY + 23, colW - 16, col.align);
+      // Font & Color Selection
+      if (isBalHighlight) {
+        ctx.fillStyle = "#e11d48"; // vibrant red/rose
+        ctx.font = "bold 11px Inter, sans-serif";
+      } else if (col.isStyleCode) {
+        ctx.fillStyle = "#0284c7"; // blue
+        ctx.font = "bold 11.5px Inter, sans-serif";
+      } else if (col.isContractor) {
+        ctx.fillStyle = "#0f172a"; // dark bold
+        ctx.font = "bold 11px Inter, sans-serif";
+      } else if (isNum) {
+        ctx.fillStyle = "#0f172a";
+        ctx.font = "600 11px Inter, sans-serif";
+      } else {
+        ctx.fillStyle = "#334155";
+        ctx.font = "500 11px Inter, sans-serif";
+      }
+
+      drawTextWithTruncate(ctx, displayStr, textX, curY + 21, colW - 14, col.align);
       curX += colW;
     });
 
-    curY += TABLE_HEADER_HEIGHT;
+    curY += ROW_HEIGHT;
+  });
 
-    // Empty state handling if no records match
-    if (rows.length === 0) {
-      ctx.fillStyle = "#ffffff";
-      ctx.fillRect(PADDING_X, curY, actualTableWidth, 60);
-      ctx.strokeStyle = "#e2e8f0";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(PADDING_X, curY, actualTableWidth, 60);
-      ctx.fillStyle = "#64748b";
-      ctx.font = "italic 12px Inter, sans-serif";
-      ctx.textAlign = "center";
-      ctx.fillText("No table records match active search or filters.", PADDING_X + (actualTableWidth / 2), curY + 35);
-      curY += 60;
-    }
+  // ------------------------------------------------------------------
+  // 4. TOTALS ROW (Optional Summary Row)
+  // ------------------------------------------------------------------
+  if (includeTotals && rows.length > 0) {
+    ctx.fillStyle = "#f1f5f9";
+    ctx.fillRect(PADDING_X, curY, actualTableWidth, TOTAL_HEIGHT);
 
-    // ------------------------------------------------------------------
-    // 3. DATA ROWS (Zebra Striping & Balance Highlights)
-    // ------------------------------------------------------------------
-    rows.forEach((row, rIdx) => {
-      const isEven = rIdx % 2 === 0;
-      const rowBg = isEven ? "#ffffff" : "#f8fafc";
-
-      ctx.fillStyle = rowBg;
-      ctx.fillRect(PADDING_X, curY, actualTableWidth, ROW_HEIGHT);
-
-      curX = PADDING_X;
-      activeCols.forEach((col, cIdx) => {
-        const colW = colWidths[cIdx];
-        const rawVal = col.get(row, rIdx);
-        const isNum = Boolean(col.isNumeric);
-        const numVal = isNum ? (Number(rawVal) || 0) : 0;
-        const isBalHighlight = Boolean(col.isBalance) && numVal > 0;
-
-        // Highlight cell if pending balance > 0
-        if (isBalHighlight) {
-          ctx.fillStyle = "#ffe4e6"; // soft rose
-          ctx.fillRect(curX, curY, colW, ROW_HEIGHT);
-        }
-
-        // Border
-        ctx.strokeStyle = "#e2e8f0";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(curX, curY, colW, ROW_HEIGHT);
-
-        // Text Formatting
-        let displayStr = "";
-        if (isNum) {
-          displayStr = numVal.toLocaleString("en-US");
-        } else {
-          displayStr = String(rawVal != null ? rawVal : "-");
-        }
-
-        let textX = curX + (colW / 2);
-        ctx.textAlign = "center";
-        if (col.align === "left") {
-          textX = curX + 10;
-          ctx.textAlign = "left";
-        } else if (col.align === "right") {
-          textX = curX + colW - 10;
-          ctx.textAlign = "right";
-        }
-
-        // Font & Color Selection
-        if (isBalHighlight) {
-          ctx.fillStyle = "#e11d48"; // vibrant red/rose
-          ctx.font = "bold 11px Inter, sans-serif";
-        } else if (col.isStyleCode) {
-          ctx.fillStyle = "#0284c7"; // blue
-          ctx.font = "bold 11.5px Inter, sans-serif";
-        } else if (col.isContractor) {
-          ctx.fillStyle = "#0f172a"; // dark bold
-          ctx.font = "bold 11px Inter, sans-serif";
-        } else if (isNum) {
-          ctx.fillStyle = "#0f172a";
-          ctx.font = "600 11px Inter, sans-serif";
-        } else {
-          ctx.fillStyle = "#334155";
-          ctx.font = "500 11px Inter, sans-serif";
-        }
-
-        drawTextWithTruncate(ctx, displayStr, textX, curY + 21, colW - 14, col.align);
-        curX += colW;
-      });
-
-      curY += ROW_HEIGHT;
-    });
-
-    // ------------------------------------------------------------------
-    // 4. TOTALS ROW (Optional Summary Row)
-    // ------------------------------------------------------------------
-    if (includeTotals && rows.length > 0) {
-      ctx.fillStyle = "#f1f5f9";
-      ctx.fillRect(PADDING_X, curY, actualTableWidth, TOTAL_HEIGHT);
-
-      // Strong dividing top border
-      ctx.strokeStyle = "#94a3b8";
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(PADDING_X, curY);
-      ctx.lineTo(PADDING_X + actualTableWidth, curY);
-      ctx.stroke();
-
-      curX = PADDING_X;
-      let totalLabelDrawn = false;
-
-      activeCols.forEach((col, cIdx) => {
-        const colW = colWidths[cIdx];
-        ctx.strokeStyle = "#cbd5e1";
-        ctx.lineWidth = 1;
-        ctx.strokeRect(curX, curY, colW, TOTAL_HEIGHT);
-
-        let textX = curX + (colW / 2);
-        ctx.textAlign = "center";
-        if (col.align === "left") {
-          textX = curX + 10;
-          ctx.textAlign = "left";
-        } else if (col.align === "right") {
-          textX = curX + colW - 10;
-          ctx.textAlign = "right";
-        }
-
-        ctx.font = "bold 11px Inter, sans-serif";
-        ctx.fillStyle = "#0f172a";
-
-        if (totals[col.id] != null) {
-          const sumVal = totals[col.id].toLocaleString("en-US");
-          drawTextWithTruncate(ctx, sumVal, textX, curY + 23, colW - 14, col.align);
-        } else if (!totalLabelDrawn && col.align === "left") {
-          drawTextWithTruncate(ctx, `TOTAL (${rows.length}):`, textX, curY + 23, colW - 14, "left");
-          totalLabelDrawn = true;
-        } else if (!totalLabelDrawn && cIdx === 0) {
-          drawTextWithTruncate(ctx, "TOTAL:", textX, curY + 23, colW - 10, "center");
-          totalLabelDrawn = true;
-        }
-
-        curX += colW;
-      });
-
-      curY += TOTAL_HEIGHT;
-    }
-
-    // ------------------------------------------------------------------
-    // 5. FOOTER WATERMARK
-    // ------------------------------------------------------------------
-    curY += 8;
-    ctx.fillStyle = "#94a3b8";
-    ctx.font = "500 9.5px Inter, -apple-system, sans-serif";
-    ctx.textAlign = "left";
-    ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
-
-    ctx.restore();
-
-    // Update badge
-    if (badge) {
-      const filterNote = filterDesc ? ` • [Filtered: ${filterDesc}]` : " • [All Records]";
-      badge.textContent = `${rows.length} rows • ${activeCols.length} cols • ${logicalWidth * 2} × ${logicalHeight * 2} px Ultra HD 2x${filterNote}`;
-    }
-  }
-
-  function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
-    ctx.save();
-    ctx.font = "bold 10px Inter, sans-serif";
-    const metrics = ctx.measureText(text);
-    const w = metrics.width + 16;
-    const h = 20;
-    const r = 4;
-
-    ctx.fillStyle = bgColor;
+    // Strong dividing top border
+    ctx.strokeStyle = "#94a3b8";
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.roundRect(x, y - 13, w, h, r);
-    ctx.fill();
-
-    ctx.strokeStyle = textColor;
-    ctx.lineWidth = 1;
+    ctx.moveTo(PADDING_X, curY);
+    ctx.lineTo(PADDING_X + actualTableWidth, curY);
     ctx.stroke();
 
-    ctx.fillStyle = textColor;
-    ctx.textAlign = "left";
-    ctx.fillText(text, x + 8, y + 1);
-    ctx.restore();
-    return w;
+    curX = PADDING_X;
+    let totalLabelDrawn = false;
+
+    activeCols.forEach((col, cIdx) => {
+      const colW = colWidths[cIdx];
+      ctx.strokeStyle = "#cbd5e1";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(curX, curY, colW, TOTAL_HEIGHT);
+
+      let textX = curX + (colW / 2);
+      ctx.textAlign = "center";
+      if (col.align === "left") {
+        textX = curX + 10;
+        ctx.textAlign = "left";
+      } else if (col.align === "right") {
+        textX = curX + colW - 10;
+        ctx.textAlign = "right";
+      }
+
+      ctx.font = "bold 11px Inter, sans-serif";
+      ctx.fillStyle = "#0f172a";
+
+      if (totals[col.id] != null) {
+        const sumVal = totals[col.id].toLocaleString("en-US");
+        drawTextWithTruncate(ctx, sumVal, textX, curY + 23, colW - 14, col.align);
+      } else if (!totalLabelDrawn && col.align === "left") {
+        drawTextWithTruncate(ctx, `TOTAL (${rows.length}):`, textX, curY + 23, colW - 14, "left");
+        totalLabelDrawn = true;
+      } else if (!totalLabelDrawn && cIdx === 0) {
+        drawTextWithTruncate(ctx, "TOTAL:", textX, curY + 23, colW - 10, "center");
+        totalLabelDrawn = true;
+      }
+
+      curX += colW;
+    });
+
+    curY += TOTAL_HEIGHT;
   }
 
-  function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
-    if (maxWidth <= 0) return;
-    text = String(text != null ? text : "");
-    if (ctx.measureText(text).width <= maxWidth) {
-      ctx.fillText(text, x, y);
-      return;
-    }
+  // ------------------------------------------------------------------
+  // 5. FOOTER WATERMARK
+  // ------------------------------------------------------------------
+  curY += 8;
+  ctx.fillStyle = "#94a3b8";
+  ctx.font = "500 9.5px Inter, -apple-system, sans-serif";
+  ctx.textAlign = "left";
+  ctx.fillText("Generated via CraftFlow Apparel Production Suite  •  Confidential Hand Embroidery Record", PADDING_X, curY + 12);
 
-    let truncated = text;
-    while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
-      truncated = truncated.slice(0, -1);
-    }
-    ctx.fillText(truncated + "…", x, y);
+  ctx.restore();
+
+  // Update badge
+  if (badge) {
+    const filterNote = filterDesc ? ` • [Filtered: ${filterDesc}]` : " • [All Records]";
+    badge.textContent = `${rows.length} rows • ${activeCols.length} cols • ${logicalWidth * 2} × ${logicalHeight * 2} px Ultra HD 2x${filterNote}`;
+  }
+}
+
+function drawCanvasBadge(ctx, text, x, y, textColor, bgColor) {
+  ctx.save();
+  ctx.font = "bold 10px Inter, sans-serif";
+  const metrics = ctx.measureText(text);
+  const w = metrics.width + 16;
+  const h = 20;
+  const r = 4;
+
+  ctx.fillStyle = bgColor;
+  ctx.beginPath();
+  ctx.roundRect(x, y - 13, w, h, r);
+  ctx.fill();
+
+  ctx.strokeStyle = textColor;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "left";
+  ctx.fillText(text, x + 8, y + 1);
+  ctx.restore();
+  return w;
+}
+
+function drawTextWithTruncate(ctx, text, x, y, maxWidth, align = "left") {
+  if (maxWidth <= 0) return;
+  text = String(text != null ? text : "");
+  if (ctx.measureText(text).width <= maxWidth) {
+    ctx.fillText(text, x, y);
+    return;
   }
 
-  async function copyWhatsAppTableImageToClipboard() {
-    const canvas = document.getElementById("whatsapp-table-canvas");
-    if (!canvas) return;
+  let truncated = text;
+  while (truncated.length > 1 && ctx.measureText(truncated + "…").width > maxWidth) {
+    truncated = truncated.slice(0, -1);
+  }
+  ctx.fillText(truncated + "…", x, y);
+}
 
-    const btn = document.getElementById("btn-whatsapp-copy-clipboard");
-    const origHtml = btn ? btn.innerHTML : "";
-    if (btn) {
-      btn.disabled = true;
-      btn.innerHTML = `<span>⏳</span> <span>Copying...</span>`;
-    }
+async function copyWhatsAppTableImageToClipboard() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  if (!canvas) return;
 
-    try {
-      canvas.toBlob(async (blob) => {
-        if (!blob) throw new Error("Could not create image blob");
+  const btn = document.getElementById("btn-whatsapp-copy-clipboard");
+  const origHtml = btn ? btn.innerHTML : "";
+  if (btn) {
+    btn.disabled = true;
+    btn.innerHTML = `<span>⏳</span> <span>Copying...</span>`;
+  }
 
-        let copiedSuccessfully = false;
-        if (navigator.clipboard && window.ClipboardItem) {
-          try {
-            const item = new ClipboardItem({ "image/png": blob });
-            await navigator.clipboard.write([item]);
-            copiedSuccessfully = true;
-          } catch (clipErr) {
-            console.warn("Direct clipboard write failed:", clipErr);
-          }
+  try {
+    canvas.toBlob(async (blob) => {
+      if (!blob) throw new Error("Could not create image blob");
+
+      let copiedSuccessfully = false;
+      if (navigator.clipboard && window.ClipboardItem) {
+        try {
+          const item = new ClipboardItem({ "image/png": blob });
+          await navigator.clipboard.write([item]);
+          copiedSuccessfully = true;
+        } catch (clipErr) {
+          console.warn("Direct clipboard write failed:", clipErr);
         }
+      }
 
-        if (copiedSuccessfully) {
-          showWhatsAppActionFeedback("Image Copied to Clipboard! Ab WhatsApp me jakar 'Ctrl + V' dabayein.", true);
-          if (typeof showToast === "function") {
-            showToast("Table image copied to clipboard! Paste directly into WhatsApp.", "success");
-          }
-          if (btn) {
-            btn.innerHTML = `<span>✅</span> <span>Copied to Clipboard!</span>`;
-            setTimeout(() => {
-              btn.innerHTML = origHtml;
-              btn.disabled = false;
-            }, 3500);
-          }
-        } else {
-          // Fallback: Download file automatically
-          downloadWhatsAppTableImage();
-          showWhatsAppActionFeedback("Image Downloaded! (Direct clipboard copy not permitted by browser)", true);
-          if (btn) {
+      if (copiedSuccessfully) {
+        showWhatsAppActionFeedback("Image Copied to Clipboard! Ab WhatsApp me jakar 'Ctrl + V' dabayein.", true);
+        if (typeof showToast === "function") {
+          showToast("Table image copied to clipboard! Paste directly into WhatsApp.", "success");
+        }
+        if (btn) {
+          btn.innerHTML = `<span>✅</span> <span>Copied to Clipboard!</span>`;
+          setTimeout(() => {
             btn.innerHTML = origHtml;
             btn.disabled = false;
-          }
+          }, 3500);
         }
-      }, "image/png");
-    } catch (err) {
-      console.error("WhatsApp Copy error:", err);
-      downloadWhatsAppTableImage();
-      if (btn) {
-        btn.innerHTML = origHtml;
-        btn.disabled = false;
+      } else {
+        // Fallback: Download file automatically
+        downloadWhatsAppTableImage();
+        showWhatsAppActionFeedback("Image Downloaded! (Direct clipboard copy not permitted by browser)", true);
+        if (btn) {
+          btn.innerHTML = origHtml;
+          btn.disabled = false;
+        }
       }
+    }, "image/png");
+  } catch (err) {
+    console.error("WhatsApp Copy error:", err);
+    downloadWhatsAppTableImage();
+    if (btn) {
+      btn.innerHTML = origHtml;
+      btn.disabled = false;
     }
   }
+}
 
-  function downloadWhatsAppTableImage() {
-    const canvas = document.getElementById("whatsapp-table-canvas");
-    if (!canvas) return;
+function downloadWhatsAppTableImage() {
+  const canvas = document.getElementById("whatsapp-table-canvas");
+  if (!canvas) return;
 
-    const sheet = currentWhatsAppSheet || "table";
-    const cont = (currentWhatsAppContractor || "all").replace(/[^a-zA-Z0-9_-]/g, "_");
-    const d = new Date().toISOString().slice(0, 10);
-    const filename = `CraftFlow_${sheet}_${cont}_${d}.png`;
+  const sheet = currentWhatsAppSheet || "table";
+  const cont = (currentWhatsAppContractor || "all").replace(/[^a-zA-Z0-9_-]/g, "_");
+  const d = new Date().toISOString().slice(0, 10);
+  const filename = `CraftFlow_${sheet}_${cont}_${d}.png`;
 
-    try {
-      const dataUrl = canvas.toDataURL("image/png");
-      const link = document.createElement("a");
-      link.download = filename;
-      link.href = dataUrl;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      if (typeof showToast === "function") {
-        showToast(`Image downloaded: ${filename}`, "success");
-      }
-    } catch (e) {
-      console.error("Failed to download canvas:", e);
-      if (typeof showToast === "function") {
-        showToast("Download failed. Please check browser permissions.", "error");
-      }
+  try {
+    const dataUrl = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = filename;
+    link.href = dataUrl;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    if (typeof showToast === "function") {
+      showToast(`Image downloaded: ${filename}`, "success");
+    }
+  } catch (e) {
+    console.error("Failed to download canvas:", e);
+    if (typeof showToast === "function") {
+      showToast("Download failed. Please check browser permissions.", "error");
     }
   }
+}
 
-  function showWhatsAppActionFeedback(msgText, isSuccess = true) {
-    const box = document.getElementById("whatsapp-action-status");
-    const textEl = document.getElementById("whatsapp-action-status-text");
-    if (!box || !textEl) return;
+function showWhatsAppActionFeedback(msgText, isSuccess = true) {
+  const box = document.getElementById("whatsapp-action-status");
+  const textEl = document.getElementById("whatsapp-action-status-text");
+  if (!box || !textEl) return;
 
-    textEl.textContent = msgText;
-    box.style.display = "flex";
-    box.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
-    box.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
-    box.style.color = isSuccess ? "#10b981" : "#f43f5e";
+  textEl.textContent = msgText;
+  box.style.display = "flex";
+  box.style.background = isSuccess ? "rgba(16, 185, 129, 0.15)" : "rgba(244, 63, 94, 0.15)";
+  box.style.borderColor = isSuccess ? "#10b981" : "#f43f5e";
+  box.style.color = isSuccess ? "#10b981" : "#f43f5e";
 
-    if (window._whatsappStatusTimer) clearTimeout(window._whatsappStatusTimer);
-    window._whatsappStatusTimer = setTimeout(() => {
-      if (box) box.style.display = "none";
-    }, 6000);
-  }
+  if (window._whatsappStatusTimer) clearTimeout(window._whatsappStatusTimer);
+  window._whatsappStatusTimer = setTimeout(() => {
+    if (box) box.style.display = "none";
+  }, 6000);
+}
 
-  // Auto-initialize when DOM is ready
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", initWhatsAppTableController);
-  } else {
-    initWhatsAppTableController();
-  }
+// Auto-initialize when DOM is ready
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initWhatsAppTableController);
+} else {
+  initWhatsAppTableController();
+}

@@ -33,7 +33,7 @@
   <title>CraftFlow - Hand Embroidery Production & Inventory SaaS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon-192.png">
-  <link rel="stylesheet" href="style.css?v=36">
+  <link rel="stylesheet" href="style.css?v=65">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
   <link rel="shortcut icon" href="icon-192.png">
 </head>
@@ -1707,16 +1707,16 @@
 
         <div class="quick-add-remarks-wrapper" style="display: flex; align-items: center; gap: 0.4rem; flex: 1;">
           <input type="text" class="app-input" id="quick-remarks-input"
-            placeholder="Time / Status / Remarks (e.g. MATERIAL NOT AVAILABLE)" style="width: 100%;">
+            placeholder="Time / Status / Remarks (e.g. Material Not Available)" style="width: 100%;">
 
           <!-- Preset quick buttons for remarks -->
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL NOT AVAILABLE')"
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Material Not Available')"
             title="Material Not Available">M-NA</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('MATERIAL ISSUE')"
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Material Issue')"
             title="Material Issue">M-Issue</button>
           <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Inline')"
             title="Inline production">Inline</button>
-          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('ALTER')"
+          <button type="button" class="btn btn-secondary btn-sm" onclick="setQuickRemark('Alter')"
             title="Alteration">Alter</button>
         </div>
 
@@ -1774,7 +1774,7 @@
                     <th style="background: rgba(99, 102, 241, 0.12); color: #818cf8;">DISPATCH HAND EMB</th>
                     <th style="background: rgba(244, 63, 94, 0.15);">BALNCE FROM H-EMB</th>
                     <th style="min-width: 200px;">TIME / REMARKS / STATUS</th>
-                    <th style="width: 60px; text-align: center;">ACTION</th>
+                    <th style="min-width: 175px; text-align: center;">ACTION</th>
                   </tr>
                 </thead>
                 <tbody id="tbody-final-styles">
@@ -5530,13 +5530,13 @@
   <div class="toast-container" id="toast-container"></div>
 
   <!-- Scripts -->
-  <script src="data.js?v=60"></script>
-  <script src="db.js?v=60"></script>
-  <script src="app.js?v=60"></script>
+  <script src="data.js?v=65"></script>
+  <script src="db.js?v=65"></script>
+  <script src="app.js?v=65"></script>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js?v=60').catch(err => {
+        navigator.serviceWorker.register('./sw.js?v=65').catch(err => {
           console.log('SW registration note:', err.message);
         });
       });

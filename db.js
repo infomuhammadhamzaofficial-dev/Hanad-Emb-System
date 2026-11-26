@@ -3,6 +3,14 @@
 // Multi-Line Inward/Outward Challans & Strict (Style + Category) Mapping
 // ====================================================================
 
+function _formatProperCase(str) {
+  if (!str) return "";
+  if (/^Rec:\s*\d+/i.test(str)) return str;
+  return String(str).replace(/([^\s/,\-+&]+)/g, (word) => {
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  });
+}
+
 const DB_KEYS = {
   MASTER_INVENTORY: "hand_emb_master_inventory_v2",
   RECEIVING_LOG: "hand_emb_receiving_log_v2",
@@ -127,7 +135,7 @@ class DatabaseService {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }
 
   // Deduplicate Daily Sheet Final Styles (Strict: Style Code + Category)
@@ -220,7 +228,7 @@ class DatabaseService {
     }
   }
 
-    // Self-healing: Deduplicate and ensure sequential unique sr_no for all Master Inventory styles
+  // Self-healing: Deduplicate and ensure sequential unique sr_no for all Master Inventory styles
   deduplicateMasterInventorySerialNumbers() {
     try {
       let list = this._memCache[DB_KEYS.MASTER_INVENTORY] || [];
@@ -870,7 +878,7 @@ class DatabaseService {
     return false; // Neon database is single source of truth; if row exists in Neon, it is valid!
   }
 
-    // TRASH & RECYCLE BIN MANAGEMENT (Soft-Delete, Recovery & Permanent Purge)
+  // TRASH & RECYCLE BIN MANAGEMENT (Soft-Delete, Recovery & Permanent Purge)
   // -------------------------------------------------------------
   getTrashItems() {
     return this._getCached(DB_KEYS.TRASH, () => {
@@ -2691,1049 +2699,1051 @@ class DatabaseService {
   // Final Style Daily Report (Auto-fetch sheet)
   // -------------------------------------------------------------
   getFinalStyles() {
-    return this._getCached(DB_KEYS.FINAL_STYLES, () => {
-      const raw = this._memCache[DB_KEYS.FINAL_STYLES] || [];
+    const raw = this._memCache[DB_KEYS.FINAL_STYLES] || [];
+    const seen = new Set();
+    const result = [];
+
+    for (let idx = 0; idx < raw.length; idx++) {
+      const entry = raw[idx];
+      if (!entry) continue;
+      const code = (entry.style_code || "").trim().toUpperCase();
+      const cat = (entry.category || "Shirt").trim();
+      if (!code) continue;
+
+      // Ensure strict uniqueness: single entry per (style_code + category)
+      const key = `${code}:::${cat.toUpperCase()}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      // STRICT MATCH on style_code AND category
+      const master = this.findMasterByStyleAndCategory(code, cat);
+      if (master) {
+        result.push({
+          s_no: result.length + 1,
+          style_code: code,
+          category: cat,
+          contractor_name: master.contractor_name || "",
+          cut_qty: master.cut_qty || 0,
+          received_qty: master.received_qty || 0,
+          balance_from_stock: master.balance_from_stock || 0,
+          dispatch_from_hemb: master.dispatch_from_hemb || 0,
+          balance_from_hemb: master.balance_from_hemb || 0,
+          time_remarks: _formatProperCase(entry.time_remarks || ""),
+          master_found: true
+        });
+      } else {
+        result.push({
+          s_no: result.length + 1,
+          style_code: code,
+          category: cat,
+          contractor_name: entry.contractor_name || "-",
+          cut_qty: entry.cut_qty || 0,
+          received_qty: entry.received_qty || 0,
+          balance_from_stock: entry.balance_from_stock || 0,
+          dispatch_from_hemb: entry.dispatch_from_hemb || 0,
+          balance_from_hemb: entry.balance_from_hemb || 0,
+          time_remarks: _formatProperCase(entry.time_remarks || ""),
+          master_found: false
+        });
+      }
+    }
+    return result;
+  }
+
+saveFinalStyles(list) {
+  this._bumpMutationVersion();
+  if (!Array.isArray(list)) list = [];
+  const seen = new Set();
+  const minimal = [];
+
+  for (let i = 0; i < list.length; i++) {
+    const item = list[i];
+    if (!item) continue;
+    const code = (item.style_code || "").trim().toUpperCase();
+    const cat = (item.category || "Shirt").trim();
+    if (!code) continue;
+
+    // Strict uniqueness per (style_code + category)
+    const key = `${code}:::${cat.toUpperCase()}`;
+    if (seen.has(key)) {
+      // Skip duplicate row
+      continue;
+    }
+    seen.add(key);
+
+    minimal.push({
+      s_no: minimal.length + 1,
+      style_code: code,
+      category: cat,
+      dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
+      time_remarks: (item.time_remarks || "").trim()
+    });
+  }
+
+  this.clearCache(DB_KEYS.FINAL_STYLES);
+  try {
+    localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(minimal));
+  } catch (e) {
+    console.warn("Storage write error:", e);
+  }
+  this._setCached(DB_KEYS.FINAL_STYLES, minimal);
+  this.clearCache();
+  this.triggerAutoSyncIfEnabled();
+  this.pushFinalStylesToNeonAsync().catch(() => null);
+}
+
+pushFinalStylesToNeonAsync() {
+  const cfg = this.getConfig();
+  if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return Promise.resolve();
+
+  this._finalStylesSyncQueue = (this._finalStylesSyncQueue || Promise.resolve()).then(async () => {
+    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+    const fullStyles = this.getFinalStyles();
+
+    try {
+      await this.initNeonTables();
+      await this.executeNeonQuery("DELETE FROM final_style_report WHERE report_date = $1::date;", [reportDate]);
+      for (let i = 0; i < fullStyles.length; i++) {
+        const s = fullStyles[i];
+        await this.executeNeonQuery(
+          `INSERT INTO final_style_report 
+             (report_date, serial_no, style_code, category, contractor_name, cut_qty, received_qty, balance_from_stock, balance_from_hemb, time_remarks)
+             VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+          [
+            reportDate,
+            s.s_no || (i + 1),
+            (s.style_code || '').trim().toUpperCase(),
+            (s.category || 'Shirt').trim(),
+            (s.contractor_name || '').trim(),
+            Number(s.cut_qty) || 0,
+            Number(s.received_qty) || 0,
+            Number(s.balance_from_stock) || 0,
+            Number(s.balance_from_hemb) || 0,
+            (s.time_remarks || '').trim()
+          ]
+        );
+      }
+      console.log(`✓ Neon Synced: final_style_report for ${reportDate} (${fullStyles.length} items)`);
+    } catch (err) {
+      console.warn("Neon final_style_report push notice:", err.message);
+    }
+  }).catch(() => null);
+
+  return this._finalStylesSyncQueue;
+}
+
+  async loadFinalStylesForDate(dateStr) {
+  const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      const res = await this.executeNeonQuery(
+        "SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;",
+        [targetDate]
+      );
+      const rows = res?.rows || (Array.isArray(res) ? res : []);
       const seen = new Set();
-      const result = [];
-
-      for (let idx = 0; idx < raw.length; idx++) {
-        const entry = raw[idx];
-        if (!entry) continue;
-        const code = (entry.style_code || "").trim().toUpperCase();
-        const cat = (entry.category || "Shirt").trim();
+      const mapped = [];
+      for (let idx = 0; idx < rows.length; idx++) {
+        const r = rows[idx];
+        const code = (r.style_code || "").trim().toUpperCase();
+        const cat = (r.category || "Shirt").trim();
         if (!code) continue;
-
-        // Ensure strict uniqueness: single entry per (style_code + category)
+        if (this.isRecordDeleted("final_style", `${targetDate}|${code.toLowerCase()}|${cat.toLowerCase()}`)) {
+          continue;
+        }
         const key = `${code}:::${cat.toUpperCase()}`;
         if (seen.has(key)) continue;
         seen.add(key);
 
-        // STRICT MATCH on style_code AND category
-        const master = this.findMasterByStyleAndCategory(code, cat);
-        if (master) {
-          result.push({
-            s_no: result.length + 1,
-            style_code: code,
-            category: cat,
-            contractor_name: master.contractor_name || "",
-            cut_qty: master.cut_qty || 0,
-            received_qty: master.received_qty || 0,
-            balance_from_stock: master.balance_from_stock || 0,
-            dispatch_from_hemb: master.dispatch_from_hemb || 0,
-            balance_from_hemb: master.balance_from_hemb || 0,
-            time_remarks: entry.time_remarks || "",
-            master_found: true
-          });
-        } else {
-          result.push({
-            s_no: result.length + 1,
-            style_code: code,
-            category: cat,
-            contractor_name: entry.contractor_name || "-",
-            cut_qty: entry.cut_qty || 0,
-            received_qty: entry.received_qty || 0,
-            balance_from_stock: entry.balance_from_stock || 0,
-            dispatch_from_hemb: entry.dispatch_from_hemb || 0,
-            balance_from_hemb: entry.balance_from_hemb || 0,
-            time_remarks: entry.time_remarks || "",
-            master_found: false
-          });
-        }
-      }
-      return result;
-    });
-  }
-
-  saveFinalStyles(list) {
-    this._bumpMutationVersion();
-    if (!Array.isArray(list)) list = [];
-    const seen = new Set();
-    const minimal = [];
-
-    for (let i = 0; i < list.length; i++) {
-      const item = list[i];
-      if (!item) continue;
-      const code = (item.style_code || "").trim().toUpperCase();
-      const cat = (item.category || "Shirt").trim();
-      if (!code) continue;
-
-      // Strict uniqueness per (style_code + category)
-      const key = `${code}:::${cat.toUpperCase()}`;
-      if (seen.has(key)) {
-        // Skip duplicate row
-        continue;
-      }
-      seen.add(key);
-
-      minimal.push({
-        s_no: minimal.length + 1,
-        style_code: code,
-        category: cat,
-        dispatch_from_hemb: Number(item.dispatch_from_hemb) || 0,
-        time_remarks: (item.time_remarks || "").trim()
-      });
-    }
-
-    this.clearCache(DB_KEYS.FINAL_STYLES);
-    try {
-      localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(minimal));
-    } catch (e) {
-      console.warn("Storage write error:", e);
-    }
-    this.triggerAutoSyncIfEnabled();
-    this.pushFinalStylesToNeonAsync().catch(() => null);
-  }
-
-  pushFinalStylesToNeonAsync() {
-    const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return Promise.resolve();
-
-    this._finalStylesSyncQueue = (this._finalStylesSyncQueue || Promise.resolve()).then(async () => {
-      const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
-      const fullStyles = this.getFinalStyles();
-
-      try {
-        await this.initNeonTables();
-        await this.executeNeonQuery("DELETE FROM final_style_report WHERE report_date = $1::date;", [reportDate]);
-        for (let i = 0; i < fullStyles.length; i++) {
-          const s = fullStyles[i];
-          await this.executeNeonQuery(
-            `INSERT INTO final_style_report 
-             (report_date, serial_no, style_code, category, contractor_name, cut_qty, received_qty, balance_from_stock, balance_from_hemb, time_remarks)
-             VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
-            [
-              reportDate,
-              s.s_no || (i + 1),
-              (s.style_code || '').trim().toUpperCase(),
-              (s.category || 'Shirt').trim(),
-              (s.contractor_name || '').trim(),
-              Number(s.cut_qty) || 0,
-              Number(s.received_qty) || 0,
-              Number(s.balance_from_stock) || 0,
-              Number(s.balance_from_hemb) || 0,
-              (s.time_remarks || '').trim()
-            ]
-          );
-        }
-        console.log(`✓ Neon Synced: final_style_report for ${reportDate} (${fullStyles.length} items)`);
-      } catch (err) {
-        console.warn("Neon final_style_report push notice:", err.message);
-      }
-    }).catch(() => null);
-
-    return this._finalStylesSyncQueue;
-  }
-
-  async loadFinalStylesForDate(dateStr) {
-    const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        const res = await this.executeNeonQuery(
-          "SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;",
-          [targetDate]
-        );
-        const rows = res?.rows || (Array.isArray(res) ? res : []);
-        const seen = new Set();
-        const mapped = [];
-        for (let idx = 0; idx < rows.length; idx++) {
-          const r = rows[idx];
-          const code = (r.style_code || "").trim().toUpperCase();
-          const cat = (r.category || "Shirt").trim();
-          if (!code) continue;
-          if (this.isRecordDeleted("final_style", `${targetDate}|${code.toLowerCase()}|${cat.toLowerCase()}`)) {
-            continue;
-          }
-          const key = `${code}:::${cat.toUpperCase()}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-
-          mapped.push({
-            s_no: mapped.length + 1,
-            style_code: code,
-            category: cat,
-            dispatch_from_hemb: 0,
-            time_remarks: (r.time_remarks || "").trim()
-          });
-        }
-        this._setCached(DB_KEYS.FINAL_STYLES, mapped);
-        return mapped;
-      } catch (err) {
-        console.warn("loadFinalStylesForDate error:", err);
-      }
-    }
-    return this._memCache[DB_KEYS.FINAL_STYLES] || [];
-  }
-
-  addFinalStyle(styleCode, category, timeRemarks = "") {
-    this._bumpMutationVersion();
-    const cleanCode = (styleCode || "").trim().toUpperCase();
-    const cleanCat = (category || "Shirt").trim();
-    if (!cleanCode) return { success: false, isNew: false, list: this.getFinalStyles() };
-
-    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
-    this.untrackDeletedRecord("final_style", `${reportDate}|${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
-    this.untrackDeletedRecord("final_style", `${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
-
-    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
-    
-    // Strict match on BOTH style_code AND category
-    const existingIndex = raw.findIndex(i =>
-      (i.style_code || "").trim().toUpperCase() === cleanCode &&
-      (i.category || "Shirt").trim().toUpperCase() === cleanCat.toUpperCase()
-    );
-
-    if (existingIndex >= 0) {
-      // Style + Category already exists in this sheet!
-      // Do NOT create a duplicate row! Keep it single.
-      if (timeRemarks && !raw[existingIndex].time_remarks) {
-        raw[existingIndex].time_remarks = timeRemarks.trim();
-        this.saveFinalStyles(raw);
-      }
-      return { success: true, isNew: false, list: this.getFinalStyles() };
-    }
-
-    // New unique style + category: append
-    const entryToSave = {
-      s_no: raw.length + 1,
-      style_code: cleanCode,
-      category: cleanCat,
-      dispatch_from_hemb: 0,
-      time_remarks: (timeRemarks || "").trim()
-    };
-    raw.push(entryToSave);
-
-    this.saveFinalStyles(raw);
-    return { success: true, isNew: true, list: this.getFinalStyles() };
-  }
-
-  updateFinalStyleRemarks(sNo, newRemarks) {
-    this._bumpMutationVersion();
-    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
-    const item = raw.find(i => i.s_no === sNo);
-    if (item) {
-      item.time_remarks = (newRemarks || "").trim();
-      this.saveFinalStyles(raw);
-    }
-    return this.getFinalStyles();
-  }
-
-  removeFinalStyle(sNo) {
-    this._bumpMutationVersion();
-    const currentList = this.getFinalStyles();
-    const item = currentList.find(i => i.s_no === sNo);
-    const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
-
-    if (item) {
-      this.moveToTrash("final_style", { ...item, report_date: reportDate });
-      if (item.style_code && item.category) {
-        const codeLower = item.style_code.trim().toLowerCase();
-        const catLower = item.category.trim().toLowerCase();
-        this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
-      }
-    }
-    const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
-    const itemCodeUpper = item && item.style_code ? item.style_code.trim().toUpperCase() : "";
-    const itemCatUpper = item ? (item.category || "Shirt").trim().toUpperCase() : "";
-    const updated = raw.filter(i => {
-      if (i.s_no === sNo) return false;
-      if (itemCodeUpper && (i.style_code || "").trim().toUpperCase() === itemCodeUpper && (i.category || "Shirt").trim().toUpperCase() === itemCatUpper) {
-        return false;
-      }
-      return true;
-    }).map((i, idx) => ({ ...i, s_no: idx + 1 }));
-    this.saveFinalStyles(updated);
-
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      if (item && item.style_code) {
-        this.executeNeonQuery(
-          "DELETE FROM final_style_report WHERE report_date = $1::date AND UPPER(TRIM(style_code)) = UPPER(TRIM($2)) AND UPPER(TRIM(category)) = UPPER(TRIM($3));",
-          [reportDate, (item.style_code || "").trim(), (item.category || "Shirt").trim()]
-        ).catch(e => console.warn("Neon delete final_style error:", e));
-      }
-    }
-
-    return this.getFinalStyles();
-  }
-
-  async clearFinalStylesForDate(dateStr) {
-    this._bumpMutationVersion();
-    const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
-    const currentList = this.getFinalStyles();
-
-    for (const item of currentList) {
-      this.moveToTrash("final_style", { ...item, report_date: targetDate });
-      if (item.style_code && item.category) {
-        const codeLower = item.style_code.trim().toLowerCase();
-        const catLower = item.category.trim().toLowerCase();
-        this.trackDeletedRecord("final_style", `${targetDate}|${codeLower}|${catLower}`);
-      }
-    }
-
-    this.saveFinalStyles([]);
-    this.clearCache(DB_KEYS.FINAL_STYLES);
-
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          "DELETE FROM final_style_report WHERE report_date = $1::date;",
-          [targetDate]
-        );
-      } catch (err) {
-        console.warn("Neon clearFinalStylesForDate error:", err);
-      }
-    }
-
-    return [];
-  }
-
-  async clearAllFinalStylesFromNeon() {
-    this._bumpMutationVersion();
-    this.saveFinalStyles([]);
-    this.clearCache(DB_KEYS.FINAL_STYLES);
-
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery("DELETE FROM final_style_report;");
-      } catch (err) {
-        console.warn("Neon clearAllFinalStylesFromNeon error:", err);
-      }
-    }
-
-    return [];
-  }
-
-  // -------------------------------------------------------------
-  // DAILY INWARD ARRIVALS & BALANCE REPORT BY DATE
-  // Finds all styles received on any given date, computes cumulative
-  // received vs cut_qty balances, and tracks Daily Sheet status.
-  // -------------------------------------------------------------
-  getArrivalsReportByDate(targetDateStr) {
-    let target = (targetDateStr || "").trim();
-    if (!target) {
-      const today = new Date();
-      const y = today.getFullYear();
-      const m = String(today.getMonth() + 1).padStart(2, "0");
-      const d = String(today.getDate()).padStart(2, "0");
-      target = `${y}-${m}-${d}`;
-    }
-
-    const recLogs = this.getReceivingLogs() || [];
-    const currentFinal = this.getFinalStyles() || [];
-
-    // Helper to normalize dates for comparison (YYYY-MM-DD)
-    const norm = (val) => {
-      if (!val) return "";
-      const s = String(val).trim();
-      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
-      if (s.includes("T")) return s.split("T")[0];
-      const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
-      if (dmy) {
-        const d = dmy[1].padStart(2, "0");
-        const m = dmy[2].padStart(2, "0");
-        let y = dmy[3];
-        if (y.length === 2) {
-          y = parseInt(y, 10) < 70 ? `20${y}` : `19${y}`;
-        }
-        return `${y}-${m}-${d}`;
-      }
-      const dt = new Date(s);
-      if (!isNaN(dt.getTime())) {
-        const y = dt.getFullYear();
-        const m = String(dt.getMonth() + 1).padStart(2, "0");
-        const d = String(dt.getDate()).padStart(2, "0");
-        return `${y}-${m}-${d}`;
-      }
-      return s;
-    };
-
-    const targetNorm = norm(target);
-
-    // Filter receiving logs for this target date
-    const matchedLogs = recLogs.filter(r => {
-      const dRec = norm(r.date_receive);
-      const dCreated = r.created_at ? norm(r.created_at) : "";
-      return dRec === targetNorm || (!dRec && dCreated === targetNorm);
-    });
-
-    // Group matching receipts by style_code and category
-    const groupMap = new Map();
-
-    matchedLogs.forEach(r => {
-      const code = (r.style_code || "").trim();
-      const cat = (r.category || "Shirt").trim();
-      if (!code) return;
-
-      const key = `${code.toLowerCase()}:::${cat.toLowerCase()}`;
-      if (!groupMap.has(key)) {
-        groupMap.set(key, {
+        mapped.push({
+          s_no: mapped.length + 1,
           style_code: code,
           category: cat,
-          date_received_qty: 0,
-          challans: new Set(),
-          contractors: new Set(),
-          remarks: new Set(),
-          max_cut_in_logs: 0
+          dispatch_from_hemb: 0,
+          time_remarks: (r.time_remarks || "").trim()
         });
       }
+      this._setCached(DB_KEYS.FINAL_STYLES, mapped);
+      return mapped;
+    } catch (err) {
+      console.warn("loadFinalStylesForDate error:", err);
+    }
+  }
+  return this._memCache[DB_KEYS.FINAL_STYLES] || [];
+}
 
-      const g = groupMap.get(key);
-      const qty = Number(r.received_qty) || 0;
-      g.date_received_qty += qty;
-      if (r.challan_rec) g.challans.add(r.challan_rec.trim());
-      if (r.contractor_name) g.contractors.add(r.contractor_name.trim());
-      if (r.remarks) g.remarks.add(r.remarks.trim());
-      if (Number(r.cut_qty) > g.max_cut_in_logs) g.max_cut_in_logs = Number(r.cut_qty);
-    });
+addFinalStyle(styleCode, category, timeRemarks = "") {
+  this._bumpMutationVersion();
+  const cleanCode = (styleCode || "").trim().toUpperCase();
+  const cleanCat = (category || "Shirt").trim();
+  if (!cleanCode) return { success: false, isNew: false, list: this.getFinalStyles() };
 
-    // Collect available receiving dates so UI can offer quick suggestions
-    const availableDatesSet = new Set();
-    recLogs.forEach(r => {
-      const d = norm(r.date_receive);
-      if (d) availableDatesSet.add(d);
-    });
-    const sortedAvailableDates = Array.from(availableDatesSet).sort().reverse();
+  const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+  this.untrackDeletedRecord("final_style", `${reportDate}|${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
+  this.untrackDeletedRecord("final_style", `${cleanCode.toLowerCase()}|${cleanCat.toLowerCase()}`);
 
-    // Map groups with master inventory balances and daily sheet status
-    const styles = [];
-    let totalDatePcs = 0;
-    let totalCutPcs = 0;
-    let totalCumulativeReceived = 0;
-    let totalDispatchedPcs = 0;
-    let totalStockBalancePcs = 0;
-    let totalPendingPieces = 0;
+  const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
 
-    groupMap.forEach((g) => {
-      const master = this.findMasterByStyleAndCategory(g.style_code, g.category);
+  // Strict match on BOTH style_code AND category
+  const existingIndex = raw.findIndex(i =>
+    (i.style_code || "").trim().toUpperCase() === cleanCode &&
+    (i.category || "Shirt").trim().toUpperCase() === cleanCat.toUpperCase()
+  );
 
-      const cutQty = master ? (Number(master.cut_qty) || 0) : g.max_cut_in_logs;
-      const totalRec = master ? (Number(master.received_qty) || 0) : g.date_received_qty;
-      const totalDis = master ? (Number(master.dispatched_qty) || 0) : 0;
-      const balStock = master ? (Number(master.balance_from_stock) || 0) : (totalRec - totalDis);
-      const balHemb = master ? (Number(master.balance_from_hemb) || 0) : Math.max(0, cutQty - totalRec);
-      const balPending = cutQty - totalRec; // Remaining pieces to complete receiving
+  const formattedRemarks = _formatProperCase(timeRemarks || "");
 
-      // Check if already in Daily Sheet (Strict on BOTH style_code AND category)
-      const inDailySheet = currentFinal.some(f =>
-        (f.style_code || "").trim().toUpperCase() === (g.style_code || "").trim().toUpperCase() &&
-        (f.category || "Shirt").trim().toUpperCase() === (g.category || "Shirt").trim().toUpperCase()
-      );
-
-      const item = {
-        style_code: g.style_code,
-        category: g.category,
-        contractors: Array.from(g.contractors).join(", ") || (master?.contractor_name || "-"),
-        challans: Array.from(g.challans).join(", ") || "-",
-        remarks: Array.from(g.remarks).join("; ") || "",
-        date_received_qty: g.date_received_qty,
-        cut_qty: cutQty,
-        total_received: totalRec,
-        total_dispatched: totalDis,
-        balance_from_stock: balStock,
-        balance_from_hemb: balHemb,
-        balance_pending: balPending,
-        in_daily_sheet: inDailySheet,
-        master_found: !!master
-      };
-
-      styles.push(item);
-      totalDatePcs += g.date_received_qty;
-      totalCutPcs += cutQty;
-      totalCumulativeReceived += totalRec;
-      totalDispatchedPcs += totalDis;
-      totalStockBalancePcs += balStock;
-      if (balPending > 0) totalPendingPieces += balPending;
-    });
-
-    // Sort: items not yet in Daily Sheet first, then by date_received_qty DESC
-    styles.sort((a, b) => {
-      if (a.in_daily_sheet !== b.in_daily_sheet) {
-        return a.in_daily_sheet ? 1 : -1;
-      }
-      return b.date_received_qty - a.date_received_qty;
-    });
-
-    return {
-      targetDate: targetNorm,
-      totalStylesCount: styles.length,
-      totalDatePcs,
-      totalCutPcs,
-      totalCumulativeReceived,
-      totalDispatchedPcs,
-      totalStockBalancePcs,
-      totalPendingPieces,
-      missingFromDailySheetCount: styles.filter(s => !s.in_daily_sheet).length,
-      styles,
-      availableDates: sortedAvailableDates
-    };
+  if (existingIndex >= 0) {
+    // Style + Category already exists in this sheet!
+    // Do NOT create a duplicate row! Keep it single.
+    if (formattedRemarks && !raw[existingIndex].time_remarks) {
+      raw[existingIndex].time_remarks = formattedRemarks;
+      this.saveFinalStyles(raw);
+    }
+    return { success: true, isNew: false, list: this.getFinalStyles() };
   }
 
+  // New unique style + category: append
+  const entryToSave = {
+    s_no: raw.length + 1,
+    style_code: cleanCode,
+    category: cleanCat,
+    dispatch_from_hemb: 0,
+    time_remarks: formattedRemarks
+  };
+  raw.push(entryToSave);
 
+  this.saveFinalStyles(raw);
+  return { success: true, isNew: true, list: this.getFinalStyles() };
+}
 
-  // -------------------------------------------------------------
-  // Contractors (Neon PostgreSQL Synchronized Master Directory)
-  // -------------------------------------------------------------
-  getContractors() {
-    return this._getCached(DB_KEYS.CONTRACTORS, () => {
-      let list = this._memCache[DB_KEYS.CONTRACTORS] || [];
-      if (!Array.isArray(list)) list = [];
+updateFinalStyleRemarks(sNo, newRemarks) {
+  this._bumpMutationVersion();
+  const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
+  const item = raw.find(i => i.s_no === sNo);
+  if (item) {
+    item.time_remarks = _formatProperCase(newRemarks || "");
+    this.saveFinalStyles(raw);
+  }
+  return this.getFinalStyles();
+}
 
-      const cleanMap = new Map();
+removeFinalStyle(sNo) {
+  this._bumpMutationVersion();
+  const currentList = this.getFinalStyles();
+  const item = currentList.find(i => i.s_no === sNo);
+  const reportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
 
-      // 1. Process and sanitize existing entries
-      list.forEach((item, idx) => {
-        if (!item) return;
-        let cName = typeof item === "string" ? item : (item.name || item.contractor_name || "");
-        cName = (cName || "").trim();
-        if (!cName) return;
+  if (item) {
+    this.moveToTrash("final_style", { ...item, report_date: reportDate });
+    if (item.style_code && item.category) {
+      const codeLower = item.style_code.trim().toLowerCase();
+      const catLower = item.category.trim().toLowerCase();
+      this.trackDeletedRecord("final_style", `${reportDate}|${codeLower}|${catLower}`);
+    }
+  }
+  const raw = Array.from(this._memCache[DB_KEYS.FINAL_STYLES] || []);
+  const itemCodeUpper = item && item.style_code ? item.style_code.trim().toUpperCase() : "";
+  const itemCatUpper = item ? (item.category || "Shirt").trim().toUpperCase() : "";
+  const updated = raw.filter(i => {
+    if (i.s_no === sNo) return false;
+    if (itemCodeUpper && (i.style_code || "").trim().toUpperCase() === itemCodeUpper && (i.category || "Shirt").trim().toUpperCase() === itemCatUpper) {
+      return false;
+    }
+    return true;
+  }).map((i, idx) => ({ ...i, s_no: idx + 1 }));
+  this.saveFinalStyles(updated);
 
-        // Strictly reject double/joint contractor combinations and filter placeholders
-        if (/[\/\\,+&]/.test(cName)) return;
-        if (/^all\b/i.test(cName)) return;
-
-        const cId = (typeof item === "object" && item.id) ? Number(item.id) : (idx + 1);
-        const lower = cName.toLowerCase();
-
-        // Deduplicate case-insensitively
-        if (cleanMap.has(lower)) {
-          const existing = cleanMap.get(lower);
-          if (!existing.phone && item.phone) existing.phone = item.phone;
-          if ((!existing.id || existing.id > cId) && cId) existing.id = cId;
-          return;
-        }
-
-        const phone = (typeof item === "object" && item.phone) ? item.phone : "";
-        const status = (typeof item === "object" && item.status) ? item.status : "Active";
-
-        cleanMap.set(lower, {
-          id: cId,
-          name: cName,
-          phone: phone,
-          status: status
-        });
-      });
-
-      const normalized = Array.from(cleanMap.values()).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
-      return normalized;
-    });
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    if (item && item.style_code) {
+      this.executeNeonQuery(
+        "DELETE FROM final_style_report WHERE report_date = $1::date AND UPPER(TRIM(style_code)) = UPPER(TRIM($2)) AND UPPER(TRIM(category)) = UPPER(TRIM($3));",
+        [reportDate, (item.style_code || "").trim(), (item.category || "Shirt").trim()]
+      ).catch(e => console.warn("Neon delete final_style error:", e));
+    }
   }
 
-  saveContractors(list) {
-    this._bumpMutationVersion();
-    this._setCached(DB_KEYS.CONTRACTORS, list);
+  return this.getFinalStyles();
+}
+
+  async clearFinalStylesForDate(dateStr) {
+  this._bumpMutationVersion();
+  const targetDate = dateStr || this.getReportDate() || new Date().toISOString().split("T")[0];
+  const currentList = this.getFinalStyles();
+
+  for (const item of currentList) {
+    this.moveToTrash("final_style", { ...item, report_date: targetDate });
+    if (item.style_code && item.category) {
+      const codeLower = item.style_code.trim().toLowerCase();
+      const catLower = item.category.trim().toLowerCase();
+      this.trackDeletedRecord("final_style", `${targetDate}|${codeLower}|${catLower}`);
+    }
   }
 
-  getRegisteredContractorNames() {
-    const contractors = this.getContractors();
-    return contractors.map(c => c.name ? c.name.trim() : "").filter(Boolean);
-  }
+  this.saveFinalStyles([]);
+  this.clearCache(DB_KEYS.FINAL_STYLES);
 
-  // Strict Validation: Only accept registered contractors from Neon table (or valid joint combinations)
-  isValidContractorName(inputName) {
-    if (!inputName || typeof inputName !== "string") return false;
-    const trimmed = inputName.trim();
-    if (!trimmed) return false;
-
-    const registered = this.getRegisteredContractorNames();
-    if (registered.length === 0) return true;
-
-    const regLower = registered.map(n => n.toLowerCase());
-
-    // 1. Direct match (e.g. "Imtiaz", "IMTIAZ")
-    if (regLower.includes(trimmed.toLowerCase())) return true;
-
-    // 2. Canonical alias dictionary for the registered contractors
-    const aliasMap = {
-      "imt": "imtiaz",
-      "imtiaz": "imtiaz",
-      "asif": "asif",
-      "sho": "shoaib",
-      "shoaib": "shoaib",
-      "tou": "touseef",
-      "tous": "touseef",
-      "touseef": "touseef",
-      "asim": "asim",
-      "nav": "naveed",
-      "navi": "naveed",
-      "naw": "naveed",
-      "naweed": "naveed",
-      "naveed": "naveed"
-    };
-
-    const cleanLower = trimmed.toLowerCase();
-    if (aliasMap[cleanLower] && regLower.includes(aliasMap[cleanLower])) {
-      return true;
-    }
-
-    // 3. Valid joint combinations (e.g. "IMT/ASIM", "TOUS/SHO", "ASIF/NAV", "IMT/ASIF/ASIM", "NAV/ASIF/ASIM/IMT")
-    const parts = trimmed.split(/[/,&+-]+/).map(p => p.trim().toLowerCase()).filter(Boolean);
-    if (parts.length > 1) {
-      const allValid = parts.every(p => {
-        const canonical = aliasMap[p] || p;
-        return regLower.includes(canonical);
-      });
-      if (allValid) return true;
-    }
-
-    return false;
-  }
-
-  // Helper to match style contractor to a registered contractor
-  doesContractorMatch(styleContractor, targetContractorName) {
-    if (!styleContractor || !targetContractorName) return false;
-    const sLower = styleContractor.trim().toLowerCase();
-    const tLower = targetContractorName.trim().toLowerCase();
-
-    if (sLower === tLower) return true;
-
-    const aliasMap = {
-      "imt": "imtiaz",
-      "imtiaz": "imtiaz",
-      "asif": "asif",
-      "sho": "shoaib",
-      "shoaib": "shoaib",
-      "tou": "touseef",
-      "tous": "touseef",
-      "touseef": "touseef",
-      "asim": "asim",
-      "nav": "naveed",
-      "navi": "naveed",
-      "naw": "naveed",
-      "naweed": "naveed",
-      "naveed": "naveed"
-    };
-
-    const targetCanonical = aliasMap[tLower] || tLower;
-
-    const parts = sLower.split(/[/,&+-]+/).map(p => p.trim()).filter(Boolean);
-    return parts.some(p => {
-      const canonical = aliasMap[p] || p;
-      return canonical === targetCanonical;
-    });
-  }
-
-  // Real-time workload & remaining balance pieces per contractor from genuine Master Inventory & Production data
-  getContractorWorkload() {
-    const contractors = this.getContractors();
-    const master = this.getMasterInventory();
-    const distList = (typeof this.getWorkDistribution === "function") ? this.getWorkDistribution() : [];
-
-    return contractors.map(c => {
-      const styleMap = new Map();
-
-      // Gather styles strictly from genuine Master Inventory production orders
-      master.forEach(m => {
-        if (this.doesContractorMatch(m.contractor_name, c.name)) {
-          const styleCode = (m.style_code || "").trim();
-          const category = (m.category || "Shirt").trim();
-          const key = `${styleCode.toUpperCase()}|${category.toUpperCase()}`;
-
-          // Real WIP pending with contractor in H-Embroidery
-          // Exclusively calculated from received pieces minus dispatched pieces.
-          // Cutting stock balance is never assigned to the contractor.
-          const recQty = parseInt(m.received_qty, 10) || 0;
-          const disQty = parseInt(m.dispatch_from_hemb, 10) || 0;
-          const bal = (m.balance_from_hemb !== null && m.balance_from_hemb !== undefined)
-            ? Math.max(0, parseInt(m.balance_from_hemb, 10) || 0)
-            : Math.max(0, recQty - disQty);
-
-          if (bal > 0) {
-            // Find optional rate or floor from work distribution if recorded
-            const distMatch = distList.find(d =>
-              (d.style_code || "").trim().toUpperCase() === styleCode.toUpperCase() &&
-              this.doesContractorMatch(d.contractor_name, c.name)
-            );
-
-            styleMap.set(key, {
-              style_code: styleCode,
-              category: category,
-              balance_pcs: bal,
-              rate: distMatch ? (distMatch.rate || 0) : 0,
-              floor: distMatch ? (distMatch.floor || "") : "",
-              assigned_to: m.contractor_name || c.name,
-              period: distMatch ? (distMatch.period || "") : "",
-              source: "master_inventory"
-            });
-          }
-        }
-      });
-
-      const activeStyles = Array.from(styleMap.values()).sort((a, b) => b.balance_pcs - a.balance_pcs);
-      const totalBalance = activeStyles.reduce((acc, s) => acc + (s.balance_pcs || 0), 0);
-
-      return {
-        id: c.id,
-        name: c.name,
-        phone: c.phone || "",
-        status: c.status || "Active",
-        total_balance: totalBalance,
-        style_count: activeStyles.length,
-        styles: activeStyles
-      };
-    }).sort((a, b) => b.total_balance - a.total_balance);
-  }
-
-  ensureContractorExists(name) {
-    // Strictly NO-OP: contractors are ONLY created explicitly from the Contractors tab by user action.
-    return;
-  }
-
-  async addContractorWithNeon(contractorData) {
-    this._bumpMutationVersion();
-    if (!contractorData || !contractorData.name) {
-      throw new Error("Contractor name is required.");
-    }
-    const rawTrim = contractorData.name.trim();
-    const cleanName = rawTrim.replace(/([^\s/,\-+&]+)/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
-    if (!cleanName) {
-      throw new Error("Contractor name cannot be empty.");
-    }
-    // Reject double / joint contractor combinations
-    if (/[\/\\,+&]/.test(cleanName)) {
-      throw new Error("Double / joint contractor names (with '/', '+', '&', ',') cannot be saved in Contractor Directory.");
-    }
-    // Reject filter placeholders
-    if (/^all\b/i.test(cleanName)) {
-      throw new Error("Invalid name: Contractor name cannot start with 'ALL'.");
-    }
-
-    this.clearCache();
-    const list = this.getContractors();
-    const cleanLower = cleanName.toLowerCase();
-    const existing = list.find(c => (c.name || "").trim().toLowerCase() === cleanLower);
-    let savedObj = null;
-
-    if (existing) {
-      if (contractorData.phone !== undefined) existing.phone = contractorData.phone;
-      if (contractorData.status) existing.status = contractorData.status;
-      savedObj = existing;
-    } else {
-      savedObj = {
-        id: list.length > 0 ? Math.max(...list.map(c => Number(c.id) || 0)) + 1 : 1,
-        name: cleanName,
-        phone: contractorData.phone || "",
-        status: contractorData.status || "Active"
-      };
-      list.push(savedObj);
-    }
-
-    // Untrack any past deletion for this contractor
-    this.untrackDeletedRecord("contractor", savedObj.id);
-    this.untrackDeletedRecord("contractor", cleanLower);
-
-    this.saveContractors(list);
-
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.initNeonTables();
-        await this.executeNeonQuery(
-          `INSERT INTO contractors (name, phone, status)
-           VALUES ($1, $2, $3)
-           ON CONFLICT (name) DO UPDATE
-           SET phone = EXCLUDED.phone, status = EXCLUDED.status;`,
-          [savedObj.name, savedObj.phone || '', savedObj.status || 'Active']
-        );
-        return { success: true, neonSynced: true, contractor: savedObj };
-      } catch (err) {
-        console.warn("Direct Neon contractor push error:", err);
-        return { success: true, neonSynced: false, error: err.message, contractor: savedObj };
-      }
-    }
-
-    return { success: true, neonSynced: false, contractor: savedObj };
-  }
-
-  async deleteContractor(id, name) {
-    this._bumpMutationVersion();
-    this.clearCache();
-    let list = this.getContractors();
-    const cleanName = (name || "").trim();
-    const cleanLower = cleanName.toLowerCase();
-    const numId = Number(id);
-
-    const toDelete = list.find(c => (numId && Number(c.id) === numId) || (c.name && c.name.trim().toLowerCase() === cleanLower));
-    const targetName = toDelete ? toDelete.name : cleanName;
-    const targetId = toDelete ? toDelete.id : numId;
-
-    if (!targetName && !targetId) {
-      return { success: false, error: "Contractor not found" };
-    }
-
-    // 1. Await Neon DELETE query first before modifying local memory
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      await this.initNeonTables();
-      if (targetId) {
-        await this.executeNeonQuery(
-          `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
-          [Number(targetId) || 0, targetName.trim().toLowerCase()]
-        );
-      } else {
-        await this.executeNeonQuery(
-          `DELETE FROM contractors WHERE LOWER(TRIM(name)) = $1;`,
-          [targetName.trim().toLowerCase()]
-        );
-      }
-    }
-
-    // 2. Move to Trash
-    if (toDelete) {
-      this.moveToTrash("contractor", toDelete);
-    }
-
-    // 3. Track deletion tombstones so sync NEVER resurrects it
-    if (targetId) this.trackDeletedRecord("contractor", targetId);
-    if (targetName) {
-      this.trackDeletedRecord("contractor", targetName.trim().toLowerCase());
-    }
-
-    // 4. Remove from local list
-    list = list.filter(c => {
-      if (targetId && Number(c.id) === Number(targetId)) return false;
-      if (targetName && (c.name || "").trim().toLowerCase() === targetName.trim().toLowerCase()) return false;
-      return true;
-    });
-    this.saveContractors(list);
-    this.clearCache();
-
-    return { success: true, neonSynced: true };
-  }
-
-  getContractorSummaries() {
-    const workload = this.getContractorWorkload();
-    const master = this.getMasterInventory();
-    return workload.map(w => {
-      const contractorMaster = master.filter(m => (m.contractor_name || "").toLowerCase() === (w.name || "").toLowerCase());
-      const totalCut = contractorMaster.reduce((sum, m) => sum + (m.cut_qty || 0), 0);
-      return {
-        name: w.name,
-        phone: w.phone,
-        styleCount: w.style_count,
-        totalCut: totalCut,
-        balanceInHemb: w.total_balance,
-        totalDispatched: 0,
-        styles: (w.styles || []).map(s => `${s.style_code} (${s.category})`)
-      };
-    });
-  }
-
-  // -------------------------------------------------------------
-  // Report Date
-  // -------------------------------------------------------------
-  getReportDate() {
-    return localStorage.getItem(DB_KEYS.REPORT_DATE) || new Date().toISOString().split("T")[0];
-  }
-
-  setReportDate(dateStr) {
-    localStorage.setItem(DB_KEYS.REPORT_DATE, dateStr);
-  }
-
-  // -------------------------------------------------------------
-  // RATE APPROVAL & PAYMENT SUMMARY SHEET (Excel Sheet Alignment)
-  // -------------------------------------------------------------
-  computePaymentBalances(item) {
-    if (!item) return {};
-    const totalPcs = parseInt(item.cut_qty != null ? item.cut_qty : item.total_pcs, 10) || 0;
-    const carigarRate = parseFloat(item.carigar_rate) || 0;
-    const commission = parseFloat(item.commission) || 0;
-    let rateTotal = parseFloat(item.rate_total);
-    if (isNaN(rateTotal) || rateTotal === 0) {
-      rateTotal = (carigarRate + commission) > 0 ? (carigarRate + commission) : (parseFloat(item.rate_per_pc) || 0);
-    }
-    const rate = rateTotal > 0 ? rateTotal : (parseFloat(item.rate_per_pc) || 0);
-    const totalAmount = totalPcs * rate;
-    const deliveredInTime = parseInt(item.delivered_in_time_pcs, 10) || 0;
-    let deductionPcs = parseInt(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs, 10) || 0;
-    const remarks1 = item.remarks_1 || item.remarks || "";
-    if (deductionPcs === 0 && remarks1) {
-      const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
-      if (match) {
-        deductionPcs = parseInt(match[1], 10) || 0;
-      }
-    }
-    const deductionAmount = parseFloat(item.deduction_amount) || (deductionPcs * rate);
-
-    const baseProdPcs = (item.base_prod_pcs != null && Number(item.base_prod_pcs) > 0)
-      ? parseInt(item.base_prod_pcs, 10)
-      : ((parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0) + deductionPcs);
-
-    // Current sheet approved production pcs (auto net of deduction)
-    let prodPcs = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
-    if (deductionPcs > 0 && item.base_prod_pcs != null) {
-      prodPcs = Math.max(0, baseProdPcs - deductionPcs);
-    }
-    const prevPaidPcs = parseInt(item.previous_paid_pcs, 10) || 0;
-    const cumulativePaidPcs = prodPcs + prevPaidPcs;
-    const paidAmount = parseFloat(item.paid_amount) || (cumulativePaidPcs * rate);
-
-    // Auto-fetch live balances from Master Inventory if style matches
-    let balStock = item.balance_from_stock != null ? parseInt(item.balance_from_stock, 10) : 0;
-    let balHemb = item.balance_from_hemb != null ? parseInt(item.balance_from_hemb, 10) : 0;
-    let totalBal = item.total_balance != null ? parseInt(item.total_balance, 10) : Math.max(0, totalPcs - cumulativePaidPcs);
-
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
     try {
-      const cleanStyle = (item.style_code || "").trim().toLowerCase();
-      const cleanCat = (item.working || item.category || "").trim().toLowerCase();
-      if (cleanStyle) {
-        const masterList = this.getMasterInventory();
-        let m = null;
-        if (cleanCat) {
-          m = masterList.find(x =>
-            (x.style_code || "").trim().toLowerCase() === cleanStyle &&
-            (x.category || "").trim().toLowerCase() === cleanCat
-          );
-        }
-        if (!m) {
-          m = masterList.find(x => (x.style_code || "").trim().toLowerCase() === cleanStyle);
-        }
-        if (m) {
-          const mBalances = this.computeRecordBalances(m);
-          balStock = mBalances.balance_from_stock;
-          balHemb = mBalances.balance_from_hemb;
-          totalBal = mBalances.total_balance;
-        }
+      await this.executeNeonQuery(
+        "DELETE FROM final_style_report WHERE report_date = $1::date;",
+        [targetDate]
+      );
+    } catch (err) {
+      console.warn("Neon clearFinalStylesForDate error:", err);
+    }
+  }
+
+  return [];
+}
+
+  async clearAllFinalStylesFromNeon() {
+  this._bumpMutationVersion();
+  this.saveFinalStyles([]);
+  this.clearCache(DB_KEYS.FINAL_STYLES);
+
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.executeNeonQuery("DELETE FROM final_style_report;");
+    } catch (err) {
+      console.warn("Neon clearAllFinalStylesFromNeon error:", err);
+    }
+  }
+
+  return [];
+}
+
+// -------------------------------------------------------------
+// DAILY INWARD ARRIVALS & BALANCE REPORT BY DATE
+// Finds all styles received on any given date, computes cumulative
+// received vs cut_qty balances, and tracks Daily Sheet status.
+// -------------------------------------------------------------
+getArrivalsReportByDate(targetDateStr) {
+  let target = (targetDateStr || "").trim();
+  if (!target) {
+    const today = new Date();
+    const y = today.getFullYear();
+    const m = String(today.getMonth() + 1).padStart(2, "0");
+    const d = String(today.getDate()).padStart(2, "0");
+    target = `${y}-${m}-${d}`;
+  }
+
+  const recLogs = this.getReceivingLogs() || [];
+  const currentFinal = this.getFinalStyles() || [];
+
+  // Helper to normalize dates for comparison (YYYY-MM-DD)
+  const norm = (val) => {
+    if (!val) return "";
+    const s = String(val).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    if (s.includes("T")) return s.split("T")[0];
+    const dmy = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+    if (dmy) {
+      const d = dmy[1].padStart(2, "0");
+      const m = dmy[2].padStart(2, "0");
+      let y = dmy[3];
+      if (y.length === 2) {
+        y = parseInt(y, 10) < 70 ? `20${y}` : `19${y}`;
       }
-    } catch (e) {
-      console.warn("Auto-fetch master balance error:", e);
+      return `${y}-${m}-${d}`;
+    }
+    const dt = new Date(s);
+    if (!isNaN(dt.getTime())) {
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, "0");
+      const d = String(dt.getDate()).padStart(2, "0");
+      return `${y}-${m}-${d}`;
+    }
+    return s;
+  };
+
+  const targetNorm = norm(target);
+
+  // Filter receiving logs for this target date
+  const matchedLogs = recLogs.filter(r => {
+    const dRec = norm(r.date_receive);
+    const dCreated = r.created_at ? norm(r.created_at) : "";
+    return dRec === targetNorm || (!dRec && dCreated === targetNorm);
+  });
+
+  // Group matching receipts by style_code and category
+  const groupMap = new Map();
+
+  matchedLogs.forEach(r => {
+    const code = (r.style_code || "").trim();
+    const cat = (r.category || "Shirt").trim();
+    if (!code) return;
+
+    const key = `${code.toLowerCase()}:::${cat.toLowerCase()}`;
+    if (!groupMap.has(key)) {
+      groupMap.set(key, {
+        style_code: code,
+        category: cat,
+        date_received_qty: 0,
+        challans: new Set(),
+        contractors: new Set(),
+        remarks: new Set(),
+        max_cut_in_logs: 0
+      });
     }
 
-    const balancePcs = totalBal;
-    const balanceAmount = balancePcs * rate;
+    const g = groupMap.get(key);
+    const qty = Number(r.received_qty) || 0;
+    g.date_received_qty += qty;
+    if (r.challan_rec) g.challans.add(r.challan_rec.trim());
+    if (r.contractor_name) g.contractors.add(r.contractor_name.trim());
+    if (r.remarks) g.remarks.add(r.remarks.trim());
+    if (Number(r.cut_qty) > g.max_cut_in_logs) g.max_cut_in_logs = Number(r.cut_qty);
+  });
 
-    let status = item.status;
-    const remarks2 = (item.remarks_2 || item.status_remarks || "").toLowerCase();
-    if (remarks2.includes("close") || balancePcs === 0) {
-      status = "close";
-    } else if (remarks2.includes("deduction")) {
-      status = "deduction";
-    } else if (balancePcs > 0 && cumulativePaidPcs > 0) {
-      status = "Partial";
-    } else {
-      status = status || "Pending";
-    }
+  // Collect available receiving dates so UI can offer quick suggestions
+  const availableDatesSet = new Set();
+  recLogs.forEach(r => {
+    const d = norm(r.date_receive);
+    if (d) availableDatesSet.add(d);
+  });
+  const sortedAvailableDates = Array.from(availableDatesSet).sort().reverse();
 
-    return {
-      period: (item.period && String(item.period).trim()) ? String(item.period).trim() : "11-SEP-2026 TO 25-SEP-2026",
-      working: item.working || item.category || "SHIRT",
-      category: item.category || item.working || "SHIRT",
-      cut_qty: totalPcs,
-      total_pcs: totalPcs,
-      base_prod_pcs: baseProdPcs,
-      deduction_pcs: deductionPcs,
-      prod_pcs_qty: prodPcs,
-      previous_paid_pcs: prevPaidPcs,
-      carigar_rate: carigarRate,
-      commission: commission,
-      rate_total: rateTotal,
-      rate_per_pc: rate,
-      total_amount: totalAmount,
-      delivered_in_time_pcs: deliveredInTime,
-      deducted_pcs: deductionPcs,
-      deduction_amount: deductionAmount,
-      paid_pcs: cumulativePaidPcs,
-      paid_amount: paidAmount,
+  // Map groups with master inventory balances and daily sheet status
+  const styles = [];
+  let totalDatePcs = 0;
+  let totalCutPcs = 0;
+  let totalCumulativeReceived = 0;
+  let totalDispatchedPcs = 0;
+  let totalStockBalancePcs = 0;
+  let totalPendingPieces = 0;
+
+  groupMap.forEach((g) => {
+    const master = this.findMasterByStyleAndCategory(g.style_code, g.category);
+
+    const cutQty = master ? (Number(master.cut_qty) || 0) : g.max_cut_in_logs;
+    const totalRec = master ? (Number(master.received_qty) || 0) : g.date_received_qty;
+    const totalDis = master ? (Number(master.dispatched_qty) || 0) : 0;
+    const balStock = master ? (Number(master.balance_from_stock) || 0) : (totalRec - totalDis);
+    const balHemb = master ? (Number(master.balance_from_hemb) || 0) : Math.max(0, cutQty - totalRec);
+    const balPending = cutQty - totalRec; // Remaining pieces to complete receiving
+
+    // Check if already in Daily Sheet (Strict on BOTH style_code AND category)
+    const inDailySheet = currentFinal.some(f =>
+      (f.style_code || "").trim().toUpperCase() === (g.style_code || "").trim().toUpperCase() &&
+      (f.category || "Shirt").trim().toUpperCase() === (g.category || "Shirt").trim().toUpperCase()
+    );
+
+    const item = {
+      style_code: g.style_code,
+      category: g.category,
+      contractors: Array.from(g.contractors).join(", ") || (master?.contractor_name || "-"),
+      challans: Array.from(g.challans).join(", ") || "-",
+      remarks: Array.from(g.remarks).join("; ") || "",
+      date_received_qty: g.date_received_qty,
+      cut_qty: cutQty,
+      total_received: totalRec,
+      total_dispatched: totalDis,
       balance_from_stock: balStock,
       balance_from_hemb: balHemb,
-      total_balance: totalBal,
-      balance_pcs: balancePcs,
-      balance_amount: balanceAmount,
-      remarks_1: item.remarks_1 || item.remarks || "",
-      remarks_2: item.remarks_2 || item.status_remarks || "",
-      is_flagged: Boolean(item.is_flagged),
-      status: status
+      balance_pending: balPending,
+      in_daily_sheet: inDailySheet,
+      master_found: !!master
     };
-  }
 
-  getPaymentSheets() {
-    return this._getCached(DB_KEYS.PAYMENT_SHEET, () => {
-      const data = this._memCache[DB_KEYS.PAYMENT_SHEET] || [];
-      return data.map(item => ({
-        ...item,
-        ...this.computePaymentBalances(item),
-        payment_history: Array.isArray(item.payment_history) ? item.payment_history : []
-      }));
+    styles.push(item);
+    totalDatePcs += g.date_received_qty;
+    totalCutPcs += cutQty;
+    totalCumulativeReceived += totalRec;
+    totalDispatchedPcs += totalDis;
+    totalStockBalancePcs += balStock;
+    if (balPending > 0) totalPendingPieces += balPending;
+  });
+
+  // Sort: items not yet in Daily Sheet first, then by date_received_qty DESC
+  styles.sort((a, b) => {
+    if (a.in_daily_sheet !== b.in_daily_sheet) {
+      return a.in_daily_sheet ? 1 : -1;
+    }
+    return b.date_received_qty - a.date_received_qty;
+  });
+
+  return {
+    targetDate: targetNorm,
+    totalStylesCount: styles.length,
+    totalDatePcs,
+    totalCutPcs,
+    totalCumulativeReceived,
+    totalDispatchedPcs,
+    totalStockBalancePcs,
+    totalPendingPieces,
+    missingFromDailySheetCount: styles.filter(s => !s.in_daily_sheet).length,
+    styles,
+    availableDates: sortedAvailableDates
+  };
+}
+
+
+
+// -------------------------------------------------------------
+// Contractors (Neon PostgreSQL Synchronized Master Directory)
+// -------------------------------------------------------------
+getContractors() {
+  return this._getCached(DB_KEYS.CONTRACTORS, () => {
+    let list = this._memCache[DB_KEYS.CONTRACTORS] || [];
+    if (!Array.isArray(list)) list = [];
+
+    const cleanMap = new Map();
+
+    // 1. Process and sanitize existing entries
+    list.forEach((item, idx) => {
+      if (!item) return;
+      let cName = typeof item === "string" ? item : (item.name || item.contractor_name || "");
+      cName = (cName || "").trim();
+      if (!cName) return;
+
+      // Strictly reject double/joint contractor combinations and filter placeholders
+      if (/[\/\\,+&]/.test(cName)) return;
+      if (/^all\b/i.test(cName)) return;
+
+      const cId = (typeof item === "object" && item.id) ? Number(item.id) : (idx + 1);
+      const lower = cName.toLowerCase();
+
+      // Deduplicate case-insensitively
+      if (cleanMap.has(lower)) {
+        const existing = cleanMap.get(lower);
+        if (!existing.phone && item.phone) existing.phone = item.phone;
+        if ((!existing.id || existing.id > cId) && cId) existing.id = cId;
+        return;
+      }
+
+      const phone = (typeof item === "object" && item.phone) ? item.phone : "";
+      const status = (typeof item === "object" && item.status) ? item.status : "Active";
+
+      cleanMap.set(lower, {
+        id: cId,
+        name: cName,
+        phone: phone,
+        status: status
+      });
     });
-  }
 
-  savePaymentSheets(list) {
-    this._bumpMutationVersion();
-    this._setCached(DB_KEYS.PAYMENT_SHEET, list || []);
-    this.triggerAutoSyncIfEnabled();
-  }
+    const normalized = Array.from(cleanMap.values()).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+    return normalized;
+  });
+}
 
-  getPaymentSheetById(id) {
-    return this.getPaymentSheets().find(p => p.id === id) || null;
-  }
+saveContractors(list) {
+  this._bumpMutationVersion();
+  this._setCached(DB_KEYS.CONTRACTORS, list);
+}
 
-  resetToExcelSampleData() {
-    localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(typeof INITIAL_CONTRACTORS !== "undefined" ? INITIAL_CONTRACTORS : []));
-    localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(typeof INITIAL_MASTER_INVENTORY !== "undefined" ? INITIAL_MASTER_INVENTORY : []));
-    localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify([]));
-    localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(typeof INITIAL_FINAL_STYLES !== "undefined" ? INITIAL_FINAL_STYLES : []));
-    this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(() => null);
-    this.triggerAutoSyncIfEnabled();
+getRegisteredContractorNames() {
+  const contractors = this.getContractors();
+  return contractors.map(c => c.name ? c.name.trim() : "").filter(Boolean);
+}
+
+// Strict Validation: Only accept registered contractors from Neon table (or valid joint combinations)
+isValidContractorName(inputName) {
+  if (!inputName || typeof inputName !== "string") return false;
+  const trimmed = inputName.trim();
+  if (!trimmed) return false;
+
+  const registered = this.getRegisteredContractorNames();
+  if (registered.length === 0) return true;
+
+  const regLower = registered.map(n => n.toLowerCase());
+
+  // 1. Direct match (e.g. "Imtiaz", "IMTIAZ")
+  if (regLower.includes(trimmed.toLowerCase())) return true;
+
+  // 2. Canonical alias dictionary for the registered contractors
+  const aliasMap = {
+    "imt": "imtiaz",
+    "imtiaz": "imtiaz",
+    "asif": "asif",
+    "sho": "shoaib",
+    "shoaib": "shoaib",
+    "tou": "touseef",
+    "tous": "touseef",
+    "touseef": "touseef",
+    "asim": "asim",
+    "nav": "naveed",
+    "navi": "naveed",
+    "naw": "naveed",
+    "naweed": "naveed",
+    "naveed": "naveed"
+  };
+
+  const cleanLower = trimmed.toLowerCase();
+  if (aliasMap[cleanLower] && regLower.includes(aliasMap[cleanLower])) {
     return true;
   }
 
-  // -------------------------------------------------------------
-  // RATE APPROVAL SHEET PERIODS MANAGEMENT
-  // -------------------------------------------------------------
-  getRateApprovalPeriods() {
-    return this._getCached(DB_KEYS.RATE_APPROVAL_PERIODS, () => {
-      const list = this._memCache[DB_KEYS.RATE_APPROVAL_PERIODS] || [];
-      return (Array.isArray(list) ? list : []).filter(p => p && (p.period_name || "").trim());
+  // 3. Valid joint combinations (e.g. "IMT/ASIM", "TOUS/SHO", "ASIF/NAV", "IMT/ASIF/ASIM", "NAV/ASIF/ASIM/IMT")
+  const parts = trimmed.split(/[/,&+-]+/).map(p => p.trim().toLowerCase()).filter(Boolean);
+  if (parts.length > 1) {
+    const allValid = parts.every(p => {
+      const canonical = aliasMap[p] || p;
+      return regLower.includes(canonical);
     });
+    if (allValid) return true;
   }
 
-  saveRateApprovalPeriods(list) {
-    this._bumpMutationVersion();
-    const valid = (list || []).filter(p => p && (p.period_name || "").trim());
-    this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, valid);
-    this.triggerAutoSyncIfEnabled();
+  return false;
+}
+
+// Helper to match style contractor to a registered contractor
+doesContractorMatch(styleContractor, targetContractorName) {
+  if (!styleContractor || !targetContractorName) return false;
+  const sLower = styleContractor.trim().toLowerCase();
+  const tLower = targetContractorName.trim().toLowerCase();
+
+  if (sLower === tLower) return true;
+
+  const aliasMap = {
+    "imt": "imtiaz",
+    "imtiaz": "imtiaz",
+    "asif": "asif",
+    "sho": "shoaib",
+    "shoaib": "shoaib",
+    "tou": "touseef",
+    "tous": "touseef",
+    "touseef": "touseef",
+    "asim": "asim",
+    "nav": "naveed",
+    "navi": "naveed",
+    "naw": "naveed",
+    "naweed": "naveed",
+    "naveed": "naveed"
+  };
+
+  const targetCanonical = aliasMap[tLower] || tLower;
+
+  const parts = sLower.split(/[/,&+-]+/).map(p => p.trim()).filter(Boolean);
+  return parts.some(p => {
+    const canonical = aliasMap[p] || p;
+    return canonical === targetCanonical;
+  });
+}
+
+// Real-time workload & remaining balance pieces per contractor from genuine Master Inventory & Production data
+getContractorWorkload() {
+  const contractors = this.getContractors();
+  const master = this.getMasterInventory();
+  const distList = (typeof this.getWorkDistribution === "function") ? this.getWorkDistribution() : [];
+
+  return contractors.map(c => {
+    const styleMap = new Map();
+
+    // Gather styles strictly from genuine Master Inventory production orders
+    master.forEach(m => {
+      if (this.doesContractorMatch(m.contractor_name, c.name)) {
+        const styleCode = (m.style_code || "").trim();
+        const category = (m.category || "Shirt").trim();
+        const key = `${styleCode.toUpperCase()}|${category.toUpperCase()}`;
+
+        // Real WIP pending with contractor in H-Embroidery
+        // Exclusively calculated from received pieces minus dispatched pieces.
+        // Cutting stock balance is never assigned to the contractor.
+        const recQty = parseInt(m.received_qty, 10) || 0;
+        const disQty = parseInt(m.dispatch_from_hemb, 10) || 0;
+        const bal = (m.balance_from_hemb !== null && m.balance_from_hemb !== undefined)
+          ? Math.max(0, parseInt(m.balance_from_hemb, 10) || 0)
+          : Math.max(0, recQty - disQty);
+
+        if (bal > 0) {
+          // Find optional rate or floor from work distribution if recorded
+          const distMatch = distList.find(d =>
+            (d.style_code || "").trim().toUpperCase() === styleCode.toUpperCase() &&
+            this.doesContractorMatch(d.contractor_name, c.name)
+          );
+
+          styleMap.set(key, {
+            style_code: styleCode,
+            category: category,
+            balance_pcs: bal,
+            rate: distMatch ? (distMatch.rate || 0) : 0,
+            floor: distMatch ? (distMatch.floor || "") : "",
+            assigned_to: m.contractor_name || c.name,
+            period: distMatch ? (distMatch.period || "") : "",
+            source: "master_inventory"
+          });
+        }
+      }
+    });
+
+    const activeStyles = Array.from(styleMap.values()).sort((a, b) => b.balance_pcs - a.balance_pcs);
+    const totalBalance = activeStyles.reduce((acc, s) => acc + (s.balance_pcs || 0), 0);
+
+    return {
+      id: c.id,
+      name: c.name,
+      phone: c.phone || "",
+      status: c.status || "Active",
+      total_balance: totalBalance,
+      style_count: activeStyles.length,
+      styles: activeStyles
+    };
+  }).sort((a, b) => b.total_balance - a.total_balance);
+}
+
+ensureContractorExists(name) {
+  // Strictly NO-OP: contractors are ONLY created explicitly from the Contractors tab by user action.
+  return;
+}
+
+  async addContractorWithNeon(contractorData) {
+  this._bumpMutationVersion();
+  if (!contractorData || !contractorData.name) {
+    throw new Error("Contractor name is required.");
   }
+  const rawTrim = contractorData.name.trim();
+  const cleanName = rawTrim.replace(/([^\s/,\-+&]+)/g, w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+  if (!cleanName) {
+    throw new Error("Contractor name cannot be empty.");
+  }
+  // Reject double / joint contractor combinations
+  if (/[\/\\,+&]/.test(cleanName)) {
+    throw new Error("Double / joint contractor names (with '/', '+', '&', ',') cannot be saved in Contractor Directory.");
+  }
+  // Reject filter placeholders
+  if (/^all\b/i.test(cleanName)) {
+    throw new Error("Invalid name: Contractor name cannot start with 'ALL'.");
+  }
+
+  this.clearCache();
+  const list = this.getContractors();
+  const cleanLower = cleanName.toLowerCase();
+  const existing = list.find(c => (c.name || "").trim().toLowerCase() === cleanLower);
+  let savedObj = null;
+
+  if (existing) {
+    if (contractorData.phone !== undefined) existing.phone = contractorData.phone;
+    if (contractorData.status) existing.status = contractorData.status;
+    savedObj = existing;
+  } else {
+    savedObj = {
+      id: list.length > 0 ? Math.max(...list.map(c => Number(c.id) || 0)) + 1 : 1,
+      name: cleanName,
+      phone: contractorData.phone || "",
+      status: contractorData.status || "Active"
+    };
+    list.push(savedObj);
+  }
+
+  // Untrack any past deletion for this contractor
+  this.untrackDeletedRecord("contractor", savedObj.id);
+  this.untrackDeletedRecord("contractor", cleanLower);
+
+  this.saveContractors(list);
+
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.initNeonTables();
+      await this.executeNeonQuery(
+        `INSERT INTO contractors (name, phone, status)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (name) DO UPDATE
+           SET phone = EXCLUDED.phone, status = EXCLUDED.status;`,
+        [savedObj.name, savedObj.phone || '', savedObj.status || 'Active']
+      );
+      return { success: true, neonSynced: true, contractor: savedObj };
+    } catch (err) {
+      console.warn("Direct Neon contractor push error:", err);
+      return { success: true, neonSynced: false, error: err.message, contractor: savedObj };
+    }
+  }
+
+  return { success: true, neonSynced: false, contractor: savedObj };
+}
+
+  async deleteContractor(id, name) {
+  this._bumpMutationVersion();
+  this.clearCache();
+  let list = this.getContractors();
+  const cleanName = (name || "").trim();
+  const cleanLower = cleanName.toLowerCase();
+  const numId = Number(id);
+
+  const toDelete = list.find(c => (numId && Number(c.id) === numId) || (c.name && c.name.trim().toLowerCase() === cleanLower));
+  const targetName = toDelete ? toDelete.name : cleanName;
+  const targetId = toDelete ? toDelete.id : numId;
+
+  if (!targetName && !targetId) {
+    return { success: false, error: "Contractor not found" };
+  }
+
+  // 1. Await Neon DELETE query first before modifying local memory
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    await this.initNeonTables();
+    if (targetId) {
+      await this.executeNeonQuery(
+        `DELETE FROM contractors WHERE id = $1 OR LOWER(TRIM(name)) = $2;`,
+        [Number(targetId) || 0, targetName.trim().toLowerCase()]
+      );
+    } else {
+      await this.executeNeonQuery(
+        `DELETE FROM contractors WHERE LOWER(TRIM(name)) = $1;`,
+        [targetName.trim().toLowerCase()]
+      );
+    }
+  }
+
+  // 2. Move to Trash
+  if (toDelete) {
+    this.moveToTrash("contractor", toDelete);
+  }
+
+  // 3. Track deletion tombstones so sync NEVER resurrects it
+  if (targetId) this.trackDeletedRecord("contractor", targetId);
+  if (targetName) {
+    this.trackDeletedRecord("contractor", targetName.trim().toLowerCase());
+  }
+
+  // 4. Remove from local list
+  list = list.filter(c => {
+    if (targetId && Number(c.id) === Number(targetId)) return false;
+    if (targetName && (c.name || "").trim().toLowerCase() === targetName.trim().toLowerCase()) return false;
+    return true;
+  });
+  this.saveContractors(list);
+  this.clearCache();
+
+  return { success: true, neonSynced: true };
+}
+
+getContractorSummaries() {
+  const workload = this.getContractorWorkload();
+  const master = this.getMasterInventory();
+  return workload.map(w => {
+    const contractorMaster = master.filter(m => (m.contractor_name || "").toLowerCase() === (w.name || "").toLowerCase());
+    const totalCut = contractorMaster.reduce((sum, m) => sum + (m.cut_qty || 0), 0);
+    return {
+      name: w.name,
+      phone: w.phone,
+      styleCount: w.style_count,
+      totalCut: totalCut,
+      balanceInHemb: w.total_balance,
+      totalDispatched: 0,
+      styles: (w.styles || []).map(s => `${s.style_code} (${s.category})`)
+    };
+  });
+}
+
+// -------------------------------------------------------------
+// Report Date
+// -------------------------------------------------------------
+getReportDate() {
+  return localStorage.getItem(DB_KEYS.REPORT_DATE) || new Date().toISOString().split("T")[0];
+}
+
+setReportDate(dateStr) {
+  localStorage.setItem(DB_KEYS.REPORT_DATE, dateStr);
+}
+
+// -------------------------------------------------------------
+// RATE APPROVAL & PAYMENT SUMMARY SHEET (Excel Sheet Alignment)
+// -------------------------------------------------------------
+computePaymentBalances(item) {
+  if (!item) return {};
+  const totalPcs = parseInt(item.cut_qty != null ? item.cut_qty : item.total_pcs, 10) || 0;
+  const carigarRate = parseFloat(item.carigar_rate) || 0;
+  const commission = parseFloat(item.commission) || 0;
+  let rateTotal = parseFloat(item.rate_total);
+  if (isNaN(rateTotal) || rateTotal === 0) {
+    rateTotal = (carigarRate + commission) > 0 ? (carigarRate + commission) : (parseFloat(item.rate_per_pc) || 0);
+  }
+  const rate = rateTotal > 0 ? rateTotal : (parseFloat(item.rate_per_pc) || 0);
+  const totalAmount = totalPcs * rate;
+  const deliveredInTime = parseInt(item.delivered_in_time_pcs, 10) || 0;
+  let deductionPcs = parseInt(item.deduction_pcs != null ? item.deduction_pcs : item.deducted_pcs, 10) || 0;
+  const remarks1 = item.remarks_1 || item.remarks || "";
+  if (deductionPcs === 0 && remarks1) {
+    const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+    if (match) {
+      deductionPcs = parseInt(match[1], 10) || 0;
+    }
+  }
+  const deductionAmount = parseFloat(item.deduction_amount) || (deductionPcs * rate);
+
+  const baseProdPcs = (item.base_prod_pcs != null && Number(item.base_prod_pcs) > 0)
+    ? parseInt(item.base_prod_pcs, 10)
+    : ((parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0) + deductionPcs);
+
+  // Current sheet approved production pcs (auto net of deduction)
+  let prodPcs = parseInt(item.prod_pcs_qty != null ? item.prod_pcs_qty : item.paid_pcs, 10) || 0;
+  if (deductionPcs > 0 && item.base_prod_pcs != null) {
+    prodPcs = Math.max(0, baseProdPcs - deductionPcs);
+  }
+  const prevPaidPcs = parseInt(item.previous_paid_pcs, 10) || 0;
+  const cumulativePaidPcs = prodPcs + prevPaidPcs;
+  const paidAmount = parseFloat(item.paid_amount) || (cumulativePaidPcs * rate);
+
+  // Auto-fetch live balances from Master Inventory if style matches
+  let balStock = item.balance_from_stock != null ? parseInt(item.balance_from_stock, 10) : 0;
+  let balHemb = item.balance_from_hemb != null ? parseInt(item.balance_from_hemb, 10) : 0;
+  let totalBal = item.total_balance != null ? parseInt(item.total_balance, 10) : Math.max(0, totalPcs - cumulativePaidPcs);
+
+  try {
+    const cleanStyle = (item.style_code || "").trim().toLowerCase();
+    const cleanCat = (item.working || item.category || "").trim().toLowerCase();
+    if (cleanStyle) {
+      const masterList = this.getMasterInventory();
+      let m = null;
+      if (cleanCat) {
+        m = masterList.find(x =>
+          (x.style_code || "").trim().toLowerCase() === cleanStyle &&
+          (x.category || "").trim().toLowerCase() === cleanCat
+        );
+      }
+      if (!m) {
+        m = masterList.find(x => (x.style_code || "").trim().toLowerCase() === cleanStyle);
+      }
+      if (m) {
+        const mBalances = this.computeRecordBalances(m);
+        balStock = mBalances.balance_from_stock;
+        balHemb = mBalances.balance_from_hemb;
+        totalBal = mBalances.total_balance;
+      }
+    }
+  } catch (e) {
+    console.warn("Auto-fetch master balance error:", e);
+  }
+
+  const balancePcs = totalBal;
+  const balanceAmount = balancePcs * rate;
+
+  let status = item.status;
+  const remarks2 = (item.remarks_2 || item.status_remarks || "").toLowerCase();
+  if (remarks2.includes("close") || balancePcs === 0) {
+    status = "close";
+  } else if (remarks2.includes("deduction")) {
+    status = "deduction";
+  } else if (balancePcs > 0 && cumulativePaidPcs > 0) {
+    status = "Partial";
+  } else {
+    status = status || "Pending";
+  }
+
+  return {
+    period: (item.period && String(item.period).trim()) ? String(item.period).trim() : "11-SEP-2026 TO 25-SEP-2026",
+    working: item.working || item.category || "SHIRT",
+    category: item.category || item.working || "SHIRT",
+    cut_qty: totalPcs,
+    total_pcs: totalPcs,
+    base_prod_pcs: baseProdPcs,
+    deduction_pcs: deductionPcs,
+    prod_pcs_qty: prodPcs,
+    previous_paid_pcs: prevPaidPcs,
+    carigar_rate: carigarRate,
+    commission: commission,
+    rate_total: rateTotal,
+    rate_per_pc: rate,
+    total_amount: totalAmount,
+    delivered_in_time_pcs: deliveredInTime,
+    deducted_pcs: deductionPcs,
+    deduction_amount: deductionAmount,
+    paid_pcs: cumulativePaidPcs,
+    paid_amount: paidAmount,
+    balance_from_stock: balStock,
+    balance_from_hemb: balHemb,
+    total_balance: totalBal,
+    balance_pcs: balancePcs,
+    balance_amount: balanceAmount,
+    remarks_1: item.remarks_1 || item.remarks || "",
+    remarks_2: item.remarks_2 || item.status_remarks || "",
+    is_flagged: Boolean(item.is_flagged),
+    status: status
+  };
+}
+
+getPaymentSheets() {
+  return this._getCached(DB_KEYS.PAYMENT_SHEET, () => {
+    const data = this._memCache[DB_KEYS.PAYMENT_SHEET] || [];
+    return data.map(item => ({
+      ...item,
+      ...this.computePaymentBalances(item),
+      payment_history: Array.isArray(item.payment_history) ? item.payment_history : []
+    }));
+  });
+}
+
+savePaymentSheets(list) {
+  this._bumpMutationVersion();
+  this._setCached(DB_KEYS.PAYMENT_SHEET, list || []);
+  this.triggerAutoSyncIfEnabled();
+}
+
+getPaymentSheetById(id) {
+  return this.getPaymentSheets().find(p => p.id === id) || null;
+}
+
+resetToExcelSampleData() {
+  localStorage.setItem(DB_KEYS.CONTRACTORS, JSON.stringify(typeof INITIAL_CONTRACTORS !== "undefined" ? INITIAL_CONTRACTORS : []));
+  localStorage.setItem(DB_KEYS.MASTER_INVENTORY, JSON.stringify(typeof INITIAL_MASTER_INVENTORY !== "undefined" ? INITIAL_MASTER_INVENTORY : []));
+  localStorage.setItem(DB_KEYS.PAYMENT_SHEET, JSON.stringify([]));
+  localStorage.setItem(DB_KEYS.FINAL_STYLES, JSON.stringify(typeof INITIAL_FINAL_STYLES !== "undefined" ? INITIAL_FINAL_STYLES : []));
+  this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(() => null);
+  this.triggerAutoSyncIfEnabled();
+  return true;
+}
+
+// -------------------------------------------------------------
+// RATE APPROVAL SHEET PERIODS MANAGEMENT
+// -------------------------------------------------------------
+getRateApprovalPeriods() {
+  return this._getCached(DB_KEYS.RATE_APPROVAL_PERIODS, () => {
+    const list = this._memCache[DB_KEYS.RATE_APPROVAL_PERIODS] || [];
+    return (Array.isArray(list) ? list : []).filter(p => p && (p.period_name || "").trim());
+  });
+}
+
+saveRateApprovalPeriods(list) {
+  this._bumpMutationVersion();
+  const valid = (list || []).filter(p => p && (p.period_name || "").trim());
+  this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, valid);
+  this.triggerAutoSyncIfEnabled();
+}
 
   async addRateApprovalPeriod(periodData) {
-    this._bumpMutationVersion();
-    const list = this.getRateApprovalPeriods();
-    const periodName = (periodData.period_name || "").trim();
-    if (!periodName) throw new Error("Period name is required");
+  this._bumpMutationVersion();
+  const list = this.getRateApprovalPeriods();
+  const periodName = (periodData.period_name || "").trim();
+  if (!periodName) throw new Error("Period name is required");
 
-    const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
-    let savedPeriod;
-    if (existingIndex >= 0) {
-      list[existingIndex] = { ...list[existingIndex], ...periodData, period_name: periodName };
-      savedPeriod = list[existingIndex];
-    } else {
-      savedPeriod = {
-        id: `period_${Date.now()}`,
-        period_name: periodName,
-        start_date: periodData.start_date || "",
-        end_date: periodData.end_date || "",
-        department: periodData.department || "Hand Embroidery Department",
-        status: periodData.status || "Active",
-        notes: periodData.notes || "",
-        created_at: new Date().toISOString()
-      };
-      list.unshift(savedPeriod);
-    }
-
-    this.saveRateApprovalPeriods(list);
-    await this.pushRateApprovalPeriodToNeonAsync(savedPeriod);
-    return savedPeriod;
+  const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
+  let savedPeriod;
+  if (existingIndex >= 0) {
+    list[existingIndex] = { ...list[existingIndex], ...periodData, period_name: periodName };
+    savedPeriod = list[existingIndex];
+  } else {
+    savedPeriod = {
+      id: `period_${Date.now()}`,
+      period_name: periodName,
+      start_date: periodData.start_date || "",
+      end_date: periodData.end_date || "",
+      department: periodData.department || "Hand Embroidery Department",
+      status: periodData.status || "Active",
+      notes: periodData.notes || "",
+      created_at: new Date().toISOString()
+    };
+    list.unshift(savedPeriod);
   }
 
-  async pushRateApprovalPeriodToNeonAsync(period) {
-    if (!period || !period.period_name) return;
-    const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+  this.saveRateApprovalPeriods(list);
+  await this.pushRateApprovalPeriodToNeonAsync(savedPeriod);
+  return savedPeriod;
+}
 
-    try {
-      await this.executeNeonQuery(
-        `INSERT INTO rate_approval_periods (id, period_name, start_date, end_date, department, status, notes)
+  async pushRateApprovalPeriodToNeonAsync(period) {
+  if (!period || !period.period_name) return;
+  const cfg = this.getConfig();
+  if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+
+  try {
+    await this.executeNeonQuery(
+      `INSERT INTO rate_approval_periods (id, period_name, start_date, end_date, department, status, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            period_name = EXCLUDED.period_name,
@@ -3742,164 +3752,164 @@ class DatabaseService {
            department = EXCLUDED.department,
            status = EXCLUDED.status,
            notes = EXCLUDED.notes;`,
-        [
-          period.id,
-          (period.period_name || '').trim(),
-          period.start_date || '',
-          period.end_date || '',
-          period.department || 'Hand Embroidery Department',
-          period.status || 'Active',
-          period.notes || ''
-        ]
-      );
-      await this.executeNeonQuery(
-        `DELETE FROM rate_approval_periods WHERE TRIM(LOWER(period_name)) = TRIM(LOWER($1)) AND id != $2;`,
-        [(period.period_name || '').trim(), period.id]
-      ).catch(() => null);
-    } catch (err) {
-      console.warn("Neon rate_approval_periods push error:", err);
-    }
+      [
+        period.id,
+        (period.period_name || '').trim(),
+        period.start_date || '',
+        period.end_date || '',
+        period.department || 'Hand Embroidery Department',
+        period.status || 'Active',
+        period.notes || ''
+      ]
+    );
+    await this.executeNeonQuery(
+      `DELETE FROM rate_approval_periods WHERE TRIM(LOWER(period_name)) = TRIM(LOWER($1)) AND id != $2;`,
+      [(period.period_name || '').trim(), period.id]
+    ).catch(() => null);
+  } catch (err) {
+    console.warn("Neon rate_approval_periods push error:", err);
   }
+}
 
   async deleteRateApprovalPeriod(periodId) {
-    this._bumpMutationVersion();
-    let list = this.getRateApprovalPeriods();
-    let toDelete = list.find(p => p.id === periodId);
-    if (!toDelete) {
-      toDelete = list.find(p => (p.period_name || "").trim().toLowerCase() === String(periodId).trim().toLowerCase());
+  this._bumpMutationVersion();
+  let list = this.getRateApprovalPeriods();
+  let toDelete = list.find(p => p.id === periodId);
+  if (!toDelete) {
+    toDelete = list.find(p => (p.period_name || "").trim().toLowerCase() === String(periodId).trim().toLowerCase());
+  }
+  if (!toDelete) return false;
+
+  const pName = (toDelete.period_name || "").trim();
+  let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
+  const cleanPeriodLower = cleanPeriod.toLowerCase();
+  const prefixMatch = `${cleanPeriodLower} to %`;
+  const numId = Number(toDelete.id);
+
+  // 1. Await Neon DELETE queries first before modifying local memory
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    await this.executeNeonQuery(
+      "DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
+      [numId || 0, cleanPeriodLower, prefixMatch]
+    );
+    await this.executeNeonQuery(
+      "DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
+      [cleanPeriodLower, prefixMatch]
+    );
+  }
+
+  const isMatch = (val) => {
+    const v = (val || '').trim().toLowerCase();
+    return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
+  };
+
+  // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
+  const allPaySheets = this.getPaymentSheets();
+  const sheets = allPaySheets.filter(p => !isMatch(p.period));
+  const linkedSheets = allPaySheets.filter(p => isMatch(p.period));
+  linkedSheets.forEach(p => {
+    this.trackDeletedRecord("payment", p.id);
+    if (p.period && p.contractor_name && p.style_code) {
+      this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.contractor_name || '').trim()}|${(p.style_code || '').trim()}`);
     }
-    if (!toDelete) return false;
-
-    const pName = (toDelete.period_name || "").trim();
-    let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
-    const cleanPeriodLower = cleanPeriod.toLowerCase();
-    const prefixMatch = `${cleanPeriodLower} to %`;
-    const numId = Number(toDelete.id);
-
-    // 1. Await Neon DELETE queries first before modifying local memory
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      await this.executeNeonQuery(
-        "DELETE FROM rate_approval_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
-        [numId || 0, cleanPeriodLower, prefixMatch]
-      );
-      await this.executeNeonQuery(
-        "DELETE FROM payment_sheet WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
-        [cleanPeriodLower, prefixMatch]
-      );
+    if (p.period && p.style_code) {
+      this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.style_code || '').trim()}|${(p.category || p.working || 'SHIRT').trim()}`);
     }
+  });
+  this._setCached(DB_KEYS.PAYMENT_SHEET, sheets);
 
-    const isMatch = (val) => {
-      const v = (val || '').trim().toLowerCase();
-      return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
-    };
+  // 3. Move to Trash (Soft Delete) with attached payment entries
+  const trashItem = this.moveToTrash("period", toDelete, { linkedEntries: linkedSheets });
 
-    // 2. Remove any entries belonging to this deleted sheet locally, saving to Trash with period
-    const allPaySheets = this.getPaymentSheets();
-    const sheets = allPaySheets.filter(p => !isMatch(p.period));
-    const linkedSheets = allPaySheets.filter(p => isMatch(p.period));
-    linkedSheets.forEach(p => {
-      this.trackDeletedRecord("payment", p.id);
-      if (p.period && p.contractor_name && p.style_code) {
-        this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.contractor_name || '').trim()}|${(p.style_code || '').trim()}`);
+  // 4. Filter rate approval periods locally
+  list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
+  this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, list);
+
+  return trashItem;
+}
+
+// -------------------------------------------------------------
+// WORK DISTRIBUTION & CONTRACTOR ALLOCATION (Bi-Monthly Cycles)
+// 6 Primary Contractors + Joint Combinations
+// -------------------------------------------------------------
+getWorkDistribution() {
+  return this._getCached(DB_KEYS.WORK_DISTRIBUTION, () => {
+    const list = this._memCache[DB_KEYS.WORK_DISTRIBUTION] || [];
+    if (!Array.isArray(list)) return [];
+    return list.map(item => {
+      const pcs = Number(item.pcs_qty) || 0;
+      const rate = Number(item.rate) || 0;
+      const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
+        ? Number(item.total_amount)
+        : (pcs * rate);
+      let periodClean = (item.period || "").trim();
+      if (periodClean.includes(" TO ")) {
+        periodClean = periodClean.split(/\s+TO\s+/i)[0].trim();
       }
-      if (p.period && p.style_code) {
-        this.trackDeletedRecord("payment", `${(p.period || '').trim()}|${(p.style_code || '').trim()}|${(p.category || p.working || 'SHIRT').trim()}`);
+      let distDateClean = (item.dist_date || item.date || item.period || (item.created_at ? item.created_at.split("T")[0] : "")).trim();
+      if (distDateClean.includes(" TO ")) {
+        distDateClean = distDateClean.split(/\s+TO\s+/i)[0].trim();
       }
+      return {
+        ...item,
+        id: Number(item.id),
+        sr_no: item.sr_no != null ? Number(item.sr_no) : null,
+        period: periodClean,
+        dist_date: distDateClean,
+        pcs_qty: pcs,
+        rate: rate,
+        total_amount: total
+      };
     });
-    this._setCached(DB_KEYS.PAYMENT_SHEET, sheets);
+  });
+}
 
-    // 3. Move to Trash (Soft Delete) with attached payment entries
-    const trashItem = this.moveToTrash("period", toDelete, { linkedEntries: linkedSheets });
-
-    // 4. Filter rate approval periods locally
-    list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
-    this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, list);
-
-    return trashItem;
-  }
-
-  // -------------------------------------------------------------
-  // WORK DISTRIBUTION & CONTRACTOR ALLOCATION (Bi-Monthly Cycles)
-  // 6 Primary Contractors + Joint Combinations
-  // -------------------------------------------------------------
-  getWorkDistribution() {
-    return this._getCached(DB_KEYS.WORK_DISTRIBUTION, () => {
-      const list = this._memCache[DB_KEYS.WORK_DISTRIBUTION] || [];
-      if (!Array.isArray(list)) return [];
-      return list.map(item => {
-        const pcs = Number(item.pcs_qty) || 0;
-        const rate = Number(item.rate) || 0;
-        const total = (item.total_amount != null && !isNaN(Number(item.total_amount)))
-          ? Number(item.total_amount)
-          : (pcs * rate);
-        let periodClean = (item.period || "").trim();
-        if (periodClean.includes(" TO ")) {
-          periodClean = periodClean.split(/\s+TO\s+/i)[0].trim();
-        }
-        let distDateClean = (item.dist_date || item.date || item.period || (item.created_at ? item.created_at.split("T")[0] : "")).trim();
-        if (distDateClean.includes(" TO ")) {
-          distDateClean = distDateClean.split(/\s+TO\s+/i)[0].trim();
-        }
-        return {
-          ...item,
-          id: Number(item.id),
-          sr_no: item.sr_no != null ? Number(item.sr_no) : null,
-          period: periodClean,
-          dist_date: distDateClean,
-          pcs_qty: pcs,
-          rate: rate,
-          total_amount: total
-        };
-      });
-    });
-  }
-
-  saveWorkDistribution(list) {
-    this._bumpMutationVersion();
-    this._setCached(DB_KEYS.WORK_DISTRIBUTION, list || []);
-    this.triggerAutoSyncIfEnabled();
-  }
+saveWorkDistribution(list) {
+  this._bumpMutationVersion();
+  this._setCached(DB_KEYS.WORK_DISTRIBUTION, list || []);
+  this.triggerAutoSyncIfEnabled();
+}
 
   async addWorkDistributionEntry(data) {
-    this._bumpMutationVersion();
-    const list = this.getWorkDistribution();
-    const nextId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
-    const nextSr = list.length > 0 ? Math.max(...list.map(i => Number(i.sr_no) || 0)) + 1 : 1;
-    const pcsQty = Number(data.pcs_qty) || 0;
-    const rate = Number(data.rate) || 0;
-    const totalAmount = pcsQty * rate;
+  this._bumpMutationVersion();
+  const list = this.getWorkDistribution();
+  const nextId = list.length > 0 ? Math.max(...list.map(i => Number(i.id) || 0)) + 1 : 1;
+  const nextSr = list.length > 0 ? Math.max(...list.map(i => Number(i.sr_no) || 0)) + 1 : 1;
+  const pcsQty = Number(data.pcs_qty) || 0;
+  const rate = Number(data.rate) || 0;
+  const totalAmount = pcsQty * rate;
 
-    const cleanPeriod = formatDistDate(data.period || data.dist_date || new Date().toISOString().split("T")[0]);
+  const cleanPeriod = formatDistDate(data.period || data.dist_date || new Date().toISOString().split("T")[0]);
 
-    const newEntry = {
-      id: nextId,
-      sr_no: data.sr_no != null && Number(data.sr_no) > 0 ? Number(data.sr_no) : nextSr,
-      period: cleanPeriod,
-      dist_date: cleanPeriod,
-      style_code: (data.style_code || "").trim().toUpperCase(),
-      contractor_name: (data.contractor_name || "").trim().toUpperCase(),
-      pcs_qty: pcsQty,
-      rate: rate,
-      item: (data.item || "SHIRT").trim().toUpperCase(),
-      floor: (data.floor || "").trim().toUpperCase(),
-      total_amount: totalAmount,
-      remarks: (data.remarks || "").trim(),
-      created_at: new Date().toISOString()
-    };
+  const newEntry = {
+    id: nextId,
+    sr_no: data.sr_no != null && Number(data.sr_no) > 0 ? Number(data.sr_no) : nextSr,
+    period: cleanPeriod,
+    dist_date: cleanPeriod,
+    style_code: (data.style_code || "").trim().toUpperCase(),
+    contractor_name: (data.contractor_name || "").trim().toUpperCase(),
+    pcs_qty: pcsQty,
+    rate: rate,
+    item: (data.item || "SHIRT").trim().toUpperCase(),
+    floor: (data.floor || "").trim().toUpperCase(),
+    total_amount: totalAmount,
+    remarks: (data.remarks || "").trim(),
+    created_at: new Date().toISOString()
+  };
 
-    list.push(newEntry);
-    this.saveWorkDistribution(list);
+  list.push(newEntry);
+  this.saveWorkDistribution(list);
 
-    if (newEntry.contractor_name) {
-      this.ensureContractorExists(newEntry.contractor_name);
-    }
+  if (newEntry.contractor_name) {
+    this.ensureContractorExists(newEntry.contractor_name);
+  }
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.executeNeonQuery(
+        `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (id) DO UPDATE SET
              sr_no = EXCLUDED.sr_no,
@@ -3912,28 +3922,28 @@ class DatabaseService {
              floor = EXCLUDED.floor,
              total_amount = EXCLUDED.total_amount,
              remarks = EXCLUDED.remarks;`,
-          [newEntry.id, newEntry.sr_no, newEntry.period, newEntry.style_code, newEntry.contractor_name, newEntry.pcs_qty, newEntry.rate, newEntry.item, newEntry.floor, newEntry.total_amount, newEntry.remarks]
-        );
-      } catch (err) {
-        console.warn("Neon distribution insert notice:", err);
-      }
+        [newEntry.id, newEntry.sr_no, newEntry.period, newEntry.style_code, newEntry.contractor_name, newEntry.pcs_qty, newEntry.rate, newEntry.item, newEntry.floor, newEntry.total_amount, newEntry.remarks]
+      );
+    } catch (err) {
+      console.warn("Neon distribution insert notice:", err);
     }
-
-    // Auto-propagate contractor to Master, Receiving, Dispatch & Payment tables
-    if (newEntry.contractor_name && newEntry.style_code) {
-      await this.propagateDistributionContractorUpdate(newEntry.style_code, newEntry.contractor_name, newEntry.item);
-    }
-
-    return newEntry;
   }
 
+  // Auto-propagate contractor to Master, Receiving, Dispatch & Payment tables
+  if (newEntry.contractor_name && newEntry.style_code) {
+    await this.propagateDistributionContractorUpdate(newEntry.style_code, newEntry.contractor_name, newEntry.item);
+  }
+
+  return newEntry;
+}
+
   async pushWorkDistributionEntryToNeon(entry) {
-    if (!entry) return;
-    const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
-    try {
-      await this.executeNeonQuery(
-        `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
+  if (!entry) return;
+  const cfg = this.getConfig();
+  if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+  try {
+    await this.executeNeonQuery(
+      `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
          ON CONFLICT (id) DO UPDATE SET
            sr_no = EXCLUDED.sr_no,
@@ -3946,82 +3956,82 @@ class DatabaseService {
            floor = EXCLUDED.floor,
            total_amount = EXCLUDED.total_amount,
            remarks = EXCLUDED.remarks;`,
-        [entry.id, entry.sr_no || 1, entry.period || '', entry.style_code || '', entry.contractor_name || '', Number(entry.pcs_qty) || 0, Number(entry.rate) || 0, entry.item || 'SHIRT', entry.floor || '', Number(entry.total_amount) || 0, entry.remarks || '']
-      );
-    } catch (err) {
-      console.warn("Neon distribution push error:", err);
-    }
+      [entry.id, entry.sr_no || 1, entry.period || '', entry.style_code || '', entry.contractor_name || '', Number(entry.pcs_qty) || 0, Number(entry.rate) || 0, entry.item || 'SHIRT', entry.floor || '', Number(entry.total_amount) || 0, entry.remarks || '']
+    );
+  } catch (err) {
+    console.warn("Neon distribution push error:", err);
   }
+}
 
   async updateWorkDistributionEntry(id, data) {
-    this._bumpMutationVersion();
-    const list = this.getWorkDistribution();
-    const idx = list.findIndex(i => Number(i.id) === Number(id));
-    if (idx === -1) return false;
+  this._bumpMutationVersion();
+  const list = this.getWorkDistribution();
+  const idx = list.findIndex(i => Number(i.id) === Number(id));
+  if (idx === -1) return false;
 
-    const pcsQty = data.pcs_qty != null ? Number(data.pcs_qty) : list[idx].pcs_qty;
-    const rate = data.rate != null ? Number(data.rate) : list[idx].rate;
-    const totalAmount = pcsQty * rate;
+  const pcsQty = data.pcs_qty != null ? Number(data.pcs_qty) : list[idx].pcs_qty;
+  const rate = data.rate != null ? Number(data.rate) : list[idx].rate;
+  const totalAmount = pcsQty * rate;
 
-    const cleanPeriod = formatDistDate(data.period || data.dist_date || list[idx].period || list[idx].dist_date || "");
+  const cleanPeriod = formatDistDate(data.period || data.dist_date || list[idx].period || list[idx].dist_date || "");
 
-    list[idx] = {
-      ...list[idx],
-      ...data,
-      id: Number(id),
-      dist_date: cleanPeriod,
-      period: cleanPeriod,
-      pcs_qty: pcsQty,
-      rate: rate,
-      total_amount: totalAmount,
-      updated_at: new Date().toISOString()
-    };
+  list[idx] = {
+    ...list[idx],
+    ...data,
+    id: Number(id),
+    dist_date: cleanPeriod,
+    period: cleanPeriod,
+    pcs_qty: pcsQty,
+    rate: rate,
+    total_amount: totalAmount,
+    updated_at: new Date().toISOString()
+  };
 
-    this.saveWorkDistribution(list);
+  this.saveWorkDistribution(list);
 
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          `UPDATE work_distribution SET
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.executeNeonQuery(
+        `UPDATE work_distribution SET
              sr_no = $2, period = $3, style_code = $4, contractor_name = $5,
              pcs_qty = $6, rate = $7, item = $8, floor = $9, total_amount = $10, remarks = $11
            WHERE id = $1;`,
-          [id, list[idx].sr_no, list[idx].period, list[idx].style_code, list[idx].contractor_name, list[idx].pcs_qty, list[idx].rate, list[idx].item, list[idx].floor, list[idx].total_amount, list[idx].remarks || ""]
-        );
-      } catch (err) {
-        console.warn("Neon distribution update notice:", err);
-      }
+        [id, list[idx].sr_no, list[idx].period, list[idx].style_code, list[idx].contractor_name, list[idx].pcs_qty, list[idx].rate, list[idx].item, list[idx].floor, list[idx].total_amount, list[idx].remarks || ""]
+      );
+    } catch (err) {
+      console.warn("Neon distribution update notice:", err);
     }
-
-    // Auto-propagate contractor to Master, Receiving, Dispatch & Payment tables
-    if (list[idx].contractor_name && list[idx].style_code) {
-      await this.propagateDistributionContractorUpdate(list[idx].style_code, list[idx].contractor_name, list[idx].item);
-    }
-
-    return list[idx];
   }
 
+  // Auto-propagate contractor to Master, Receiving, Dispatch & Payment tables
+  if (list[idx].contractor_name && list[idx].style_code) {
+    await this.propagateDistributionContractorUpdate(list[idx].style_code, list[idx].contractor_name, list[idx].item);
+  }
+
+  return list[idx];
+}
+
   async deleteWorkDistributionEntry(id) {
-    this._bumpMutationVersion();
-    let list = this.getWorkDistribution();
-    const numId = Number(id);
-    const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
-    if (!item) return false;
+  this._bumpMutationVersion();
+  let list = this.getWorkDistribution();
+  const numId = Number(id);
+  const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
+  if (!item) return false;
 
-    const rawPeriod = (item.period || item.dist_date || "").trim();
-    let cleanPeriod = rawPeriod;
-    if (cleanPeriod.includes(" TO ")) {
-      cleanPeriod = cleanPeriod.split(/\s+TO\s+/i)[0].trim();
-    }
-    const cleanPeriodLower = cleanPeriod.toLowerCase();
-    const prefixMatch = `${cleanPeriodLower} to %`;
+  const rawPeriod = (item.period || item.dist_date || "").trim();
+  let cleanPeriod = rawPeriod;
+  if (cleanPeriod.includes(" TO ")) {
+    cleanPeriod = cleanPeriod.split(/\s+TO\s+/i)[0].trim();
+  }
+  const cleanPeriodLower = cleanPeriod.toLowerCase();
+  const prefixMatch = `${cleanPeriodLower} to %`;
 
-    // 1. Await Neon DELETE query first before modifying memory
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      await this.executeNeonQuery(
-        `DELETE FROM work_distribution 
+  // 1. Await Neon DELETE query first before modifying memory
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    await this.executeNeonQuery(
+      `DELETE FROM work_distribution 
          WHERE id = $1 
             OR (
               TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
@@ -4031,23 +4041,23 @@ class DatabaseService {
                 OR TRIM(LOWER(period)) LIKE $5
               )
             );`,
-        [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
-      );
-    }
-
-    // 2. Safely move to Trash (Soft Delete)
-    const trashItem = this.moveToTrash("distribution", item);
-
-    this.trackDeletedRecord("distribution", id);
-    if (item && item.period && item.contractor_name && item.style_code) {
-      this.trackDeletedRecord("distribution", `${item.period}|${item.contractor_name}|${item.style_code}`);
-    }
-
-    list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
-    this.saveWorkDistribution(list);
-
-    return trashItem;
+      [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
+    );
   }
+
+  // 2. Safely move to Trash (Soft Delete)
+  const trashItem = this.moveToTrash("distribution", item);
+
+  this.trackDeletedRecord("distribution", id);
+  if (item && item.period && item.contractor_name && item.style_code) {
+    this.trackDeletedRecord("distribution", `${item.period}|${item.contractor_name}|${item.style_code}`);
+  }
+
+  list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
+  this.saveWorkDistribution(list);
+
+  return trashItem;
+}
 
   // -------------------------------------------------------------
   // PROPAGATE DISTRIBUTION CONTRACTOR ASSIGNMENT TO ALL LOGS & MASTER
@@ -4056,261 +4066,261 @@ class DatabaseService {
   // and Payment Sheet (locally & on Neon PostgreSQL cloud)
   // -------------------------------------------------------------
   async propagateDistributionContractorUpdate(styleCode, newContractor, itemCategory = "") {
-    if (!styleCode || !newContractor) return;
-    const cleanCode = styleCode.trim().toUpperCase();
-    const cleanCodeLower = cleanCode.toLowerCase();
-    const cleanCont = newContractor.trim().toUpperCase();
-    const cleanCat = (itemCategory || "").trim().toUpperCase();
-    const cleanCatLower = cleanCat.toLowerCase();
+  if (!styleCode || !newContractor) return;
+  const cleanCode = styleCode.trim().toUpperCase();
+  const cleanCodeLower = cleanCode.toLowerCase();
+  const cleanCont = newContractor.trim().toUpperCase();
+  const cleanCat = (itemCategory || "").trim().toUpperCase();
+  const cleanCatLower = cleanCat.toLowerCase();
 
-    // 1. Clear contractor memory cache immediately
-    this._styleContractorCache = {};
-    this.clearCache();
+  // 1. Clear contractor memory cache immediately
+  this._styleContractorCache = {};
+  this.clearCache();
 
-    // 2. Update Master Inventory
+  // 2. Update Master Inventory
+  const masterList = this.getMasterInventory();
+  let masterChanged = false;
+  masterList.forEach(m => {
+    const mCode = (m.style_code || "").trim().toLowerCase();
+    const mCat = (m.category || "").trim().toLowerCase();
+    const match = mCode === cleanCodeLower && (!cleanCatLower || mCat === cleanCatLower || cleanCatLower === "SHIRT" || mCat === "");
+    if (match || mCode === cleanCodeLower) {
+      if (m.contractor_name !== cleanCont) {
+        m.contractor_name = cleanCont;
+        m.updated_at = new Date().toISOString();
+        masterChanged = true;
+      }
+    }
+  });
+  if (masterChanged) {
+    this.saveMasterInventory(masterList);
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery(
+        `UPDATE master_inventory SET contractor_name = $1, updated_at = CURRENT_TIMESTAMP WHERE TRIM(LOWER(style_code)) = $2;`,
+        [cleanCont, cleanCodeLower]
+      ).catch(e => console.warn("Neon master contractor propagation notice:", e));
+    }
+  }
+
+  // 4. Update Receiving Logs
+  const recList = this.getReceivingLogs();
+  let recChanged = false;
+  recList.forEach(r => {
+    const rCode = (r.style_code || "").trim().toLowerCase();
+    if (rCode === cleanCodeLower) {
+      if (r.contractor_name !== cleanCont) {
+        r.contractor_name = cleanCont;
+        recChanged = true;
+      }
+    }
+  });
+  if (recChanged) {
+    this.saveReceivingLogs(recList);
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery(
+        `UPDATE receiving_log SET contractor_name = $1 WHERE TRIM(LOWER(style_code)) = $2;`,
+        [cleanCont, cleanCodeLower]
+      ).catch(e => console.warn("Neon receiving contractor propagation notice:", e));
+    }
+  }
+
+  // 5. Update Dispatch Logs
+  const disList = this.getDispatchLogs();
+  let disChanged = false;
+  disList.forEach(d => {
+    const dCode = (d.style_code || "").trim().toLowerCase();
+    if (dCode === cleanCodeLower) {
+      if (d.contractor_name !== cleanCont) {
+        d.contractor_name = cleanCont;
+        disChanged = true;
+      }
+    }
+  });
+  if (disChanged) {
+    this.saveDispatchLogs(disList);
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery(
+        `UPDATE dispatch_log SET contractor_name = $1 WHERE TRIM(LOWER(style_code)) = $2;`,
+        [cleanCont, cleanCodeLower]
+      ).catch(e => console.warn("Neon dispatch contractor propagation notice:", e));
+    }
+  }
+
+  // 6. Update Payment Sheet
+  const payList = this.getPaymentSheets();
+  let payChanged = false;
+  payList.forEach(p => {
+    const pCode = (p.style_code || "").trim().toLowerCase();
+    if (pCode === cleanCodeLower) {
+      if (p.contractor_name !== cleanCont) {
+        p.contractor_name = cleanCont;
+        p.updated_at = new Date().toISOString();
+        payChanged = true;
+      }
+    }
+  });
+  if (payChanged) {
+    this.savePaymentSheets(payList);
+    const cfg = this.getConfig();
+    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+      this.executeNeonQuery(
+        `UPDATE payment_sheet SET contractor_name = $1, updated_at = CURRENT_TIMESTAMP WHERE TRIM(LOWER(style_code)) = $2;`,
+        [cleanCont, cleanCodeLower]
+      ).catch(e => console.warn("Neon payment contractor propagation notice:", e));
+    }
+  }
+
+  this.clearCache();
+}
+
+// -------------------------------------------------------------
+// AUTO-SYNC ALL DISTRIBUTION CONTRACTORS ACROSS SHEETS
+// Scans work_distribution and enforces contractor consistency
+// on master_inventory, receiving_log, and dispatch_log
+// -------------------------------------------------------------
+syncAllDistributionContractorsToLogsAndMaster({ skipBump = false } = {}) {
+  try {
+    const distList = this.getWorkDistribution();
+    if (!Array.isArray(distList) || distList.length === 0) return;
+
     const masterList = this.getMasterInventory();
-    let masterChanged = false;
-    masterList.forEach(m => {
-      const mCode = (m.style_code || "").trim().toLowerCase();
-      const mCat = (m.category || "").trim().toLowerCase();
-      const match = mCode === cleanCodeLower && (!cleanCatLower || mCat === cleanCatLower || cleanCatLower === "SHIRT" || mCat === "");
-      if (match || mCode === cleanCodeLower) {
-        if (m.contractor_name !== cleanCont) {
-          m.contractor_name = cleanCont;
-          m.updated_at = new Date().toISOString();
-          masterChanged = true;
-        }
-      }
-    });
-    if (masterChanged) {
-      this.saveMasterInventory(masterList);
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `UPDATE master_inventory SET contractor_name = $1, updated_at = CURRENT_TIMESTAMP WHERE TRIM(LOWER(style_code)) = $2;`,
-          [cleanCont, cleanCodeLower]
-        ).catch(e => console.warn("Neon master contractor propagation notice:", e));
-      }
-    }
-
-    // 4. Update Receiving Logs
     const recList = this.getReceivingLogs();
-    let recChanged = false;
-    recList.forEach(r => {
-      const rCode = (r.style_code || "").trim().toLowerCase();
-      if (rCode === cleanCodeLower) {
-        if (r.contractor_name !== cleanCont) {
-          r.contractor_name = cleanCont;
-          recChanged = true;
-        }
-      }
-    });
-    if (recChanged) {
-      this.saveReceivingLogs(recList);
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `UPDATE receiving_log SET contractor_name = $1 WHERE TRIM(LOWER(style_code)) = $2;`,
-          [cleanCont, cleanCodeLower]
-        ).catch(e => console.warn("Neon receiving contractor propagation notice:", e));
-      }
-    }
-
-    // 5. Update Dispatch Logs
     const disList = this.getDispatchLogs();
-    let disChanged = false;
-    disList.forEach(d => {
-      const dCode = (d.style_code || "").trim().toLowerCase();
-      if (dCode === cleanCodeLower) {
-        if (d.contractor_name !== cleanCont) {
-          d.contractor_name = cleanCont;
-          disChanged = true;
-        }
+
+    let masterModified = false;
+    let recModified = false;
+    let disModified = false;
+
+    // Map from styleCodeLower -> latest assigned contractor
+    const distMap = new Map();
+    distList.forEach(d => {
+      const code = (d.style_code || "").trim().toLowerCase();
+      const cont = (d.contractor_name || "").trim().toUpperCase();
+      if (code && cont && cont !== "UNASSIGNED" && cont !== "-") {
+        distMap.set(code, cont);
       }
     });
-    if (disChanged) {
-      this.saveDispatchLogs(disList);
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `UPDATE dispatch_log SET contractor_name = $1 WHERE TRIM(LOWER(style_code)) = $2;`,
-          [cleanCont, cleanCodeLower]
-        ).catch(e => console.warn("Neon dispatch contractor propagation notice:", e));
-      }
-    }
 
-    // 6. Update Payment Sheet
-    const payList = this.getPaymentSheets();
-    let payChanged = false;
-    payList.forEach(p => {
-      const pCode = (p.style_code || "").trim().toLowerCase();
-      if (pCode === cleanCodeLower) {
-        if (p.contractor_name !== cleanCont) {
-          p.contractor_name = cleanCont;
-          p.updated_at = new Date().toISOString();
-          payChanged = true;
-        }
-      }
-    });
-    if (payChanged) {
-      this.savePaymentSheets(payList);
-      const cfg = this.getConfig();
-      if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-        this.executeNeonQuery(
-          `UPDATE payment_sheet SET contractor_name = $1, updated_at = CURRENT_TIMESTAMP WHERE TRIM(LOWER(style_code)) = $2;`,
-          [cleanCont, cleanCodeLower]
-        ).catch(e => console.warn("Neon payment contractor propagation notice:", e));
-      }
-    }
-
-    this.clearCache();
-  }
-
-  // -------------------------------------------------------------
-  // AUTO-SYNC ALL DISTRIBUTION CONTRACTORS ACROSS SHEETS
-  // Scans work_distribution and enforces contractor consistency
-  // on master_inventory, receiving_log, and dispatch_log
-  // -------------------------------------------------------------
-  syncAllDistributionContractorsToLogsAndMaster({ skipBump = false } = {}) {
-    try {
-      const distList = this.getWorkDistribution();
-      if (!Array.isArray(distList) || distList.length === 0) return;
-
-      const masterList = this.getMasterInventory();
-      const recList = this.getReceivingLogs();
-      const disList = this.getDispatchLogs();
-
-      let masterModified = false;
-      let recModified = false;
-      let disModified = false;
-
-      // Map from styleCodeLower -> latest assigned contractor
-      const distMap = new Map();
-      distList.forEach(d => {
-        const code = (d.style_code || "").trim().toLowerCase();
-        const cont = (d.contractor_name || "").trim().toUpperCase();
-        if (code && cont && cont !== "UNASSIGNED" && cont !== "-") {
-          distMap.set(code, cont);
+    distMap.forEach((cont, codeLower) => {
+      masterList.forEach(m => {
+        if ((m.style_code || "").trim().toLowerCase() === codeLower && m.contractor_name !== cont) {
+          m.contractor_name = cont;
+          masterModified = true;
         }
       });
-
-      distMap.forEach((cont, codeLower) => {
-        masterList.forEach(m => {
-          if ((m.style_code || "").trim().toLowerCase() === codeLower && m.contractor_name !== cont) {
-            m.contractor_name = cont;
-            masterModified = true;
-          }
-        });
-        recList.forEach(r => {
-          if ((r.style_code || "").trim().toLowerCase() === codeLower && r.contractor_name !== cont) {
-            r.contractor_name = cont;
-            recModified = true;
-          }
-        });
-        disList.forEach(d => {
-          if ((d.style_code || "").trim().toLowerCase() === codeLower && d.contractor_name !== cont) {
-            d.contractor_name = cont;
-            disModified = true;
-          }
-        });
-      });
-
-      if (masterModified) {
-        if (skipBump) this._setCached(DB_KEYS.MASTER_INVENTORY, masterList);
-        else this.saveMasterInventory(masterList);
-      }
-      if (recModified) {
-        if (skipBump) this._setCached(DB_KEYS.RECEIVING_LOG, recList);
-        else this.saveReceivingLogs(recList);
-      }
-      if (disModified) {
-        if (skipBump) this._setCached(DB_KEYS.DISPATCH_LOG, disList);
-        else this.saveDispatchLogs(disList);
-      }
-      if (masterModified || recModified || disModified) {
-        this.clearCache();
-      }
-    } catch (e) {
-      console.warn("syncAllDistributionContractorsToLogsAndMaster error:", e);
-    }
-  }
-
-  // -------------------------------------------------------------
-  // DISTRIBUTION PERIODS MANAGEMENT (Bi-Monthly Cycles)
-  // -------------------------------------------------------------
-  getDistributionPeriods() {
-    return this._getCached(DB_KEYS.DISTRIBUTION_PERIODS, () => {
-      const list = this._memCache[DB_KEYS.DISTRIBUTION_PERIODS] || [];
-      if (!Array.isArray(list)) return [];
-      return list.filter(p => p && (p.period_name || "").trim()).map(p => {
-        let pName = (p.period_name || "").trim();
-        if (/\s+to\s+/i.test(pName)) {
-          pName = pName.split(/\s+to\s+/i)[0].trim();
+      recList.forEach(r => {
+        if ((r.style_code || "").trim().toLowerCase() === codeLower && r.contractor_name !== cont) {
+          r.contractor_name = cont;
+          recModified = true;
         }
-        return {
-          ...p,
-          period_name: pName
-        };
+      });
+      disList.forEach(d => {
+        if ((d.style_code || "").trim().toLowerCase() === codeLower && d.contractor_name !== cont) {
+          d.contractor_name = cont;
+          disModified = true;
+        }
       });
     });
-  }
 
-  saveDistributionPeriods(list) {
-    this._bumpMutationVersion();
-    const valid = (list || []).filter(p => p && (p.period_name || "").trim()).map(p => {
-      if (!p.id) p.id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-      return p;
-    });
-    this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, valid);
-    this.triggerAutoSyncIfEnabled();
+    if (masterModified) {
+      if (skipBump) this._setCached(DB_KEYS.MASTER_INVENTORY, masterList);
+      else this.saveMasterInventory(masterList);
+    }
+    if (recModified) {
+      if (skipBump) this._setCached(DB_KEYS.RECEIVING_LOG, recList);
+      else this.saveReceivingLogs(recList);
+    }
+    if (disModified) {
+      if (skipBump) this._setCached(DB_KEYS.DISPATCH_LOG, disList);
+      else this.saveDispatchLogs(disList);
+    }
+    if (masterModified || recModified || disModified) {
+      this.clearCache();
+    }
+  } catch (e) {
+    console.warn("syncAllDistributionContractorsToLogsAndMaster error:", e);
   }
+}
+
+// -------------------------------------------------------------
+// DISTRIBUTION PERIODS MANAGEMENT (Bi-Monthly Cycles)
+// -------------------------------------------------------------
+getDistributionPeriods() {
+  return this._getCached(DB_KEYS.DISTRIBUTION_PERIODS, () => {
+    const list = this._memCache[DB_KEYS.DISTRIBUTION_PERIODS] || [];
+    if (!Array.isArray(list)) return [];
+    return list.filter(p => p && (p.period_name || "").trim()).map(p => {
+      let pName = (p.period_name || "").trim();
+      if (/\s+to\s+/i.test(pName)) {
+        pName = pName.split(/\s+to\s+/i)[0].trim();
+      }
+      return {
+        ...p,
+        period_name: pName
+      };
+    });
+  });
+}
+
+saveDistributionPeriods(list) {
+  this._bumpMutationVersion();
+  const valid = (list || []).filter(p => p && (p.period_name || "").trim()).map(p => {
+    if (!p.id) p.id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    return p;
+  });
+  this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, valid);
+  this.triggerAutoSyncIfEnabled();
+}
 
   async saveDistributionPeriod(periodData) {
-    this._bumpMutationVersion();
-    const list = this.getDistributionPeriods();
-    const periodName = (periodData.period_name || "").trim();
-    if (!periodName) throw new Error("Period name is required");
+  this._bumpMutationVersion();
+  const list = this.getDistributionPeriods();
+  const periodName = (periodData.period_name || "").trim();
+  if (!periodName) throw new Error("Period name is required");
 
-    const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
-    let savedPeriod;
-    if (existingIndex >= 0) {
-      list[existingIndex] = { ...list[existingIndex], ...periodData, period_name: periodName };
-      if (!list[existingIndex].id) {
-        list[existingIndex].id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-      }
-      savedPeriod = list[existingIndex];
-    } else {
-      savedPeriod = {
-        id: `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        period_name: periodName,
-        start_date: periodData.start_date || "",
-        end_date: periodData.end_date || "",
-        department: periodData.department || "Hand Embroidery Department",
-        status: periodData.status || "Active",
-        notes: periodData.notes || "",
-        created_at: new Date().toISOString()
-      };
-      list.push(savedPeriod);
+  const existingIndex = list.findIndex(p => p.period_name.toLowerCase() === periodName.toLowerCase());
+  let savedPeriod;
+  if (existingIndex >= 0) {
+    list[existingIndex] = { ...list[existingIndex], ...periodData, period_name: periodName };
+    if (!list[existingIndex].id) {
+      list[existingIndex].id = `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
     }
-    this.untrackDeletedRecord("distribution_period", savedPeriod.id);
-
-    // Remove from Trash if it was previously soft-deleted
-    const trash = this.getTrashItems().filter(t => !(t.entity_type === "distribution_period" && ((t.item_data && (t.item_data.period_name || "").trim().toLowerCase() === periodName.toLowerCase()) || String(t.original_id || "") === String(savedPeriod.id))));
-    this.saveTrashItems(trash);
-
-    this.saveDistributionPeriods(list);
-    await this.pushDistributionPeriodToNeonAsync(savedPeriod);
-    return savedPeriod;
+    savedPeriod = list[existingIndex];
+  } else {
+    savedPeriod = {
+      id: `dist_period_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      period_name: periodName,
+      start_date: periodData.start_date || "",
+      end_date: periodData.end_date || "",
+      department: periodData.department || "Hand Embroidery Department",
+      status: periodData.status || "Active",
+      notes: periodData.notes || "",
+      created_at: new Date().toISOString()
+    };
+    list.push(savedPeriod);
   }
+  this.untrackDeletedRecord("distribution_period", savedPeriod.id);
+
+  // Remove from Trash if it was previously soft-deleted
+  const trash = this.getTrashItems().filter(t => !(t.entity_type === "distribution_period" && ((t.item_data && (t.item_data.period_name || "").trim().toLowerCase() === periodName.toLowerCase()) || String(t.original_id || "") === String(savedPeriod.id))));
+  this.saveTrashItems(trash);
+
+  this.saveDistributionPeriods(list);
+  await this.pushDistributionPeriodToNeonAsync(savedPeriod);
+  return savedPeriod;
+}
 
   async pushDistributionPeriodToNeonAsync(period) {
-    if (!period || !period.period_name) return;
-    const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
+  if (!period || !period.period_name) return;
+  const cfg = this.getConfig();
+  if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return;
 
-    try {
-      await this.executeNeonQuery(
-        `INSERT INTO distribution_periods (id, period_name, start_date, end_date, department, status, notes)
+  try {
+    await this.executeNeonQuery(
+      `INSERT INTO distribution_periods (id, period_name, start_date, end_date, department, status, notes)
          VALUES ($1, $2, $3, $4, $5, $6, $7)
          ON CONFLICT (id) DO UPDATE SET
            period_name = EXCLUDED.period_name,
@@ -4319,424 +4329,424 @@ class DatabaseService {
            department = EXCLUDED.department,
            status = EXCLUDED.status,
            notes = EXCLUDED.notes;`,
-        [
-          period.id,
-          (period.period_name || '').trim(),
-          period.start_date || '',
-          period.end_date || '',
-          period.department || 'Hand Embroidery Department',
-          period.status || 'Active',
-          period.notes || ''
-        ]
-      );
-      await this.executeNeonQuery(
-        `DELETE FROM distribution_periods WHERE TRIM(LOWER(period_name)) = TRIM(LOWER($1)) AND id != $2;`,
-        [(period.period_name || '').trim(), period.id]
-      ).catch(() => null);
-    } catch (err) {
-      console.warn("Neon distribution_periods push error:", err);
-    }
+      [
+        period.id,
+        (period.period_name || '').trim(),
+        period.start_date || '',
+        period.end_date || '',
+        period.department || 'Hand Embroidery Department',
+        period.status || 'Active',
+        period.notes || ''
+      ]
+    );
+    await this.executeNeonQuery(
+      `DELETE FROM distribution_periods WHERE TRIM(LOWER(period_name)) = TRIM(LOWER($1)) AND id != $2;`,
+      [(period.period_name || '').trim(), period.id]
+    ).catch(() => null);
+  } catch (err) {
+    console.warn("Neon distribution_periods push error:", err);
   }
+}
 
   async deleteDistributionPeriod(periodId) {
-    this._bumpMutationVersion();
-    let list = this.getDistributionPeriods();
-    let toDelete = list.find(p => p.id === periodId);
-    if (!toDelete) {
-      toDelete = list.find(p => (p.period_name || "").trim().toLowerCase() === String(periodId).trim().toLowerCase());
-    }
-    if (!toDelete) return false;
+  this._bumpMutationVersion();
+  let list = this.getDistributionPeriods();
+  let toDelete = list.find(p => p.id === periodId);
+  if (!toDelete) {
+    toDelete = list.find(p => (p.period_name || "").trim().toLowerCase() === String(periodId).trim().toLowerCase());
+  }
+  if (!toDelete) return false;
 
-    const pName = (toDelete.period_name || "").trim();
-    let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
-    const cleanPeriodLower = cleanPeriod.toLowerCase();
-    const prefixMatch = `${cleanPeriodLower} to %`;
-    const numId = Number(toDelete.id);
+  const pName = (toDelete.period_name || "").trim();
+  let cleanPeriod = pName.includes(" TO ") ? pName.split(/\s+TO\s+/i)[0].trim() : pName;
+  const cleanPeriodLower = cleanPeriod.toLowerCase();
+  const prefixMatch = `${cleanPeriodLower} to %`;
+  const numId = Number(toDelete.id);
 
-    // 1. Await Neon DELETE queries first before modifying local memory
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      await this.executeNeonQuery(
-        "DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
-        [numId || 0, cleanPeriodLower, prefixMatch]
-      );
-      await this.executeNeonQuery(
-        "DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
-        [cleanPeriodLower, prefixMatch]
-      );
-    }
-
-    const isMatch = (val) => {
-      const v = (val || '').trim().toLowerCase();
-      return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
-    };
-
-    // 2. Move to Trash (Soft Delete) with attached work distribution entries
-    const linkedDist = this.getWorkDistribution().filter(w => isMatch(w.period));
-    linkedDist.forEach(w => {
-      this.trackDeletedRecord("distribution", w.id);
-      if (w.period && w.contractor_name && w.style_code) {
-        this.trackDeletedRecord("distribution", `${w.period}|${w.contractor_name}|${w.style_code}`);
-      }
-    });
-    const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
-
-    const remainingDist = this.getWorkDistribution().filter(w => !isMatch(w.period));
-    this._setCached(DB_KEYS.WORK_DISTRIBUTION, remainingDist);
-
-    list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
-    this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, list);
-
-    return trashItem;
+  // 1. Await Neon DELETE queries first before modifying local memory
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    await this.executeNeonQuery(
+      "DELETE FROM distribution_periods WHERE id = $1 OR TRIM(LOWER(period_name)) = $2 OR TRIM(LOWER(period_name)) LIKE $3;",
+      [numId || 0, cleanPeriodLower, prefixMatch]
+    );
+    await this.executeNeonQuery(
+      "DELETE FROM work_distribution WHERE TRIM(LOWER(period)) = $1 OR TRIM(LOWER(period)) LIKE $2;",
+      [cleanPeriodLower, prefixMatch]
+    );
   }
 
-  // -------------------------------------------------------------
-  // INTELLIGENT CONTRACTOR LOOKUP ACROSS SHEETS
-  // Auto-resolves contractor assigned in Work Distribution Sheet
-  // Fallbacks: Master Inventory -> Payment Sheet
-  // -------------------------------------------------------------
-  getContractorForStyle(styleCode, category = "") {
-    if (!styleCode) return null;
-    const cleanCode = styleCode.trim().toLowerCase();
-    const cleanCat = (category || "").trim().toLowerCase();
+  const isMatch = (val) => {
+    const v = (val || '').trim().toLowerCase();
+    return v === cleanPeriodLower || v.startsWith(cleanPeriodLower + ' to ');
+  };
 
-    if (!this._styleContractorCache) this._styleContractorCache = {};
-    const cacheKey = `${cleanCode}:::${cleanCat}`;
-    if (this._styleContractorCache[cacheKey] !== undefined) {
-      return this._styleContractorCache[cacheKey];
+  // 2. Move to Trash (Soft Delete) with attached work distribution entries
+  const linkedDist = this.getWorkDistribution().filter(w => isMatch(w.period));
+  linkedDist.forEach(w => {
+    this.trackDeletedRecord("distribution", w.id);
+    if (w.period && w.contractor_name && w.style_code) {
+      this.trackDeletedRecord("distribution", `${w.period}|${w.contractor_name}|${w.style_code}`);
     }
+  });
+  const trashItem = this.moveToTrash("distribution_period", toDelete, { linkedEntries: linkedDist });
 
-    let result = null;
+  const remainingDist = this.getWorkDistribution().filter(w => !isMatch(w.period));
+  this._setCached(DB_KEYS.WORK_DISTRIBUTION, remainingDist);
 
-    // 1. Check Work Distribution (prefer matching active period or latest entry)
-    const distList = this.getWorkDistribution();
-    let distMatch = null;
-    if (cleanCat) {
-      for (let i = distList.length - 1; i >= 0; i--) {
-        const d = distList[i];
-        if ((d.style_code || "").trim().toLowerCase() === cleanCode &&
-          (d.item || "").trim().toLowerCase() === cleanCat) {
-          distMatch = d;
-          break;
-        }
-      }
-    }
-    if (!distMatch) {
-      for (let i = distList.length - 1; i >= 0; i--) {
-        const d = distList[i];
-        if ((d.style_code || "").trim().toLowerCase() === cleanCode) {
-          distMatch = d;
-          break;
-        }
-      }
-    }
+  list = list.filter(p => Number(p.id) !== numId && !isMatch(p.period_name));
+  this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, list);
 
-    if (distMatch && distMatch.contractor_name) {
-      result = {
-        contractor_name: distMatch.contractor_name,
-        rate: distMatch.rate || 0,
-        item: distMatch.item || "SHIRT",
-        floor: distMatch.floor || "",
-        pcs_qty: distMatch.pcs_qty || 0,
-        period: distMatch.period || "",
-        source: "work_distribution"
-      };
-      this._styleContractorCache[cacheKey] = result;
-      return result;
-    }
+  return trashItem;
+}
 
-    // 2. Check Master Inventory
-    const masterList = this.getMasterInventory();
-    let masterMatch = null;
-    if (cleanCat) {
-      masterMatch = masterList.find(m =>
-        (m.style_code || "").trim().toLowerCase() === cleanCode &&
-        (m.category || "").trim().toLowerCase() === cleanCat
-      );
-    }
-    if (!masterMatch) {
-      masterMatch = masterList.find(m => (m.style_code || "").trim().toLowerCase() === cleanCode);
-    }
+// -------------------------------------------------------------
+// INTELLIGENT CONTRACTOR LOOKUP ACROSS SHEETS
+// Auto-resolves contractor assigned in Work Distribution Sheet
+// Fallbacks: Master Inventory -> Payment Sheet
+// -------------------------------------------------------------
+getContractorForStyle(styleCode, category = "") {
+  if (!styleCode) return null;
+  const cleanCode = styleCode.trim().toLowerCase();
+  const cleanCat = (category || "").trim().toLowerCase();
 
-    if (masterMatch && masterMatch.contractor_name && masterMatch.contractor_name !== "Unassigned" && masterMatch.contractor_name !== "-") {
-      result = {
-        contractor_name: masterMatch.contractor_name,
-        rate: 0,
-        item: masterMatch.category || "SHIRT",
-        floor: "",
-        pcs_qty: masterMatch.cut_qty || 0,
-        period: "",
-        source: "master_inventory"
-      };
-      this._styleContractorCache[cacheKey] = result;
-      return result;
-    }
+  if (!this._styleContractorCache) this._styleContractorCache = {};
+  const cacheKey = `${cleanCode}:::${cleanCat}`;
+  if (this._styleContractorCache[cacheKey] !== undefined) {
+    return this._styleContractorCache[cacheKey];
+  }
 
-    // 3. Check Payment Sheet
-    const payList = this.getPaymentSheets();
-    let payMatch = null;
-    for (let i = payList.length - 1; i >= 0; i--) {
-      const p = payList[i];
-      if ((p.style_code || "").trim().toLowerCase() === cleanCode) {
-        payMatch = p;
+  let result = null;
+
+  // 1. Check Work Distribution (prefer matching active period or latest entry)
+  const distList = this.getWorkDistribution();
+  let distMatch = null;
+  if (cleanCat) {
+    for (let i = distList.length - 1; i >= 0; i--) {
+      const d = distList[i];
+      if ((d.style_code || "").trim().toLowerCase() === cleanCode &&
+        (d.item || "").trim().toLowerCase() === cleanCat) {
+        distMatch = d;
         break;
       }
     }
-    if (payMatch && payMatch.contractor_name && payMatch.contractor_name !== "-") {
-      result = {
-        contractor_name: payMatch.contractor_name,
-        rate: payMatch.rate_per_pc || 0,
-        item: payMatch.category || payMatch.working || "SHIRT",
-        floor: "",
-        pcs_qty: payMatch.prod_pcs_qty || payMatch.cut_qty || 0,
-        period: payMatch.period || "",
-        source: "payment_sheet"
-      };
-      this._styleContractorCache[cacheKey] = result;
-      return result;
+  }
+  if (!distMatch) {
+    for (let i = distList.length - 1; i >= 0; i--) {
+      const d = distList[i];
+      if ((d.style_code || "").trim().toLowerCase() === cleanCode) {
+        distMatch = d;
+        break;
+      }
     }
-
-    this._styleContractorCache[cacheKey] = null;
-    return null;
   }
 
-  // -------------------------------------------------------------
-  // DUAL-CONDITION SMART AUDIT: (Style Code + Category / Working)
-  // Cross-search all past sheets, sum up paid pcs, check dorie & floor
-  // -------------------------------------------------------------
-  auditStylePaymentHistory(styleCode, category = "") {
-    if (!styleCode) return null;
-    const cleanStyle = styleCode.trim().toLowerCase();
-    const cleanCat = (category || "").trim().toLowerCase();
-
-    // 1. Look up Master Inventory
-    const masterList = this.getMasterInventory();
-    let masterRecord = null;
-    if (cleanCat) {
-      masterRecord = masterList.find(m =>
-        (m.style_code || "").trim().toLowerCase() === cleanStyle &&
-        (m.category || "").trim().toLowerCase() === cleanCat
-      );
-    }
-    if (!masterRecord) {
-      masterRecord = masterList.find(m => (m.style_code || "").trim().toLowerCase() === cleanStyle);
-    }
-
-    // 2. Look up all Rate Approval / Payment Sheet entries
-    const paymentList = this.getPaymentSheets();
-    const matchingPayments = paymentList.filter(p => {
-      const matchStyle = (p.style_code || "").trim().toLowerCase() === cleanStyle;
-      if (!matchStyle) return false;
-      if (cleanCat) {
-        const cat = (p.category || p.working || "").trim().toLowerCase();
-        return cat === cleanCat;
-      }
-      return true;
-    });
-
-    // 3. Cut Qty
-    let cutQty = masterRecord ? (masterRecord.cut_qty || 0) : 0;
-    if (!cutQty && matchingPayments.length > 0) {
-      cutQty = Math.max(...matchingPayments.map(p => p.cut_qty || p.total_pcs || 0));
-    }
-
-    // 4. Detailed analysis across all matching sheets
-    let currentSheetProdPcs = 0;
-    let explicitPayReceiveMax = 0;
-    const dorieFindings = [];
-    const floorFindings = [];
-
-    matchingPayments.forEach(p => {
-      const prodPcs = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
-      currentSheetProdPcs += prodPcs;
-
-      const prevPaid = parseInt(p.previous_paid_pcs, 10) || 0;
-      if (prevPaid > explicitPayReceiveMax) {
-        explicitPayReceiveMax = prevPaid;
-      }
-
-      const allRemarks = `${p.remarks || ''} ${p.remarks_1 || ''} ${p.remarks_2 || ''} ${p.status_remarks || ''}`.toUpperCase();
-      const matchReceive = allRemarks.match(/(\d+)\s*PCS\s*PAY\s*RECEIVE/);
-      if (matchReceive) {
-        const parsed = parseInt(matchReceive[1], 10);
-        if (parsed > explicitPayReceiveMax) {
-          explicitPayReceiveMax = parsed;
-        }
-      }
-
-      // Check Dorie
-      const isDorie = (p.payment_channel === 'dorie') || allRemarks.includes('DORIE') || (p.remarks_1 || '').toUpperCase().includes('DORIE');
-      if (isDorie) {
-        dorieFindings.push({
-          period: p.period || '11-SEP-2026 TO 25-SEP-2026',
-          pcs: prodPcs,
-          contractor: p.contractor_name || 'N/A',
-          remarks: p.remarks_1 || p.remarks || 'DORIE'
-        });
-      }
-
-      // Check Floor Transfer
-      const isFloor = (p.payment_channel === 'floor_transfer') ||
-        allRemarks.includes('FLOOR') ||
-        allRemarks.includes('28 FLOOR') ||
-        allRemarks.includes('2ND FLOOR') ||
-        allRemarks.includes('3RD FLOOR') ||
-        allRemarks.includes('STITCHING') ||
-        allRemarks.includes('FINISHING') ||
-        Boolean(p.target_floor);
-      if (isFloor) {
-        floorFindings.push({
-          period: p.period || '11-SEP-2026 TO 25-SEP-2026',
-          pcs: prodPcs,
-          floor_name: p.target_floor || p.floor_name || 'Other Floor',
-          challan: p.floor_challan_no || '',
-          remarks: p.remarks_1 || p.remarks || 'Floor Transfer'
-        });
-      }
-    });
-
-    // Total pieces for which payment was taken across all sheets
-    const totalPaidPcs = currentSheetProdPcs + explicitPayReceiveMax;
-    const remainingBalancePcs = Math.max(0, cutQty - totalPaidPcs);
-
-    const hasClosedRemarks = matchingPayments.some(p => {
-      const rem = `${p.remarks_2 || ''} ${p.status || ''} ${p.remarks_1 || ''}`.toLowerCase();
-      return rem.includes('close');
-    });
-
-    const isFullyPaid = (totalPaidPcs >= cutQty && cutQty > 0) || (hasClosedRemarks && remainingBalancePcs === 0);
-
-    return {
-      style_code: masterRecord ? masterRecord.style_code : (matchingPayments[0]?.style_code || styleCode.toUpperCase()),
-      category: masterRecord ? masterRecord.category : (matchingPayments[0]?.category || matchingPayments[0]?.working || category || "SHIRT"),
-      working: masterRecord ? masterRecord.category : (matchingPayments[0]?.working || matchingPayments[0]?.category || category || "SHIRT"),
-      contractor_name: masterRecord ? masterRecord.contractor_name : (matchingPayments[0]?.contractor_name || ""),
-      cut_qty: cutQty,
-      total_paid_pcs: totalPaidPcs,
-      current_sheet_prod_pcs: currentSheetProdPcs,
-      previous_sheets_paid_pcs: explicitPayReceiveMax,
-      remaining_balance_pcs: remainingBalancePcs,
-      is_fully_paid: isFullyPaid,
-      has_closed_remarks: hasClosedRemarks,
-      is_dorie: dorieFindings.length > 0,
-      dorie_findings: dorieFindings,
-      is_floor_transfer: floorFindings.length > 0,
-      floor_findings: floorFindings,
-      balance_from_stock: masterRecord ? masterRecord.balance_from_stock : (matchingPayments[0]?.balance_from_stock || 0),
-      balance_from_hemb: masterRecord ? masterRecord.balance_from_hemb : (matchingPayments[0]?.balance_from_hemb || 0),
-      total_balance: masterRecord ? masterRecord.total_balance : (matchingPayments[0]?.total_balance || 0),
-      records: matchingPayments
+  if (distMatch && distMatch.contractor_name) {
+    result = {
+      contractor_name: distMatch.contractor_name,
+      rate: distMatch.rate || 0,
+      item: distMatch.item || "SHIRT",
+      floor: distMatch.floor || "",
+      pcs_qty: distMatch.pcs_qty || 0,
+      period: distMatch.period || "",
+      source: "work_distribution"
     };
+    this._styleContractorCache[cacheKey] = result;
+    return result;
   }
+
+  // 2. Check Master Inventory
+  const masterList = this.getMasterInventory();
+  let masterMatch = null;
+  if (cleanCat) {
+    masterMatch = masterList.find(m =>
+      (m.style_code || "").trim().toLowerCase() === cleanCode &&
+      (m.category || "").trim().toLowerCase() === cleanCat
+    );
+  }
+  if (!masterMatch) {
+    masterMatch = masterList.find(m => (m.style_code || "").trim().toLowerCase() === cleanCode);
+  }
+
+  if (masterMatch && masterMatch.contractor_name && masterMatch.contractor_name !== "Unassigned" && masterMatch.contractor_name !== "-") {
+    result = {
+      contractor_name: masterMatch.contractor_name,
+      rate: 0,
+      item: masterMatch.category || "SHIRT",
+      floor: "",
+      pcs_qty: masterMatch.cut_qty || 0,
+      period: "",
+      source: "master_inventory"
+    };
+    this._styleContractorCache[cacheKey] = result;
+    return result;
+  }
+
+  // 3. Check Payment Sheet
+  const payList = this.getPaymentSheets();
+  let payMatch = null;
+  for (let i = payList.length - 1; i >= 0; i--) {
+    const p = payList[i];
+    if ((p.style_code || "").trim().toLowerCase() === cleanCode) {
+      payMatch = p;
+      break;
+    }
+  }
+  if (payMatch && payMatch.contractor_name && payMatch.contractor_name !== "-") {
+    result = {
+      contractor_name: payMatch.contractor_name,
+      rate: payMatch.rate_per_pc || 0,
+      item: payMatch.category || payMatch.working || "SHIRT",
+      floor: "",
+      pcs_qty: payMatch.prod_pcs_qty || payMatch.cut_qty || 0,
+      period: payMatch.period || "",
+      source: "payment_sheet"
+    };
+    this._styleContractorCache[cacheKey] = result;
+    return result;
+  }
+
+  this._styleContractorCache[cacheKey] = null;
+  return null;
+}
+
+// -------------------------------------------------------------
+// DUAL-CONDITION SMART AUDIT: (Style Code + Category / Working)
+// Cross-search all past sheets, sum up paid pcs, check dorie & floor
+// -------------------------------------------------------------
+auditStylePaymentHistory(styleCode, category = "") {
+  if (!styleCode) return null;
+  const cleanStyle = styleCode.trim().toLowerCase();
+  const cleanCat = (category || "").trim().toLowerCase();
+
+  // 1. Look up Master Inventory
+  const masterList = this.getMasterInventory();
+  let masterRecord = null;
+  if (cleanCat) {
+    masterRecord = masterList.find(m =>
+      (m.style_code || "").trim().toLowerCase() === cleanStyle &&
+      (m.category || "").trim().toLowerCase() === cleanCat
+    );
+  }
+  if (!masterRecord) {
+    masterRecord = masterList.find(m => (m.style_code || "").trim().toLowerCase() === cleanStyle);
+  }
+
+  // 2. Look up all Rate Approval / Payment Sheet entries
+  const paymentList = this.getPaymentSheets();
+  const matchingPayments = paymentList.filter(p => {
+    const matchStyle = (p.style_code || "").trim().toLowerCase() === cleanStyle;
+    if (!matchStyle) return false;
+    if (cleanCat) {
+      const cat = (p.category || p.working || "").trim().toLowerCase();
+      return cat === cleanCat;
+    }
+    return true;
+  });
+
+  // 3. Cut Qty
+  let cutQty = masterRecord ? (masterRecord.cut_qty || 0) : 0;
+  if (!cutQty && matchingPayments.length > 0) {
+    cutQty = Math.max(...matchingPayments.map(p => p.cut_qty || p.total_pcs || 0));
+  }
+
+  // 4. Detailed analysis across all matching sheets
+  let currentSheetProdPcs = 0;
+  let explicitPayReceiveMax = 0;
+  const dorieFindings = [];
+  const floorFindings = [];
+
+  matchingPayments.forEach(p => {
+    const prodPcs = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
+    currentSheetProdPcs += prodPcs;
+
+    const prevPaid = parseInt(p.previous_paid_pcs, 10) || 0;
+    if (prevPaid > explicitPayReceiveMax) {
+      explicitPayReceiveMax = prevPaid;
+    }
+
+    const allRemarks = `${p.remarks || ''} ${p.remarks_1 || ''} ${p.remarks_2 || ''} ${p.status_remarks || ''}`.toUpperCase();
+    const matchReceive = allRemarks.match(/(\d+)\s*PCS\s*PAY\s*RECEIVE/);
+    if (matchReceive) {
+      const parsed = parseInt(matchReceive[1], 10);
+      if (parsed > explicitPayReceiveMax) {
+        explicitPayReceiveMax = parsed;
+      }
+    }
+
+    // Check Dorie
+    const isDorie = (p.payment_channel === 'dorie') || allRemarks.includes('DORIE') || (p.remarks_1 || '').toUpperCase().includes('DORIE');
+    if (isDorie) {
+      dorieFindings.push({
+        period: p.period || '11-SEP-2026 TO 25-SEP-2026',
+        pcs: prodPcs,
+        contractor: p.contractor_name || 'N/A',
+        remarks: p.remarks_1 || p.remarks || 'DORIE'
+      });
+    }
+
+    // Check Floor Transfer
+    const isFloor = (p.payment_channel === 'floor_transfer') ||
+      allRemarks.includes('FLOOR') ||
+      allRemarks.includes('28 FLOOR') ||
+      allRemarks.includes('2ND FLOOR') ||
+      allRemarks.includes('3RD FLOOR') ||
+      allRemarks.includes('STITCHING') ||
+      allRemarks.includes('FINISHING') ||
+      Boolean(p.target_floor);
+    if (isFloor) {
+      floorFindings.push({
+        period: p.period || '11-SEP-2026 TO 25-SEP-2026',
+        pcs: prodPcs,
+        floor_name: p.target_floor || p.floor_name || 'Other Floor',
+        challan: p.floor_challan_no || '',
+        remarks: p.remarks_1 || p.remarks || 'Floor Transfer'
+      });
+    }
+  });
+
+  // Total pieces for which payment was taken across all sheets
+  const totalPaidPcs = currentSheetProdPcs + explicitPayReceiveMax;
+  const remainingBalancePcs = Math.max(0, cutQty - totalPaidPcs);
+
+  const hasClosedRemarks = matchingPayments.some(p => {
+    const rem = `${p.remarks_2 || ''} ${p.status || ''} ${p.remarks_1 || ''}`.toLowerCase();
+    return rem.includes('close');
+  });
+
+  const isFullyPaid = (totalPaidPcs >= cutQty && cutQty > 0) || (hasClosedRemarks && remainingBalancePcs === 0);
+
+  return {
+    style_code: masterRecord ? masterRecord.style_code : (matchingPayments[0]?.style_code || styleCode.toUpperCase()),
+    category: masterRecord ? masterRecord.category : (matchingPayments[0]?.category || matchingPayments[0]?.working || category || "SHIRT"),
+    working: masterRecord ? masterRecord.category : (matchingPayments[0]?.working || matchingPayments[0]?.category || category || "SHIRT"),
+    contractor_name: masterRecord ? masterRecord.contractor_name : (matchingPayments[0]?.contractor_name || ""),
+    cut_qty: cutQty,
+    total_paid_pcs: totalPaidPcs,
+    current_sheet_prod_pcs: currentSheetProdPcs,
+    previous_sheets_paid_pcs: explicitPayReceiveMax,
+    remaining_balance_pcs: remainingBalancePcs,
+    is_fully_paid: isFullyPaid,
+    has_closed_remarks: hasClosedRemarks,
+    is_dorie: dorieFindings.length > 0,
+    dorie_findings: dorieFindings,
+    is_floor_transfer: floorFindings.length > 0,
+    floor_findings: floorFindings,
+    balance_from_stock: masterRecord ? masterRecord.balance_from_stock : (matchingPayments[0]?.balance_from_stock || 0),
+    balance_from_hemb: masterRecord ? masterRecord.balance_from_hemb : (matchingPayments[0]?.balance_from_hemb || 0),
+    total_balance: masterRecord ? masterRecord.total_balance : (matchingPayments[0]?.total_balance || 0),
+    records: matchingPayments
+  };
+}
 
   async addPaymentSheet(item) {
-    this._bumpMutationVersion();
-    const list = this.getPaymentSheets();
-    const newId = list.length > 0 ? Math.max(...list.map(i => i.id || 0)) + 1 : 1;
-    const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
+  this._bumpMutationVersion();
+  const list = this.getPaymentSheets();
+  const newId = list.length > 0 ? Math.max(...list.map(i => i.id || 0)) + 1 : 1;
+  const maxSr = list.length > 0 ? Math.max(...list.map(i => parseInt(i.sr_no, 10) || 0)) : 0;
 
-    const computed = this.computePaymentBalances(item);
+  const computed = this.computePaymentBalances(item);
 
-    const record = {
-      id: newId,
-      sr_no: item.sr_no ? parseInt(item.sr_no, 10) : maxSr + 1,
-      period: (item.period && String(item.period).trim()) ? String(item.period).trim() : "11-SEP-2026 TO 25-SEP-2026",
-      style_code: (item.style_code || "").trim(),
-      working: (item.working || item.category || "SHIRT").trim(),
-      category: (item.category || item.working || "SHIRT").trim(),
-      ship: (item.ship || "").trim(),
-      contractor_name: (item.contractor_name || "").trim(),
-      payment_channel: item.payment_channel || "stock_direct", // 'dorie', 'floor_transfer', 'stock_direct'
-      target_floor: (item.target_floor || "").trim(),
-      floor_challan_no: (item.floor_challan_no || "").trim(),
-      floor_received_by: (item.floor_received_by || "").trim(),
-      submission_date: item.submission_date || "",
-      cutoff_date: item.cutoff_date || "",
-      image_data: item.image_data || "",
-      remarks: item.remarks_1 || item.remarks || "",
-      remarks_1: item.remarks_1 || item.remarks || "",
-      remarks_2: item.remarks_2 || item.status_remarks || "",
-      is_flagged: Boolean(item.is_flagged),
-      payment_history: Array.isArray(item.payment_history) ? item.payment_history : [],
-      created_at: new Date().toISOString(),
-      ...computed
-    };
+  const record = {
+    id: newId,
+    sr_no: item.sr_no ? parseInt(item.sr_no, 10) : maxSr + 1,
+    period: (item.period && String(item.period).trim()) ? String(item.period).trim() : "11-SEP-2026 TO 25-SEP-2026",
+    style_code: (item.style_code || "").trim(),
+    working: (item.working || item.category || "SHIRT").trim(),
+    category: (item.category || item.working || "SHIRT").trim(),
+    ship: (item.ship || "").trim(),
+    contractor_name: (item.contractor_name || "").trim(),
+    payment_channel: item.payment_channel || "stock_direct", // 'dorie', 'floor_transfer', 'stock_direct'
+    target_floor: (item.target_floor || "").trim(),
+    floor_challan_no: (item.floor_challan_no || "").trim(),
+    floor_received_by: (item.floor_received_by || "").trim(),
+    submission_date: item.submission_date || "",
+    cutoff_date: item.cutoff_date || "",
+    image_data: item.image_data || "",
+    remarks: item.remarks_1 || item.remarks || "",
+    remarks_1: item.remarks_1 || item.remarks || "",
+    remarks_2: item.remarks_2 || item.status_remarks || "",
+    is_flagged: Boolean(item.is_flagged),
+    payment_history: Array.isArray(item.payment_history) ? item.payment_history : [],
+    created_at: new Date().toISOString(),
+    ...computed
+  };
 
-    list.unshift(record);
-    this.savePaymentSheets(list);
+  list.unshift(record);
+  this.savePaymentSheets(list);
 
-    if (record.contractor_name) {
-      this.ensureContractorExists(record.contractor_name);
-    }
-
-    // Sync to Neon if configured
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.syncPaymentSheetToNeon(record);
-      } catch (err) {
-        console.warn("Neon payment_sheet push error:", err);
-      }
-    }
-
-    return record;
+  if (record.contractor_name) {
+    this.ensureContractorExists(record.contractor_name);
   }
+
+  // Sync to Neon if configured
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.syncPaymentSheetToNeon(record);
+    } catch (err) {
+      console.warn("Neon payment_sheet push error:", err);
+    }
+  }
+
+  return record;
+}
 
   async updatePaymentSheet(id, updatedFields) {
-    this._bumpMutationVersion();
-    const list = this.getPaymentSheets();
-    const index = list.findIndex(i => i.id === id);
-    if (index === -1) return null;
+  this._bumpMutationVersion();
+  const list = this.getPaymentSheets();
+  const index = list.findIndex(i => i.id === id);
+  if (index === -1) return null;
 
-    const merged = {
-      ...list[index],
-      ...updatedFields,
-      id: id
-    };
+  const merged = {
+    ...list[index],
+    ...updatedFields,
+    id: id
+  };
 
-    const computed = this.computePaymentBalances(merged);
-    list[index] = {
-      ...merged,
-      ...computed,
-      updated_at: new Date().toISOString()
-    };
+  const computed = this.computePaymentBalances(merged);
+  list[index] = {
+    ...merged,
+    ...computed,
+    updated_at: new Date().toISOString()
+  };
 
-    if (list[index].contractor_name) {
-      this.ensureContractorExists(list[index].contractor_name);
-    }
-
-    this.savePaymentSheets(list);
-
-    // Sync to Neon if configured
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.syncPaymentSheetToNeon(list[index]);
-      } catch (err) {
-        console.warn("Neon payment_sheet update error:", err);
-      }
-    }
-
-    return list[index];
+  if (list[index].contractor_name) {
+    this.ensureContractorExists(list[index].contractor_name);
   }
 
+  this.savePaymentSheets(list);
+
+  // Sync to Neon if configured
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.syncPaymentSheetToNeon(list[index]);
+    } catch (err) {
+      console.warn("Neon payment_sheet update error:", err);
+    }
+  }
+
+  return list[index];
+}
+
   async deletePaymentSheet(id) {
-    this._bumpMutationVersion();
-    let list = this.getPaymentSheets();
-    const numId = Number(id);
-    const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
-    if (!item) return false;
+  this._bumpMutationVersion();
+  let list = this.getPaymentSheets();
+  const numId = Number(id);
+  const item = list.find(i => Number(i.id) === numId || String(i.id) === String(id));
+  if (!item) return false;
 
-    const rawPeriod = (item.period || "").trim();
-    let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
-    const cleanPeriodLower = cleanPeriod.toLowerCase();
-    const prefixMatch = `${cleanPeriodLower} to %`;
+  const rawPeriod = (item.period || "").trim();
+  let cleanPeriod = rawPeriod.includes(" TO ") ? rawPeriod.split(/\s+TO\s+/i)[0].trim() : rawPeriod;
+  const cleanPeriodLower = cleanPeriod.toLowerCase();
+  const prefixMatch = `${cleanPeriodLower} to %`;
 
-    // 1. Await Neon DELETE query first before modifying local memory
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      await this.executeNeonQuery(
-        `DELETE FROM payment_sheet 
+  // 1. Await Neon DELETE query first before modifying local memory
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    await this.executeNeonQuery(
+      `DELETE FROM payment_sheet 
          WHERE id = $1 
             OR (
               TRIM(LOWER(style_code)) = TRIM(LOWER($2)) 
@@ -4746,80 +4756,80 @@ class DatabaseService {
                 OR TRIM(LOWER(period)) LIKE $5
               )
             );`,
-        [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
-      );
-    }
-
-    // 2. Safely move to Trash (Soft Delete)
-    const trashItem = this.moveToTrash("payment", item);
-
-    this.trackDeletedRecord("payment", id);
-    if (item && item.period && item.contractor_name && item.style_code) {
-      this.trackDeletedRecord("payment", `${item.period}|${item.contractor_name}|${item.style_code}`);
-    }
-
-    list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
-    this.savePaymentSheets(list);
-
-    return trashItem;
+      [numId || 0, item.style_code || '', item.contractor_name || '', cleanPeriodLower, prefixMatch]
+    );
   }
+
+  // 2. Safely move to Trash (Soft Delete)
+  const trashItem = this.moveToTrash("payment", item);
+
+  this.trackDeletedRecord("payment", id);
+  if (item && item.period && item.contractor_name && item.style_code) {
+    this.trackDeletedRecord("payment", `${item.period}|${item.contractor_name}|${item.style_code}`);
+  }
+
+  list = list.filter(i => Number(i.id) !== numId && String(i.id) !== String(id));
+  this.savePaymentSheets(list);
+
+  return trashItem;
+}
 
   async recordPaymentReceipt(paymentId, receipt) {
-    const payment = this.getPaymentSheetById(paymentId);
-    if (!payment) throw new Error("Payment record not found.");
+  const payment = this.getPaymentSheetById(paymentId);
+  if (!payment) throw new Error("Payment record not found.");
 
-    const amount = parseFloat(receipt.amount) || 0;
-    const rate = payment.rate_per_pc || 1;
-    const pcsCovered = receipt.pcs_covered !== undefined ? parseInt(receipt.pcs_covered, 10) : (rate > 0 ? Math.round(amount / rate) : 0);
+  const amount = parseFloat(receipt.amount) || 0;
+  const rate = payment.rate_per_pc || 1;
+  const pcsCovered = receipt.pcs_covered !== undefined ? parseInt(receipt.pcs_covered, 10) : (rate > 0 ? Math.round(amount / rate) : 0);
 
-    const history = Array.isArray(payment.payment_history) ? [...payment.payment_history] : [];
-    history.push({
-      id: Date.now(),
-      date: receipt.date || new Date().toISOString().split("T")[0],
-      amount: amount,
-      pcs_covered: pcsCovered,
-      receipt_no: (receipt.receipt_no || "").trim(),
-      payment_mode: receipt.payment_mode || "Cash",
-      notes: (receipt.notes || "").trim()
-    });
+  const history = Array.isArray(payment.payment_history) ? [...payment.payment_history] : [];
+  history.push({
+    id: Date.now(),
+    date: receipt.date || new Date().toISOString().split("T")[0],
+    amount: amount,
+    pcs_covered: pcsCovered,
+    receipt_no: (receipt.receipt_no || "").trim(),
+    payment_mode: receipt.payment_mode || "Cash",
+    notes: (receipt.notes || "").trim()
+  });
 
-    const newPaidAmount = (payment.paid_amount || 0) + amount;
-    const newPaidPcs = (payment.paid_pcs || 0) + pcsCovered;
+  const newPaidAmount = (payment.paid_amount || 0) + amount;
+  const newPaidPcs = (payment.paid_pcs || 0) + pcsCovered;
 
-    return await this.updatePaymentSheet(paymentId, {
-      paid_amount: newPaidAmount,
-      paid_pcs: newPaidPcs,
-      payment_history: history
-    });
-  }
+  return await this.updatePaymentSheet(paymentId, {
+    paid_amount: newPaidAmount,
+    paid_pcs: newPaidPcs,
+    payment_history: history
+  });
+}
 
   async syncPaymentSheetToNeon(p) {
-    if (!p) return;
-    const period = (p.period && String(p.period).trim()) ? String(p.period).trim() : "11-SEP-2026 TO 25-SEP-2026";
-    const cutQty = parseInt(p.cut_qty != null ? p.cut_qty : p.total_pcs, 10) || 0;
-    const prodPcs = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
-    let deductionPcs = parseInt(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs, 10) || 0;
-    const remarks1 = (p.remarks_1 || p.remarks || "").trim();
-    if (deductionPcs === 0 && remarks1) {
-      const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
-      if (match) {
-        deductionPcs = parseInt(match[1], 10) || 0;
-      }
+  if (!p) return;
+  const period = (p.period && String(p.period).trim()) ? String(p.period).trim() : "11-SEP-2026 TO 25-SEP-2026";
+  const cutQty = parseInt(p.cut_qty != null ? p.cut_qty : p.total_pcs, 10) || 0;
+  const prodPcs = parseInt(p.prod_pcs_qty != null ? p.prod_pcs_qty : p.paid_pcs, 10) || 0;
+  let deductionPcs = parseInt(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs, 10) || 0;
+  const remarks1 = (p.remarks_1 || p.remarks || "").trim();
+  if (deductionPcs === 0 && remarks1) {
+    const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+    if (match) {
+      deductionPcs = parseInt(match[1], 10) || 0;
     }
-    const baseProdPcs = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
-      ? parseInt(p.base_prod_pcs, 10)
-      : (prodPcs + deductionPcs);
-    const balStock = parseInt(p.balance_from_stock, 10) || 0;
-    const balHemb = parseInt(p.balance_from_hemb, 10) || 0;
-    const totalBal = parseInt(p.total_balance != null ? p.total_balance : p.balance_pcs, 10) || 0;
-    const isFlagged = Boolean(p.is_flagged);
-    const paymentChannel = (p.payment_channel || 'stock_direct').trim();
-    const targetFloor = (p.target_floor || '').trim();
-    const floorChallanNo = (p.floor_challan_no || '').trim();
-    const floorReceivedBy = (p.floor_received_by || '').trim();
+  }
+  const baseProdPcs = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
+    ? parseInt(p.base_prod_pcs, 10)
+    : (prodPcs + deductionPcs);
+  const balStock = parseInt(p.balance_from_stock, 10) || 0;
+  const balHemb = parseInt(p.balance_from_hemb, 10) || 0;
+  const totalBal = parseInt(p.total_balance != null ? p.total_balance : p.balance_pcs, 10) || 0;
+  const isFlagged = Boolean(p.is_flagged);
+  const paymentChannel = (p.payment_channel || 'stock_direct').trim();
+  const targetFloor = (p.target_floor || '').trim();
+  const floorChallanNo = (p.floor_challan_no || '').trim();
+  const floorReceivedBy = (p.floor_received_by || '').trim();
 
-    await this.executeNeonQuery(
-      `INSERT INTO payment_sheet (
+  await this.executeNeonQuery(
+    `INSERT INTO payment_sheet (
         id, period, sr_no, style_code, category, contractor_name,
         cut_qty, prod_pcs_qty, deduction_pcs, base_prod_pcs, remarks_1,
         balance_from_stock, balance_from_hemb, total_balance,
@@ -4851,135 +4861,135 @@ class DatabaseService {
         floor_challan_no = EXCLUDED.floor_challan_no,
         floor_received_by = EXCLUDED.floor_received_by,
         updated_at = CURRENT_TIMESTAMP;`,
-      [
-        p.id,
-        period,
-        p.sr_no || 0,
-        (p.style_code || '').trim(),
-        (p.category || p.working || 'SHIRT').trim(),
-        (p.contractor_name || '').trim(),
-        cutQty,
-        prodPcs,
-        deductionPcs,
-        baseProdPcs,
-        remarks1,
-        balStock,
-        balHemb,
-        totalBal,
-        isFlagged,
-        paymentChannel,
-        targetFloor,
-        floorChallanNo,
-        floorReceivedBy
-      ]
-    );
-  }
+    [
+      p.id,
+      period,
+      p.sr_no || 0,
+      (p.style_code || '').trim(),
+      (p.category || p.working || 'SHIRT').trim(),
+      (p.contractor_name || '').trim(),
+      cutQty,
+      prodPcs,
+      deductionPcs,
+      baseProdPcs,
+      remarks1,
+      balStock,
+      balHemb,
+      totalBal,
+      isFlagged,
+      paymentChannel,
+      targetFloor,
+      floorChallanNo,
+      floorReceivedBy
+    ]
+  );
+}
 
-  // -------------------------------------------------------------
-  // USER AUTHENTICATION & ACCESS CONTROL (RBAC)
-  // -------------------------------------------------------------
-  getUsers() {
-    return JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
-  }
+// -------------------------------------------------------------
+// USER AUTHENTICATION & ACCESS CONTROL (RBAC)
+// -------------------------------------------------------------
+getUsers() {
+  return JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
+}
 
-  saveUsers(list) {
-    localStorage.setItem(DB_KEYS.USERS, JSON.stringify(list));
-    this.triggerAutoSyncIfEnabled();
-  }
+saveUsers(list) {
+  localStorage.setItem(DB_KEYS.USERS, JSON.stringify(list));
+  this.triggerAutoSyncIfEnabled();
+}
 
-  getUserById(id) {
-    return this.getUsers().find(u => u.id === id) || null;
-  }
+getUserById(id) {
+  return this.getUsers().find(u => u.id === id) || null;
+}
 
-  getUserByUsername(username) {
-    if (!username) return null;
-    return this.getUsers().find(u => (u.username || "").toLowerCase() === username.toLowerCase().trim()) || null;
-  }
+getUserByUsername(username) {
+  if (!username) return null;
+  return this.getUsers().find(u => (u.username || "").toLowerCase() === username.toLowerCase().trim()) || null;
+}
 
   async saveUserAccount(userData) {
-    const currentSession = this.getCurrentUser();
-    const list = this.getUsers();
+  const currentSession = this.getCurrentUser();
+  const list = this.getUsers();
 
-    if (list.length > 0 && !this.canUserManageUsers(currentSession)) {
-      throw new Error("Access Denied: Only Administrator / Software Owner can create or edit user accounts.");
-    }
+  if (list.length > 0 && !this.canUserManageUsers(currentSession)) {
+    throw new Error("Access Denied: Only Administrator / Software Owner can create or edit user accounts.");
+  }
 
-    const cleanUsername = (userData.username || "").toLowerCase().trim();
+  const cleanUsername = (userData.username || "").toLowerCase().trim();
 
-    if (!cleanUsername) throw new Error("Username is required.");
-    if (!userData.password && !userData.id) throw new Error("Password is required for new accounts.");
+  if (!cleanUsername) throw new Error("Username is required.");
+  if (!userData.password && !userData.id) throw new Error("Password is required for new accounts.");
 
-    let userItem = null;
+  let userItem = null;
 
-    if (userData.id) {
-      // Edit existing user
-      userItem = list.find(u => u.id === userData.id);
-      if (!userItem) throw new Error("User account not found.");
+  if (userData.id) {
+    // Edit existing user
+    userItem = list.find(u => u.id === userData.id);
+    if (!userItem) throw new Error("User account not found.");
 
-      const duplicate = list.find(u => u.id !== userData.id && (u.username || "").toLowerCase() === cleanUsername);
-      if (duplicate) throw new Error(`Username "${cleanUsername}" is already taken.`);
+    const duplicate = list.find(u => u.id !== userData.id && (u.username || "").toLowerCase() === cleanUsername);
+    if (duplicate) throw new Error(`Username "${cleanUsername}" is already taken.`);
 
-      userItem.username = cleanUsername;
-      userItem.full_name = (userData.full_name || userItem.full_name).trim();
-      if (userData.password) userItem.password = userData.password;
+    userItem.username = cleanUsername;
+    userItem.full_name = (userData.full_name || userItem.full_name).trim();
+    if (userData.password) userItem.password = userData.password;
 
-      if (userItem.id === 1) {
-        userItem.role = "admin";
-        userItem.status = "Active";
-      } else {
-        userItem.role = userData.role || userItem.role;
-        userItem.status = userData.status || "Active";
-      }
-
-      userItem.permissions = userData.permissions || userItem.permissions;
-      userItem.updated_at = new Date().toISOString();
-
+    if (userItem.id === 1) {
+      userItem.role = "admin";
+      userItem.status = "Active";
     } else {
-      // Add new user
-      const duplicate = list.find(u => (u.username || "").toLowerCase() === cleanUsername);
-      if (duplicate) throw new Error(`Username "${cleanUsername}" is already in use.`);
+      userItem.role = userData.role || userItem.role;
+      userItem.status = userData.status || "Active";
+    }
 
-      const maxId = list.length > 0 ? Math.max(...list.map(u => u.id || 0)) : 0;
-      userItem = {
-        id: maxId + 1,
-        username: cleanUsername,
-        password: userData.password,
-        full_name: (userData.full_name || cleanUsername).trim(),
-        role: userData.role || "Operator",
-        status: userData.status || "Active",
-        created_at: new Date().toISOString(),
-        permissions: userData.permissions || {
-          tabs: {
-            master_inventory: true,
-            receiving_log: true,
-            dispatch_log: true,
-            final_style: false,
-            contractors: false,
-            neon_sync: false
-          },
-          actions: {
-            can_create: true,
-            can_edit: false,
-            can_delete: false
-          }
+    userItem.permissions = userData.permissions || userItem.permissions;
+    userItem.updated_at = new Date().toISOString();
+
+  } else {
+    // Add new user
+    const duplicate = list.find(u => (u.username || "").toLowerCase() === cleanUsername);
+    if (duplicate) throw new Error(`Username "${cleanUsername}" is already in use.`);
+
+    const maxId = list.length > 0 ? Math.max(...list.map(u => u.id || 0)) : 0;
+    userItem = {
+      id: maxId + 1,
+      username: cleanUsername,
+      password: userData.password,
+      full_name: (userData.full_name || cleanUsername).trim(),
+      role: userData.role || "Operator",
+      status: userData.status || "Active",
+      created_at: new Date().toISOString(),
+      permissions: userData.permissions || {
+        tabs: {
+          master_inventory: true,
+          receiving_log: true,
+          dispatch_log: true,
+          final_style: false,
+          contractors: false,
+          neon_sync: false
+        },
+        actions: {
+          can_create: true,
+          can_edit: false,
+          can_delete: false
         }
-      };
-      list.push(userItem);
-    }
+      }
+    };
+    list.push(userItem);
+  }
 
-    this.saveUsers(list);
+  this.saveUsers(list);
 
-    // If current logged-in user edited their own details, update current session
-    if (currentSession && currentSession.id === userItem.id) {
-      this.setCurrentUser(userItem);
-    }
+  // If current logged-in user edited their own details, update current session
+  if (currentSession && currentSession.id === userItem.id) {
+    this.setCurrentUser(userItem);
+  }
 
-    // Sync user to Neon if configured
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      try {
-        await this.executeNeonQuery(
-          `INSERT INTO app_users (id, username, password, full_name, role, permissions, status)
+  // Sync user to Neon if configured
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    try {
+      await this.executeNeonQuery(
+        `INSERT INTO app_users (id, username, password, full_name, role, permissions, status)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (username) DO UPDATE SET
              password = EXCLUDED.password,
@@ -4987,506 +4997,506 @@ class DatabaseService {
              role = EXCLUDED.role,
              permissions = EXCLUDED.permissions,
              status = EXCLUDED.status;`,
-          [
-            userItem.id, userItem.username, userItem.password, userItem.full_name,
-            userItem.role, JSON.stringify(userItem.permissions), userItem.status
-          ]
-        );
-      } catch (err) {
-        console.warn("Neon sync app_users error:", err);
-      }
+        [
+          userItem.id, userItem.username, userItem.password, userItem.full_name,
+          userItem.role, JSON.stringify(userItem.permissions), userItem.status
+        ]
+      );
+    } catch (err) {
+      console.warn("Neon sync app_users error:", err);
     }
-
-    return userItem;
   }
+
+  return userItem;
+}
 
   async deleteUserAccount(id) {
-    const currentSession = this.getCurrentUser();
-    if (!this.canUserManageUsers(currentSession)) {
-      throw new Error("Access Denied: Only Administrator / Software Owner can delete user accounts.");
-    }
-
-    if (id === 1) {
-      throw new Error("Primary Master Admin account cannot be deleted.");
-    }
-
-    let list = this.getUsers();
-    const user = list.find(u => u.id === id);
-    if (!user) return false;
-
-    if (user.role === "admin") {
-      const adminCount = list.filter(u => u.role === "admin").length;
-      if (adminCount <= 1) {
-        throw new Error("Cannot delete the only remaining Admin account.");
-      }
-    }
-
-    // Move to Trash (Soft Delete)
-    const trashItem = this.moveToTrash("user", user);
-
-    list = list.filter(u => u.id !== id);
-    this.saveUsers(list);
-
-    // Remove from Neon
-    const cfg = this.getConfig();
-    if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
-      this.executeNeonQuery("DELETE FROM app_users WHERE id = $1;", [id]).catch(err => {
-        console.warn("Neon delete app_users error:", err);
-      });
-    }
-
-    return trashItem;
+  const currentSession = this.getCurrentUser();
+  if (!this.canUserManageUsers(currentSession)) {
+    throw new Error("Access Denied: Only Administrator / Software Owner can delete user accounts.");
   }
+
+  if (id === 1) {
+    throw new Error("Primary Master Admin account cannot be deleted.");
+  }
+
+  let list = this.getUsers();
+  const user = list.find(u => u.id === id);
+  if (!user) return false;
+
+  if (user.role === "admin") {
+    const adminCount = list.filter(u => u.role === "admin").length;
+    if (adminCount <= 1) {
+      throw new Error("Cannot delete the only remaining Admin account.");
+    }
+  }
+
+  // Move to Trash (Soft Delete)
+  const trashItem = this.moveToTrash("user", user);
+
+  list = list.filter(u => u.id !== id);
+  this.saveUsers(list);
+
+  // Remove from Neon
+  const cfg = this.getConfig();
+  if (cfg.neonConnectionString || cfg.neonEndpointUrl) {
+    this.executeNeonQuery("DELETE FROM app_users WHERE id = $1;", [id]).catch(err => {
+      console.warn("Neon delete app_users error:", err);
+    });
+  }
+
+  return trashItem;
+}
 
   async authenticateUser(username, password) {
-    const cleanUser = (username || "").toLowerCase().trim();
-    const cleanPass = (password || "").trim();
+  const cleanUser = (username || "").toLowerCase().trim();
+  const cleanPass = (password || "").trim();
 
-    if (!cleanUser || !cleanPass) {
-      return { success: false, error: "Please enter both username and password." };
-    }
+  if (!cleanUser || !cleanPass) {
+    return { success: false, error: "Please enter both username and password." };
+  }
 
-    let user = null;
-    let queryError = null;
+  let user = null;
+  let queryError = null;
 
-    // 1. Direct authentication against Neon PostgreSQL app_users table
-    try {
-      const neonRes = await this.executeNeonQuery(
-        "SELECT * FROM app_users WHERE LOWER(TRIM(username)) = $1 OR LOWER(TRIM(full_name)) = $1 LIMIT 1;",
-        [cleanUser]
+  // 1. Direct authentication against Neon PostgreSQL app_users table
+  try {
+    const neonRes = await this.executeNeonQuery(
+      "SELECT * FROM app_users WHERE LOWER(TRIM(username)) = $1 OR LOWER(TRIM(full_name)) = $1 LIMIT 1;",
+      [cleanUser]
+    );
+    if (neonRes && neonRes.rows && neonRes.rows.length > 0) {
+      const dbU = neonRes.rows[0];
+      let perms = dbU.permissions;
+      if (typeof perms === "string") {
+        try { perms = JSON.parse(perms); } catch (e) { perms = {}; }
+      }
+      user = {
+        id: dbU.id,
+        username: dbU.username,
+        password: dbU.password,
+        full_name: dbU.full_name || dbU.username,
+        role: dbU.role || "Operator",
+        status: dbU.status || "Active",
+        permissions: perms || {}
+      };
+
+      // Cache authenticated user into local users list
+      const localList = (JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]")).filter(
+        u => (u.username || "").toLowerCase().trim() !== (user.username || "").toLowerCase().trim()
       );
-      if (neonRes && neonRes.rows && neonRes.rows.length > 0) {
-        const dbU = neonRes.rows[0];
-        let perms = dbU.permissions;
-        if (typeof perms === "string") {
-          try { perms = JSON.parse(perms); } catch (e) { perms = {}; }
-        }
-        user = {
-          id: dbU.id,
-          username: dbU.username,
-          password: dbU.password,
-          full_name: dbU.full_name || dbU.username,
-          role: dbU.role || "Operator",
-          status: dbU.status || "Active",
-          permissions: perms || {}
-        };
-
-        // Cache authenticated user into local users list
-        const localList = (JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]")).filter(
-          u => (u.username || "").toLowerCase().trim() !== (user.username || "").toLowerCase().trim()
-        );
-        localList.push(user);
-        localStorage.setItem(DB_KEYS.USERS, JSON.stringify(localList));
-      }
-    } catch (neonErr) {
-      console.warn("Neon authentication query notice:", neonErr);
-      queryError = neonErr.message;
+      localList.push(user);
+      localStorage.setItem(DB_KEYS.USERS, JSON.stringify(localList));
     }
-
-    // 2. Offline Fallback: If Neon query failed due to network issues, check cached users
-    if (!user && queryError) {
-      const cachedUsers = JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
-      user = cachedUsers.find(u => {
-        const uName = (u.username || "").toLowerCase().trim();
-        const fName = (u.full_name || "").toLowerCase().trim();
-        return uName === cleanUser || fName === cleanUser;
-      }) || null;
-    }
-
-    // 3. User verification
-    if (!user) {
-      return {
-        success: false,
-        error: "Invalid username or password."
-      };
-    }
-
-    if (user.status === "Disabled" || user.status === "Inactive") {
-      return {
-        success: false,
-        error: "This user account is currently disabled. Please contact Admin."
-      };
-    }
-
-    // 4. Strict password verification against Neon database
-    if (user.password !== cleanPass) {
-      return {
-        success: false,
-        error: "Invalid username or password."
-      };
-    }
-
-    this.setCurrentUser(user);
-    return { success: true, user: user };
+  } catch (neonErr) {
+    console.warn("Neon authentication query notice:", neonErr);
+    queryError = neonErr.message;
   }
 
-  getCurrentUser() {
-    const raw = localStorage.getItem(DB_KEYS.CURRENT_USER);
-    if (raw) {
-      try {
-        const u = JSON.parse(raw);
-        if (u && u.username) return u;
-      } catch (e) { }
-    }
-    // Default seamless session for mobile and desktop access
-    const defaultAdmin = {
-      id: 1,
-      username: "admin",
-      role: "admin",
-      full_name: "Amir Ghouri",
-      status: "Active",
-      permissions: {
-        tabs: {
-          dashboard: true,
-          master_inventory: true,
-          receiving_log: true,
-          dispatch_log: true,
-          designer_samples: true,
-          final_style: true,
-          work_distribution: true,
-          payment_sheet: true,
-          contractors: true,
-          neon_sync: true
-        },
-        actions: {
-          can_create: true,
-          can_edit: true,
-          can_delete: true
-        }
-      }
+  // 2. Offline Fallback: If Neon query failed due to network issues, check cached users
+  if (!user && queryError) {
+    const cachedUsers = JSON.parse(localStorage.getItem(DB_KEYS.USERS) || "[]");
+    user = cachedUsers.find(u => {
+      const uName = (u.username || "").toLowerCase().trim();
+      const fName = (u.full_name || "").toLowerCase().trim();
+      return uName === cleanUser || fName === cleanUser;
+    }) || null;
+  }
+
+  // 3. User verification
+  if (!user) {
+    return {
+      success: false,
+      error: "Invalid username or password."
     };
+  }
+
+  if (user.status === "Disabled" || user.status === "Inactive") {
+    return {
+      success: false,
+      error: "This user account is currently disabled. Please contact Admin."
+    };
+  }
+
+  // 4. Strict password verification against Neon database
+  if (user.password !== cleanPass) {
+    return {
+      success: false,
+      error: "Invalid username or password."
+    };
+  }
+
+  this.setCurrentUser(user);
+  return { success: true, user: user };
+}
+
+getCurrentUser() {
+  const raw = localStorage.getItem(DB_KEYS.CURRENT_USER);
+  if (raw) {
     try {
-      localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(defaultAdmin));
+      const u = JSON.parse(raw);
+      if (u && u.username) return u;
     } catch (e) { }
-    return defaultAdmin;
   }
-
-  setCurrentUser(user) {
-    if (!user) {
-      localStorage.removeItem(DB_KEYS.CURRENT_USER);
-    } else {
-      localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(user));
+  // Default seamless session for mobile and desktop access
+  const defaultAdmin = {
+    id: 1,
+    username: "admin",
+    role: "admin",
+    full_name: "Amir Ghouri",
+    status: "Active",
+    permissions: {
+      tabs: {
+        dashboard: true,
+        master_inventory: true,
+        receiving_log: true,
+        dispatch_log: true,
+        designer_samples: true,
+        final_style: true,
+        work_distribution: true,
+        payment_sheet: true,
+        contractors: true,
+        neon_sync: true
+      },
+      actions: {
+        can_create: true,
+        can_edit: true,
+        can_delete: true
+      }
     }
-  }
+  };
+  try {
+    localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(defaultAdmin));
+  } catch (e) { }
+  return defaultAdmin;
+}
 
-  logoutUser() {
+setCurrentUser(user) {
+  if (!user) {
     localStorage.removeItem(DB_KEYS.CURRENT_USER);
+  } else {
+    localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(user));
+  }
+}
+
+logoutUser() {
+  localStorage.removeItem(DB_KEYS.CURRENT_USER);
+}
+
+// Permission Checks
+canUserAccessTab(tabKey, user = null) {
+  const cur = user || this.getCurrentUser();
+  if (!cur) return false;
+  if (cur.role === "admin") return true;
+
+  // Check explicitly configured tab permission in user permissions object
+  if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs[tabKey] !== undefined) {
+    return Boolean(cur.permissions.tabs[tabKey]);
   }
 
-  // Permission Checks
-  canUserAccessTab(tabKey, user = null) {
-    const cur = user || this.getCurrentUser();
-    if (!cur) return false;
-    if (cur.role === "admin") return true;
-
-    // Check explicitly configured tab permission in user permissions object
-    if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs[tabKey] !== undefined) {
-      return Boolean(cur.permissions.tabs[tabKey]);
+  if (tabKey === "dashboard") return true;
+  if (tabKey === "trash") {
+    if (cur.role === "admin" || cur.role === "manager") return true;
+    if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs.trash !== undefined) {
+      return !!cur.permissions.tabs.trash;
     }
+    return true; // Default accessible so staff can see and undo accidental deletions
+  }
+  if (!cur.permissions || !cur.permissions.tabs) return false;
+  if (tabKey === "payment_sheet" && cur.permissions.tabs.payment_sheet === undefined) {
+    return cur.role === "manager" || cur.role === "operator" || cur.role === "admin";
+  }
+  if (tabKey === "designer_samples" && cur.permissions.tabs.designer_samples === undefined) {
+    return Boolean(cur.permissions.tabs.receiving_log || cur.permissions.tabs.dispatch_log || cur.role === "manager" || cur.role === "admin");
+  }
+  return !!cur.permissions.tabs[tabKey];
+}
 
-    if (tabKey === "dashboard") return true;
-    if (tabKey === "trash") {
-      if (cur.role === "admin" || cur.role === "manager") return true;
-      if (cur.permissions && cur.permissions.tabs && cur.permissions.tabs.trash !== undefined) {
-        return !!cur.permissions.tabs.trash;
+canUserPerformAction(actionKey, user = null) {
+  const cur = user || this.getCurrentUser();
+  if (!cur) return false;
+  if (cur.role === "admin") return true;
+  if (actionKey === "can_destroy_trash") {
+    return cur.role === "admin" || (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_delete);
+  }
+  if (!cur.permissions || !cur.permissions.actions) return false;
+  return !!cur.permissions.actions[actionKey];
+}
+
+canUserManageUsers(user = null) {
+  const cur = user || this.getCurrentUser();
+  if (!cur) return false;
+  const role = (cur.role || "").toLowerCase().trim();
+  if (role === "admin") return true;
+  if (cur.id === 1) return true;
+  if (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_manage_users) return true;
+  return false;
+}
+
+// -------------------------------------------------------------
+// Neon PostgreSQL HTTP API & Sync
+// -------------------------------------------------------------
+parseNeonConfig(overrideConn = null) {
+  const cfg = this.getConfig();
+  const rawConn = (overrideConn != null ? String(overrideConn).trim() : (cfg.neonConnectionString || "").trim());
+  let endpoint = (cfg.neonEndpointUrl || "").trim();
+  let apiKey = (cfg.neonApiKey || "").trim();
+  let user = "";
+  let password = "";
+  let host = "";
+  let database = "";
+
+  if (rawConn && rawConn.includes("@")) {
+    try {
+      const sanitized = rawConn.replace("postgresql://", "http://").replace("postgres://", "http://");
+      const parsed = new URL(sanitized);
+      user = decodeURIComponent(parsed.username);
+      password = decodeURIComponent(parsed.password);
+      host = parsed.hostname;
+      database = parsed.pathname.replace(/^\//, "").split("?")[0];
+
+      if (!endpoint) {
+        endpoint = `https://${host}/sql`;
       }
-      return true; // Default accessible so staff can see and undo accidental deletions
-    }
-    if (!cur.permissions || !cur.permissions.tabs) return false;
-    if (tabKey === "payment_sheet" && cur.permissions.tabs.payment_sheet === undefined) {
-      return cur.role === "manager" || cur.role === "operator" || cur.role === "admin";
-    }
-    if (tabKey === "designer_samples" && cur.permissions.tabs.designer_samples === undefined) {
-      return Boolean(cur.permissions.tabs.receiving_log || cur.permissions.tabs.dispatch_log || cur.role === "manager" || cur.role === "admin");
-    }
-    return !!cur.permissions.tabs[tabKey];
-  }
-
-  canUserPerformAction(actionKey, user = null) {
-    const cur = user || this.getCurrentUser();
-    if (!cur) return false;
-    if (cur.role === "admin") return true;
-    if (actionKey === "can_destroy_trash") {
-      return cur.role === "admin" || (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_delete);
-    }
-    if (!cur.permissions || !cur.permissions.actions) return false;
-    return !!cur.permissions.actions[actionKey];
-  }
-
-  canUserManageUsers(user = null) {
-    const cur = user || this.getCurrentUser();
-    if (!cur) return false;
-    const role = (cur.role || "").toLowerCase().trim();
-    if (role === "admin") return true;
-    if (cur.id === 1) return true;
-    if (cur.permissions && cur.permissions.actions && cur.permissions.actions.can_manage_users) return true;
-    return false;
-  }
-
-  // -------------------------------------------------------------
-  // Neon PostgreSQL HTTP API & Sync
-  // -------------------------------------------------------------
-  parseNeonConfig(overrideConn = null) {
-    const cfg = this.getConfig();
-    const rawConn = (overrideConn != null ? String(overrideConn).trim() : (cfg.neonConnectionString || "").trim());
-    let endpoint = (cfg.neonEndpointUrl || "").trim();
-    let apiKey = (cfg.neonApiKey || "").trim();
-    let user = "";
-    let password = "";
-    let host = "";
-    let database = "";
-
-    if (rawConn && rawConn.includes("@")) {
-      try {
-        const sanitized = rawConn.replace("postgresql://", "http://").replace("postgres://", "http://");
-        const parsed = new URL(sanitized);
-        user = decodeURIComponent(parsed.username);
-        password = decodeURIComponent(parsed.password);
-        host = parsed.hostname;
-        database = parsed.pathname.replace(/^\//, "").split("?")[0];
-
-        if (!endpoint) {
-          endpoint = `https://${host}/sql`;
-        }
-        if (!apiKey && password) {
-          apiKey = password;
-        }
-      } catch (err) {
-        console.warn("Could not parse Neon URL:", err);
+      if (!apiKey && password) {
+        apiKey = password;
       }
+    } catch (err) {
+      console.warn("Could not parse Neon URL:", err);
     }
-
-    return { endpoint, apiKey, connectionString: rawConn, user, password, host, database };
   }
 
-  _interpolateSql(sql, params) {
-    if (!Array.isArray(params) || params.length === 0) return sql;
-    return sql.replace(/\$(\d+)/g, (match, num) => {
-      const idx = parseInt(num, 10) - 1;
-      if (idx < 0 || idx >= params.length) return match;
-      const val = params[idx];
-      if (val === null || val === undefined) return 'NULL';
-      if (typeof val === 'number') return String(val);
-      if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
-      return `'${String(val).replace(/'/g, "''")}'`;
-    });
-  }
+  return { endpoint, apiKey, connectionString: rawConn, user, password, host, database };
+}
+
+_interpolateSql(sql, params) {
+  if (!Array.isArray(params) || params.length === 0) return sql;
+  return sql.replace(/\$(\d+)/g, (match, num) => {
+    const idx = parseInt(num, 10) - 1;
+    if (idx < 0 || idx >= params.length) return match;
+    const val = params[idx];
+    if (val === null || val === undefined) return 'NULL';
+    if (typeof val === 'number') return String(val);
+    if (typeof val === 'boolean') return val ? 'TRUE' : 'FALSE';
+    return `'${String(val).replace(/'/g, "''")}'`;
+  });
+}
 
   async executeNeonQuery(sqlQuery, params = [], overrideConn = null) {
-    const { endpoint, apiKey, connectionString, password, host } = this.parseNeonConfig(overrideConn);
+  const { endpoint, apiKey, connectionString, password, host } = this.parseNeonConfig(overrideConn);
 
-    if (!connectionString && !endpoint) {
-      throw new Error("Neon Connection String is empty. Please paste your connection string from Neon Console.");
-    }
-
-    if (connectionString && connectionString.includes("****")) {
-      throw new Error("Your connection string has hidden asterisks (****). In Neon Console, click 'Show password' (bottom left) to reveal your real password before copying!");
-    }
-
-    // Attempt 1: Official Neon Serverless Driver over CDN (single deduplicated import)
-    if (connectionString) {
-      let driverReady = Boolean(window._neonDriverSql && window._neonDriverConn === connectionString);
-      if (!driverReady) {
-        try {
-          if (!window._neonDriverImportPromise) {
-            window._neonDriverImportPromise = import('https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.10.4/+esm');
-          }
-          const neonModule = await window._neonDriverImportPromise;
-          if (neonModule && neonModule.neon) {
-            window._neonDriverSql = neonModule.neon(connectionString);
-            window._neonDriverConn = connectionString;
-            driverReady = true;
-          }
-        } catch (importErr) {
-          console.warn("Neon CDN module load fallback:", importErr.message);
-        }
-      }
-
-      if (driverReady && window._neonDriverSql) {
-        // Run query directly via CDN driver; propagate real SQL errors instead of triggering a CORS fallback
-        let result;
-        if (typeof window._neonDriverSql.query === "function") {
-          result = await window._neonDriverSql.query(sqlQuery, params || []);
-        } else if (typeof window._neonDriverSql === "function") {
-          result = await window._neonDriverSql(sqlQuery, params || []);
-        }
-        return { rows: Array.isArray(result) ? result : (result?.rows || [result]) };
-      }
-    }
-
-    // Attempt 2: Direct HTTP POST to Neon's /sql endpoint (only when no connectionString or CDN unavailable)
-    const targetUrl = endpoint || (host ? `https://${host}/sql` : "");
-    if (!targetUrl) {
-      throw new Error("Unable to determine Neon HTTP SQL endpoint. Please verify connection string.");
-    }
-
-    const headers = {
-      "Content-Type": "application/json"
-    };
-
-    if (connectionString) {
-      headers["Neon-Connection-String"] = connectionString;
-    } else {
-      const token = apiKey || password;
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
-      }
-    }
-
-    const finalQuery = (Array.isArray(params) && params.length > 0)
-      ? this._interpolateSql(sqlQuery, params)
-      : sqlQuery;
-
-    const payload = {
-      query: finalQuery
-    };
-
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers: headers,
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      let parsedMsg = errText;
-      try {
-        const json = JSON.parse(errText);
-        parsedMsg = json.message || errText;
-      } catch (e) { }
-      throw new Error(`Neon Error (${response.status}): ${parsedMsg}`);
-    }
-
-    let data;
-    try {
-      data = await response.json();
-    } catch (e) {
-      data = {};
-    }
-    if (data && Array.isArray(data.results) && data.results[0] && Array.isArray(data.results[0].rows)) {
-      return { rows: data.results[0].rows };
-    }
-    if (data && Array.isArray(data.rows)) {
-      return data;
-    }
-    return { rows: Array.isArray(data) ? data : [data] };
+  if (!connectionString && !endpoint) {
+    throw new Error("Neon Connection String is empty. Please paste your connection string from Neon Console.");
   }
+
+  if (connectionString && connectionString.includes("****")) {
+    throw new Error("Your connection string has hidden asterisks (****). In Neon Console, click 'Show password' (bottom left) to reveal your real password before copying!");
+  }
+
+  // Attempt 1: Official Neon Serverless Driver over CDN (single deduplicated import)
+  if (connectionString) {
+    let driverReady = Boolean(window._neonDriverSql && window._neonDriverConn === connectionString);
+    if (!driverReady) {
+      try {
+        if (!window._neonDriverImportPromise) {
+          window._neonDriverImportPromise = import('https://cdn.jsdelivr.net/npm/@neondatabase/serverless@0.10.4/+esm');
+        }
+        const neonModule = await window._neonDriverImportPromise;
+        if (neonModule && neonModule.neon) {
+          window._neonDriverSql = neonModule.neon(connectionString);
+          window._neonDriverConn = connectionString;
+          driverReady = true;
+        }
+      } catch (importErr) {
+        console.warn("Neon CDN module load fallback:", importErr.message);
+      }
+    }
+
+    if (driverReady && window._neonDriverSql) {
+      // Run query directly via CDN driver; propagate real SQL errors instead of triggering a CORS fallback
+      let result;
+      if (typeof window._neonDriverSql.query === "function") {
+        result = await window._neonDriverSql.query(sqlQuery, params || []);
+      } else if (typeof window._neonDriverSql === "function") {
+        result = await window._neonDriverSql(sqlQuery, params || []);
+      }
+      return { rows: Array.isArray(result) ? result : (result?.rows || [result]) };
+    }
+  }
+
+  // Attempt 2: Direct HTTP POST to Neon's /sql endpoint (only when no connectionString or CDN unavailable)
+  const targetUrl = endpoint || (host ? `https://${host}/sql` : "");
+  if (!targetUrl) {
+    throw new Error("Unable to determine Neon HTTP SQL endpoint. Please verify connection string.");
+  }
+
+  const headers = {
+    "Content-Type": "application/json"
+  };
+
+  if (connectionString) {
+    headers["Neon-Connection-String"] = connectionString;
+  } else {
+    const token = apiKey || password;
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const finalQuery = (Array.isArray(params) && params.length > 0)
+    ? this._interpolateSql(sqlQuery, params)
+    : sqlQuery;
+
+  const payload = {
+    query: finalQuery
+  };
+
+  const response = await fetch(targetUrl, {
+    method: "POST",
+    headers: headers,
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    const errText = await response.text();
+    let parsedMsg = errText;
+    try {
+      const json = JSON.parse(errText);
+      parsedMsg = json.message || errText;
+    } catch (e) { }
+    throw new Error(`Neon Error (${response.status}): ${parsedMsg}`);
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (e) {
+    data = {};
+  }
+  if (data && Array.isArray(data.results) && data.results[0] && Array.isArray(data.results[0].rows)) {
+    return { rows: data.results[0].rows };
+  }
+  if (data && Array.isArray(data.rows)) {
+    return data;
+  }
+  return { rows: Array.isArray(data) ? data : [data] };
+}
 
   async testNeonConnection(overrideConn = null) {
-    try {
-      const result = await this.executeNeonQuery("SELECT NOW() as current_time, version() as pg_version;", [], overrideConn);
-      return { success: true, data: result };
-    } catch (err) {
-      return { success: false, error: err.message };
-    }
+  try {
+    const result = await this.executeNeonQuery("SELECT NOW() as current_time, version() as pg_version;", [], overrideConn);
+    return { success: true, data: result };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
+}
 
   async getNeonStorageMetrics(overrideConn = null) {
-    const quotaMb = 1024; // Neon Free Plan Capacity (1 GB = 1024 MB)
-    const quotaBytes = quotaMb * 1024 * 1024;
+  const quotaMb = 1024; // Neon Free Plan Capacity (1 GB = 1024 MB)
+  const quotaBytes = quotaMb * 1024 * 1024;
 
+  try {
+    // 1. Live Neon PostgreSQL Database Size Query
+    const dbSizeRes = await this.executeNeonQuery(
+      "SELECT pg_database_size(current_database()) AS db_bytes;",
+      [],
+      overrideConn
+    );
+
+    let usedBytes = 0;
+    if (dbSizeRes && dbSizeRes.rows && dbSizeRes.rows.length > 0) {
+      usedBytes = Number(dbSizeRes.rows[0].db_bytes) || 0;
+    }
+
+    // 2. Table breakdown query (user tables)
+    let tableRows = [];
     try {
-      // 1. Live Neon PostgreSQL Database Size Query
-      const dbSizeRes = await this.executeNeonQuery(
-        "SELECT pg_database_size(current_database()) AS db_bytes;",
-        [],
-        overrideConn
-      );
-
-      let usedBytes = 0;
-      if (dbSizeRes && dbSizeRes.rows && dbSizeRes.rows.length > 0) {
-        usedBytes = Number(dbSizeRes.rows[0].db_bytes) || 0;
-      }
-
-      // 2. Table breakdown query (user tables)
-      let tableRows = [];
-      try {
-        const tableSizeRes = await this.executeNeonQuery(
-          `SELECT 
+      const tableSizeRes = await this.executeNeonQuery(
+        `SELECT 
              relname AS table_name,
              pg_total_relation_size(relid) AS bytes
            FROM pg_catalog.pg_statio_user_tables
            ORDER BY bytes DESC
            LIMIT 8;`,
-          [],
-          overrideConn
-        );
-        if (tableSizeRes && tableSizeRes.rows) {
-          tableRows = tableSizeRes.rows.map(r => ({
-            name: r.table_name,
-            bytes: Number(r.bytes) || 0,
-            mb: ((Number(r.bytes) || 0) / (1024 * 1024)).toFixed(2)
-          }));
-        }
-      } catch (tErr) {
-        console.warn("Table size breakdown notice:", tErr);
+        [],
+        overrideConn
+      );
+      if (tableSizeRes && tableSizeRes.rows) {
+        tableRows = tableSizeRes.rows.map(r => ({
+          name: r.table_name,
+          bytes: Number(r.bytes) || 0,
+          mb: ((Number(r.bytes) || 0) / (1024 * 1024)).toFixed(2)
+        }));
       }
-
-      const freeBytes = Math.max(0, quotaBytes - usedBytes);
-      const usedMb = usedBytes / (1024 * 1024);
-      const freeMb = freeBytes / (1024 * 1024);
-      const percentUsed = Math.min(100, Math.max(0, (usedBytes / quotaBytes) * 100));
-
-      return {
-        isOnline: true,
-        source: 'Neon PostgreSQL Cloud (Live)',
-        usedBytes,
-        freeBytes,
-        quotaBytes,
-        usedMb: Number(usedMb.toFixed(2)),
-        freeMb: Number(freeMb.toFixed(2)),
-        quotaMb,
-        percentUsed: Number(percentUsed.toFixed(1)),
-        percentFree: Number((100 - percentUsed).toFixed(1)),
-        tables: tableRows
-      };
-    } catch (err) {
-      // Offline fallback: calculate local storage dataset size
-      let localBytes = 0;
-      try {
-        for (let i = 0; i < localStorage.length; i++) {
-          const key = localStorage.key(i);
-          if (key && (key.startsWith("hand_emb_") || key.startsWith("craftflow_") || key.startsWith("neon_"))) {
-            localBytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
-          }
-        }
-      } catch (e) { }
-
-      // Add base catalog estimate (~4 MB)
-      const estimatedUsedBytes = localBytes + (3.8 * 1024 * 1024);
-      const freeBytes = Math.max(0, quotaBytes - estimatedUsedBytes);
-      const usedMb = estimatedUsedBytes / (1024 * 1024);
-      const freeMb = freeBytes / (1024 * 1024);
-      const percentUsed = Math.min(100, Math.max(0, (estimatedUsedBytes / quotaBytes) * 100));
-
-      return {
-        isOnline: false,
-        source: 'Local Cache Estimate (Connect Neon for Live)',
-        error: err.message,
-        usedBytes: estimatedUsedBytes,
-        freeBytes,
-        quotaBytes,
-        usedMb: Number(usedMb.toFixed(2)),
-        freeMb: Number(freeMb.toFixed(2)),
-        quotaMb,
-        percentUsed: Number(percentUsed.toFixed(1)),
-        percentFree: Number((100 - percentUsed).toFixed(1)),
-        tables: [
-          { name: 'master_inventory', mb: Math.max(0.1, (localBytes * 0.35 / (1024 * 1024))).toFixed(2) },
-          { name: 'receiving_log', mb: Math.max(0.08, (localBytes * 0.25 / (1024 * 1024))).toFixed(2) },
-          { name: 'dispatch_log', mb: Math.max(0.08, (localBytes * 0.20 / (1024 * 1024))).toFixed(2) },
-          { name: 'payment_sheet', mb: Math.max(0.05, (localBytes * 0.15 / (1024 * 1024))).toFixed(2) }
-        ]
-      };
+    } catch (tErr) {
+      console.warn("Table size breakdown notice:", tErr);
     }
+
+    const freeBytes = Math.max(0, quotaBytes - usedBytes);
+    const usedMb = usedBytes / (1024 * 1024);
+    const freeMb = freeBytes / (1024 * 1024);
+    const percentUsed = Math.min(100, Math.max(0, (usedBytes / quotaBytes) * 100));
+
+    return {
+      isOnline: true,
+      source: 'Neon PostgreSQL Cloud (Live)',
+      usedBytes,
+      freeBytes,
+      quotaBytes,
+      usedMb: Number(usedMb.toFixed(2)),
+      freeMb: Number(freeMb.toFixed(2)),
+      quotaMb,
+      percentUsed: Number(percentUsed.toFixed(1)),
+      percentFree: Number((100 - percentUsed).toFixed(1)),
+      tables: tableRows
+    };
+  } catch (err) {
+    // Offline fallback: calculate local storage dataset size
+    let localBytes = 0;
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith("hand_emb_") || key.startsWith("craftflow_") || key.startsWith("neon_"))) {
+          localBytes += (key.length + (localStorage.getItem(key) || "").length) * 2;
+        }
+      }
+    } catch (e) { }
+
+    // Add base catalog estimate (~4 MB)
+    const estimatedUsedBytes = localBytes + (3.8 * 1024 * 1024);
+    const freeBytes = Math.max(0, quotaBytes - estimatedUsedBytes);
+    const usedMb = estimatedUsedBytes / (1024 * 1024);
+    const freeMb = freeBytes / (1024 * 1024);
+    const percentUsed = Math.min(100, Math.max(0, (estimatedUsedBytes / quotaBytes) * 100));
+
+    return {
+      isOnline: false,
+      source: 'Local Cache Estimate (Connect Neon for Live)',
+      error: err.message,
+      usedBytes: estimatedUsedBytes,
+      freeBytes,
+      quotaBytes,
+      usedMb: Number(usedMb.toFixed(2)),
+      freeMb: Number(freeMb.toFixed(2)),
+      quotaMb,
+      percentUsed: Number(percentUsed.toFixed(1)),
+      percentFree: Number((100 - percentUsed).toFixed(1)),
+      tables: [
+        { name: 'master_inventory', mb: Math.max(0.1, (localBytes * 0.35 / (1024 * 1024))).toFixed(2) },
+        { name: 'receiving_log', mb: Math.max(0.08, (localBytes * 0.25 / (1024 * 1024))).toFixed(2) },
+        { name: 'dispatch_log', mb: Math.max(0.08, (localBytes * 0.20 / (1024 * 1024))).toFixed(2) },
+        { name: 'payment_sheet', mb: Math.max(0.05, (localBytes * 0.15 / (1024 * 1024))).toFixed(2) }
+      ]
+    };
   }
+}
 
   async initNeonTables(force = false) {
-    if (this._neonTablesReady && !force) {
-      return { success: true };
-    }
-    const tableQueries = [
-      `CREATE TABLE IF NOT EXISTS contractors (
+  if (this._neonTablesReady && !force) {
+    return { success: true };
+  }
+  const tableQueries = [
+    `CREATE TABLE IF NOT EXISTS contractors (
         id SERIAL PRIMARY KEY,
         name VARCHAR(100) NOT NULL UNIQUE,
         phone VARCHAR(50),
@@ -5494,7 +5504,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS master_inventory (
+    `CREATE TABLE IF NOT EXISTS master_inventory (
         id SERIAL PRIMARY KEY,
         sr_no INT,
         style_code VARCHAR(100) NOT NULL,
@@ -5513,7 +5523,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS receiving_log (
+    `CREATE TABLE IF NOT EXISTS receiving_log (
         id SERIAL PRIMARY KEY,
         sr_no INT,
         style_code VARCHAR(100) NOT NULL,
@@ -5527,7 +5537,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS dispatch_log (
+    `CREATE TABLE IF NOT EXISTS dispatch_log (
         id SERIAL PRIMARY KEY,
         sr_no INT,
         style_code VARCHAR(100) NOT NULL,
@@ -5540,7 +5550,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS final_style_report (
+    `CREATE TABLE IF NOT EXISTS final_style_report (
         id SERIAL PRIMARY KEY,
         report_date DATE NOT NULL DEFAULT CURRENT_DATE,
         serial_no INT NOT NULL,
@@ -5555,7 +5565,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS app_users (
+    `CREATE TABLE IF NOT EXISTS app_users (
         id SERIAL PRIMARY KEY,
         username VARCHAR(50) NOT NULL UNIQUE,
         password VARCHAR(255) NOT NULL,
@@ -5566,7 +5576,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS payment_sheet (
+    `CREATE TABLE IF NOT EXISTS payment_sheet (
         id SERIAL PRIMARY KEY,
         period VARCHAR(150) NOT NULL,
         sr_no INT,
@@ -5590,7 +5600,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS rate_approval_periods (
+    `CREATE TABLE IF NOT EXISTS rate_approval_periods (
         id VARCHAR(100) PRIMARY KEY,
         period_name VARCHAR(150) NOT NULL,
         start_date VARCHAR(50),
@@ -5601,7 +5611,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS work_distribution (
+    `CREATE TABLE IF NOT EXISTS work_distribution (
         id SERIAL PRIMARY KEY,
         sr_no INT,
         period VARCHAR(150) NOT NULL,
@@ -5616,7 +5626,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS distribution_periods (
+    `CREATE TABLE IF NOT EXISTS distribution_periods (
         id VARCHAR(100) PRIMARY KEY,
         period_name VARCHAR(150) NOT NULL,
         start_date VARCHAR(50),
@@ -5627,7 +5637,7 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS trash_items (
+    `CREATE TABLE IF NOT EXISTS trash_items (
         id VARCHAR(100) PRIMARY KEY,
         original_id VARCHAR(100),
         entity_type VARCHAR(50) NOT NULL,
@@ -5639,7 +5649,7 @@ class DatabaseService {
         deleted_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE TABLE IF NOT EXISTS designer_samples (
+    `CREATE TABLE IF NOT EXISTS designer_samples (
         id SERIAL PRIMARY KEY,
         sr_no INT,
         entry_date TEXT NOT NULL,
@@ -5653,40 +5663,40 @@ class DatabaseService {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
       );`,
 
-      `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`
-    ];
+    `CREATE INDEX IF NOT EXISTS idx_trash_type ON trash_items(entity_type);`
+  ];
 
-    for (const q of tableQueries) {
-      await this.executeNeonQuery(q);
-    }
-
-    // Always run schema migration to upgrade columns, drop useless ones, and guarantee period is active
-    await this.migrateNeonPaymentSchema();
-
-    this._neonTablesReady = true;
-    return { success: true };
+  for (const q of tableQueries) {
+    await this.executeNeonQuery(q);
   }
 
+  // Always run schema migration to upgrade columns, drop useless ones, and guarantee period is active
+  await this.migrateNeonPaymentSchema();
+
+  this._neonTablesReady = true;
+  return { success: true };
+}
+
   async migrateNeonPaymentSchema(force = false) {
-    const cfg = this.getConfig();
-    if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return { success: false, error: "No connection string" };
+  const cfg = this.getConfig();
+  if (!cfg.neonConnectionString && !cfg.neonEndpointUrl) return { success: false, error: "No connection string" };
 
-    const TARGET_SCHEMA_VER = "55";
-    try {
-      if (!force && typeof localStorage !== "undefined" && localStorage.getItem("craftflow_schema_version") === TARGET_SCHEMA_VER) {
-        return { success: true, skipped: true };
-      }
-    } catch (e) { }
+  const TARGET_SCHEMA_VER = "55";
+  try {
+    if (!force && typeof localStorage !== "undefined" && localStorage.getItem("craftflow_schema_version") === TARGET_SCHEMA_VER) {
+      return { success: true, skipped: true };
+    }
+  } catch (e) { }
 
-    try {
-      // Guarantee designer_samples table exists
-      await this.ensureNeonDesignerSamplesTable().catch(e => console.warn("Designer samples table notice:", e.message));
+  try {
+    // Guarantee designer_samples table exists
+    await this.ensureNeonDesignerSamplesTable().catch(e => console.warn("Designer samples table notice:", e.message));
 
-      // Guarantee deleted_tombstones table is permanently dropped from Neon
-      await this.executeNeonQuery("DROP TABLE IF EXISTS deleted_tombstones;").catch(() => null);
+    // Guarantee deleted_tombstones table is permanently dropped from Neon
+    await this.executeNeonQuery("DROP TABLE IF EXISTS deleted_tombstones;").catch(() => null);
 
-      // 1. Add missing essential columns in a single atomic ALTER statement
-      const addColsSql = `
+    // 1. Add missing essential columns in a single atomic ALTER statement
+    const addColsSql = `
         ALTER TABLE payment_sheet
           ADD COLUMN IF NOT EXISTS period VARCHAR(150) DEFAULT '11-SEP-2026 TO 25-SEP-2026',
           ADD COLUMN IF NOT EXISTS cut_qty INT DEFAULT 0,
@@ -5703,10 +5713,10 @@ class DatabaseService {
           ADD COLUMN IF NOT EXISTS floor_challan_no VARCHAR(100) DEFAULT '',
           ADD COLUMN IF NOT EXISTS floor_received_by VARCHAR(100) DEFAULT '';
       `;
-      await this.executeNeonQuery(addColsSql).catch(e => console.warn("Add cols notice:", e.message));
+    await this.executeNeonQuery(addColsSql).catch(e => console.warn("Add cols notice:", e.message));
 
-      // 2. Backfill legacy columns if they exist
-      const backfillSql = `
+    // 2. Backfill legacy columns if they exist
+    const backfillSql = `
         DO $$
         BEGIN
           IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='payment_sheet' AND column_name='total_pcs') THEN
@@ -5724,10 +5734,10 @@ class DatabaseService {
           UPDATE payment_sheet SET period = '11-SEP-2026 TO 25-SEP-2026' WHERE period IS NULL OR period = '';
         END $$;
       `;
-      await this.executeNeonQuery(backfillSql).catch(e => console.warn("Backfill notice:", e.message));
+    await this.executeNeonQuery(backfillSql).catch(e => console.warn("Backfill notice:", e.message));
 
-      // 3. Drop only actually useless legacy columns from payment_sheet
-      const dropColsSql = `
+    // 3. Drop only actually useless legacy columns from payment_sheet
+    const dropColsSql = `
         ALTER TABLE payment_sheet
           DROP COLUMN IF EXISTS submission_date,
           DROP COLUMN IF EXISTS cutoff_date,
@@ -5749,66 +5759,66 @@ class DatabaseService {
           DROP COLUMN IF EXISTS rate_total,
           DROP COLUMN IF EXISTS remarks_2;
       `;
-      await this.executeNeonQuery(dropColsSql).catch(e => console.warn("Drop cols notice:", e.message));
+    await this.executeNeonQuery(dropColsSql).catch(e => console.warn("Drop cols notice:", e.message));
 
-      // 4. Create index on period & payment_channel
-      await this.executeNeonQuery("CREATE INDEX IF NOT EXISTS idx_payment_period ON payment_sheet(period);").catch(() => null);
-      await this.executeNeonQuery("CREATE INDEX IF NOT EXISTS idx_payment_channel ON payment_sheet(payment_channel);").catch(() => null);
-      await this.executeNeonQuery("CREATE UNIQUE INDEX IF NOT EXISTS idx_master_style_cat ON master_inventory(style_code, category);").catch(() => null);
+    // 4. Create index on period & payment_channel
+    await this.executeNeonQuery("CREATE INDEX IF NOT EXISTS idx_payment_period ON payment_sheet(period);").catch(() => null);
+    await this.executeNeonQuery("CREATE INDEX IF NOT EXISTS idx_payment_channel ON payment_sheet(payment_channel);").catch(() => null);
+    await this.executeNeonQuery("CREATE UNIQUE INDEX IF NOT EXISTS idx_master_style_cat ON master_inventory(style_code, category);").catch(() => null);
 
-      // 5. Upgrade master_inventory columns to TEXT to safely store multi-challans & multi-dates
-      const alterMasterSql = `
+    // 5. Upgrade master_inventory columns to TEXT to safely store multi-challans & multi-dates
+    const alterMasterSql = `
         ALTER TABLE master_inventory
           ALTER COLUMN date_receive TYPE TEXT,
           ALTER COLUMN challan_rec TYPE TEXT,
           ALTER COLUMN date_dispatch TYPE TEXT,
           ALTER COLUMN challan_dis TYPE TEXT;
       `;
-      await this.executeNeonQuery(alterMasterSql).catch(e => console.warn("Alter master_inventory text cols notice:", e.message));
+    await this.executeNeonQuery(alterMasterSql).catch(e => console.warn("Alter master_inventory text cols notice:", e.message));
 
-      // 6. Drop ship column from master_inventory if it exists on Neon
-      await this.executeNeonQuery("ALTER TABLE master_inventory DROP COLUMN IF EXISTS ship;").catch(e => console.warn("Drop ship notice:", e.message));
-
-      try {
-        if (typeof localStorage !== "undefined") {
-          localStorage.setItem("craftflow_schema_version", TARGET_SCHEMA_VER);
-        }
-      } catch (e) { }
-
-      console.log("✓ Neon payment_sheet, master_inventory, and designer_samples schemas upgraded successfully!");
-      return { success: true };
-    } catch (err) {
-      console.warn("Neon schema migration warning:", err.message);
-      return { success: false, error: err.message };
-    }
-  }
-
-  async syncToNeon() {
-    const master = this.getMasterInventory();
-    const contractors = this.getContractors();
-    const receivingLogs = this.getReceivingLogs();
-    const dispatchLogs = this.getDispatchLogs();
-    const users = this.getUsers();
-    const paymentSheets = this.getPaymentSheets();
+    // 6. Drop ship column from master_inventory if it exists on Neon
+    await this.executeNeonQuery("ALTER TABLE master_inventory DROP COLUMN IF EXISTS ship;").catch(e => console.warn("Drop ship notice:", e.message));
 
     try {
-      await this.initNeonTables();
+      if (typeof localStorage !== "undefined") {
+        localStorage.setItem("craftflow_schema_version", TARGET_SCHEMA_VER);
+      }
+    } catch (e) { }
 
-      // 1. Sync Contractors
-      for (const c of contractors) {
-        await this.executeNeonQuery(
-          `INSERT INTO contractors (id, name, phone, status) 
+    console.log("✓ Neon payment_sheet, master_inventory, and designer_samples schemas upgraded successfully!");
+    return { success: true };
+  } catch (err) {
+    console.warn("Neon schema migration warning:", err.message);
+    return { success: false, error: err.message };
+  }
+}
+
+  async syncToNeon() {
+  const master = this.getMasterInventory();
+  const contractors = this.getContractors();
+  const receivingLogs = this.getReceivingLogs();
+  const dispatchLogs = this.getDispatchLogs();
+  const users = this.getUsers();
+  const paymentSheets = this.getPaymentSheets();
+
+  try {
+    await this.initNeonTables();
+
+    // 1. Sync Contractors
+    for (const c of contractors) {
+      await this.executeNeonQuery(
+        `INSERT INTO contractors (id, name, phone, status) 
            VALUES ($1, $2, $3, $4) 
            ON CONFLICT (name) DO UPDATE 
            SET phone = EXCLUDED.phone, status = EXCLUDED.status;`,
-          [c.id, c.name, c.phone || '', c.status || 'Active']
-        );
-      }
+        [c.id, c.name, c.phone || '', c.status || 'Active']
+      );
+    }
 
-      // 2. Sync Receiving Logs
-      for (const r of receivingLogs) {
-        await this.executeNeonQuery(
-          `INSERT INTO receiving_log 
+    // 2. Sync Receiving Logs
+    for (const r of receivingLogs) {
+      await this.executeNeonQuery(
+        `INSERT INTO receiving_log 
            (id, sr_no, style_code, category, contractor_name, cut_qty, received_qty, date_receive, challan_rec, remarks)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
            ON CONFLICT (id) DO UPDATE SET
@@ -5821,17 +5831,17 @@ class DatabaseService {
              date_receive = EXCLUDED.date_receive,
              challan_rec = EXCLUDED.challan_rec,
              remarks = EXCLUDED.remarks;`,
-          [
-            r.id, r.sr_no || 0, r.style_code, r.category || 'Shirt', r.contractor_name || '',
-            r.cut_qty || 0, r.received_qty || 0, r.date_receive || '', r.challan_rec || '', r.remarks || ''
-          ]
-        );
-      }
+        [
+          r.id, r.sr_no || 0, r.style_code, r.category || 'Shirt', r.contractor_name || '',
+          r.cut_qty || 0, r.received_qty || 0, r.date_receive || '', r.challan_rec || '', r.remarks || ''
+        ]
+      );
+    }
 
-      // 3. Sync Dispatch Logs
-      for (const d of dispatchLogs) {
-        await this.executeNeonQuery(
-          `INSERT INTO dispatch_log 
+    // 3. Sync Dispatch Logs
+    for (const d of dispatchLogs) {
+      await this.executeNeonQuery(
+        `INSERT INTO dispatch_log 
            (id, sr_no, style_code, category, contractor_name, dispatch_qty, date_dispatch, challan_dis, remarks)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            ON CONFLICT (id) DO UPDATE SET
@@ -5843,22 +5853,22 @@ class DatabaseService {
              date_dispatch = EXCLUDED.date_dispatch,
              challan_dis = EXCLUDED.challan_dis,
              remarks = EXCLUDED.remarks;`,
-          [
-            d.id, d.sr_no || 0, d.style_code, d.category || 'Shirt', d.contractor_name || '',
-            d.dispatch_qty || 0, d.date_dispatch || '', d.challan_dis || '', d.remarks || ''
-          ]
-        );
-      }
+        [
+          d.id, d.sr_no || 0, d.style_code, d.category || 'Shirt', d.contractor_name || '',
+          d.dispatch_qty || 0, d.date_dispatch || '', d.challan_dis || '', d.remarks || ''
+        ]
+      );
+    }
 
-      // 4. Sync Master Inventory
-      for (const m of master) {
-        await this.syncMasterRecordToNeon(m);
-      }
+    // 4. Sync Master Inventory
+    for (const m of master) {
+      await this.syncMasterRecordToNeon(m);
+    }
 
-      // 5. Sync Application Users
-      for (const u of users) {
-        await this.executeNeonQuery(
-          `INSERT INTO app_users (id, username, password, full_name, role, permissions, status)
+    // 5. Sync Application Users
+    for (const u of users) {
+      await this.executeNeonQuery(
+        `INSERT INTO app_users (id, username, password, full_name, role, permissions, status)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (username) DO UPDATE SET
              password = EXCLUDED.password,
@@ -5866,27 +5876,27 @@ class DatabaseService {
              role = EXCLUDED.role,
              permissions = EXCLUDED.permissions,
              status = EXCLUDED.status;`,
-          [
-            u.id, u.username, u.password, u.full_name || '',
-            u.role || 'Operator', JSON.stringify(u.permissions || {}), u.status || 'Active'
-          ]
-        );
-      }
+        [
+          u.id, u.username, u.password, u.full_name || '',
+          u.role || 'Operator', JSON.stringify(u.permissions || {}), u.status || 'Active'
+        ]
+      );
+    }
 
-      // 6. Sync Payment Sheets
-      if (paymentSheets.length === 0) {
-        await this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(() => null);
-      } else {
-        for (const p of paymentSheets) {
-          await this.syncPaymentSheetToNeon(p);
-        }
+    // 6. Sync Payment Sheets
+    if (paymentSheets.length === 0) {
+      await this.executeNeonQuery("TRUNCATE TABLE payment_sheet;").catch(() => null);
+    } else {
+      for (const p of paymentSheets) {
+        await this.syncPaymentSheetToNeon(p);
       }
+    }
 
-      // 7. Sync Rate Approval Periods
-      const periods = this.getRateApprovalPeriods();
-      for (const pr of periods) {
-        await this.executeNeonQuery(
-          `INSERT INTO rate_approval_periods (id, period_name, start_date, end_date, department, status, notes)
+    // 7. Sync Rate Approval Periods
+    const periods = this.getRateApprovalPeriods();
+    for (const pr of periods) {
+      await this.executeNeonQuery(
+        `INSERT INTO rate_approval_periods (id, period_name, start_date, end_date, department, status, notes)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (id) DO UPDATE SET
              period_name = EXCLUDED.period_name,
@@ -5895,15 +5905,15 @@ class DatabaseService {
              department = EXCLUDED.department,
              status = EXCLUDED.status,
              notes = EXCLUDED.notes;`,
-          [pr.id, pr.period_name || '', pr.start_date || '', pr.end_date || '', pr.department || '', pr.status || 'Active', pr.notes || '']
-        ).catch(() => null);
-      }
+        [pr.id, pr.period_name || '', pr.start_date || '', pr.end_date || '', pr.department || '', pr.status || 'Active', pr.notes || '']
+      ).catch(() => null);
+    }
 
-      // 8. Sync Work Distribution & Distribution Periods
-      const workDistList = this.getWorkDistribution();
-      for (const wd of workDistList) {
-        await this.executeNeonQuery(
-          `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
+    // 8. Sync Work Distribution & Distribution Periods
+    const workDistList = this.getWorkDistribution();
+    for (const wd of workDistList) {
+      await this.executeNeonQuery(
+        `INSERT INTO work_distribution (id, sr_no, period, style_code, contractor_name, pcs_qty, rate, item, floor, total_amount, remarks)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
            ON CONFLICT (id) DO UPDATE SET
              sr_no = EXCLUDED.sr_no,
@@ -5916,14 +5926,14 @@ class DatabaseService {
              floor = EXCLUDED.floor,
              total_amount = EXCLUDED.total_amount,
              remarks = EXCLUDED.remarks;`,
-          [wd.id, wd.sr_no, wd.period, wd.style_code, wd.contractor_name, wd.pcs_qty, wd.rate, wd.item, wd.floor, wd.total_amount, wd.remarks || ""]
-        ).catch(() => null);
-      }
+        [wd.id, wd.sr_no, wd.period, wd.style_code, wd.contractor_name, wd.pcs_qty, wd.rate, wd.item, wd.floor, wd.total_amount, wd.remarks || ""]
+      ).catch(() => null);
+    }
 
-      const distPeriods = this.getDistributionPeriods();
-      for (const dp of distPeriods) {
-        await this.executeNeonQuery(
-          `INSERT INTO distribution_periods (id, period_name, start_date, end_date, department, status, notes)
+    const distPeriods = this.getDistributionPeriods();
+    for (const dp of distPeriods) {
+      await this.executeNeonQuery(
+        `INSERT INTO distribution_periods (id, period_name, start_date, end_date, department, status, notes)
            VALUES ($1, $2, $3, $4, $5, $6, $7)
            ON CONFLICT (id) DO UPDATE SET
              period_name = EXCLUDED.period_name,
@@ -5932,15 +5942,15 @@ class DatabaseService {
              department = EXCLUDED.department,
              status = EXCLUDED.status,
              notes = EXCLUDED.notes;`,
-          [dp.id, dp.period_name || '', dp.start_date || '', dp.end_date || '', dp.department || '', dp.status || 'Active', dp.notes || '']
-        ).catch(() => null);
-      }
+        [dp.id, dp.period_name || '', dp.start_date || '', dp.end_date || '', dp.department || '', dp.status || 'Active', dp.notes || '']
+      ).catch(() => null);
+    }
 
-      // 9. Sync Trash Items to Neon
-      const trashItems = this.getTrashItems();
-      for (const t of trashItems) {
-        await this.executeNeonQuery(
-          `INSERT INTO trash_items (id, original_id, entity_type, title, subtitle, item_data, meta, deleted_by, deleted_at)
+    // 9. Sync Trash Items to Neon
+    const trashItems = this.getTrashItems();
+    for (const t of trashItems) {
+      await this.executeNeonQuery(
+        `INSERT INTO trash_items (id, original_id, entity_type, title, subtitle, item_data, meta, deleted_by, deleted_at)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
            ON CONFLICT (id) DO UPDATE SET
              original_id = EXCLUDED.original_id,
@@ -5951,371 +5961,371 @@ class DatabaseService {
              meta = EXCLUDED.meta,
              deleted_by = EXCLUDED.deleted_by,
              deleted_at = EXCLUDED.deleted_at;`,
-          [
-            t.id,
-            String(t.original_id || ''),
-            t.entity_type,
-            t.title,
-            t.subtitle || '',
-            JSON.stringify(t.data || {}),
-            JSON.stringify(t.meta || {}),
-            t.deleted_by || 'Admin',
-            t.deleted_at || new Date().toISOString()
-          ]
-        ).catch(() => null);
-      }
-
-      // 10. Sync Daily Final Styles to Neon
-      await this.pushFinalStylesToNeonAsync().catch(() => null);
-
-      // 11. Sync Designer Samples to Neon
-      const designerSamples = this.getDesignerSamples();
-      for (const ds of designerSamples) {
-        await this.pushDesignerSampleToNeonAsync(ds).catch(() => null);
-      }
-
-      const cfg = this.getConfig();
-      cfg.lastSyncTime = new Date().toISOString();
-      this.saveConfig(cfg);
-
-      return {
-        success: true,
-        message: `Successfully synchronized ${master.length} styles, ${receivingLogs.length} receiving challans, ${dispatchLogs.length} dispatch challans, ${trashItems.length} trash records, and users to Neon PostgreSQL!`
-      };
-    } catch (err) {
-      return { success: false, error: err.message };
+        [
+          t.id,
+          String(t.original_id || ''),
+          t.entity_type,
+          t.title,
+          t.subtitle || '',
+          JSON.stringify(t.data || {}),
+          JSON.stringify(t.meta || {}),
+          t.deleted_by || 'Admin',
+          t.deleted_at || new Date().toISOString()
+        ]
+      ).catch(() => null);
     }
+
+    // 10. Sync Daily Final Styles to Neon
+    await this.pushFinalStylesToNeonAsync().catch(() => null);
+
+    // 11. Sync Designer Samples to Neon
+    const designerSamples = this.getDesignerSamples();
+    for (const ds of designerSamples) {
+      await this.pushDesignerSampleToNeonAsync(ds).catch(() => null);
+    }
+
+    const cfg = this.getConfig();
+    cfg.lastSyncTime = new Date().toISOString();
+    this.saveConfig(cfg);
+
+    return {
+      success: true,
+      message: `Successfully synchronized ${master.length} styles, ${receivingLogs.length} receiving challans, ${dispatchLogs.length} dispatch challans, ${trashItems.length} trash records, and users to Neon PostgreSQL!`
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
+}
 
   async fetchFromNeon() {
-    try {
-      const startVersion = this._mutationVersion || 0;
-      const currentReportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
+  try {
+    const startVersion = this._mutationVersion || 0;
+    const currentReportDate = this.getReportDate() || new Date().toISOString().split("T")[0];
 
-      // Execute all table queries simultaneously with Promise.all (~300ms)
-      const [
-        masterRes,
-        contRes,
-        recRes,
-        disRes,
-        userRes,
-        payRes,
-        periodRes,
-        distRes,
-        distPeriodRes,
-        trashRes,
-        finalStyleRes,
-        dsRes
-      ] = await Promise.all([
-        this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
-        this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
-        this.executeNeonQuery("SELECT * FROM receiving_log ORDER BY id DESC;").catch(e => { console.warn("Neon rec fetch:", e); return null; }),
-        this.executeNeonQuery("SELECT * FROM dispatch_log ORDER BY id DESC;").catch(e => { console.warn("Neon dis fetch:", e); return null; }),
-        this.executeNeonQuery("SELECT * FROM app_users ORDER BY id ASC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM payment_sheet ORDER BY id DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM rate_approval_periods ORDER BY created_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
-        this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null),
-        this.executeNeonQuery("SELECT * FROM designer_samples ORDER BY id DESC;").catch(() => null)
-      ]);
+    // Execute all table queries simultaneously with Promise.all (~300ms)
+    const [
+      masterRes,
+      contRes,
+      recRes,
+      disRes,
+      userRes,
+      payRes,
+      periodRes,
+      distRes,
+      distPeriodRes,
+      trashRes,
+      finalStyleRes,
+      dsRes
+    ] = await Promise.all([
+      this.executeNeonQuery("SELECT * FROM master_inventory ORDER BY sr_no DESC;").catch(e => { console.warn("Neon master fetch:", e); return null; }),
+      this.executeNeonQuery("SELECT * FROM contractors ORDER BY name ASC;").catch(e => { console.warn("Neon cont fetch:", e); return null; }),
+      this.executeNeonQuery("SELECT * FROM receiving_log ORDER BY id DESC;").catch(e => { console.warn("Neon rec fetch:", e); return null; }),
+      this.executeNeonQuery("SELECT * FROM dispatch_log ORDER BY id DESC;").catch(e => { console.warn("Neon dis fetch:", e); return null; }),
+      this.executeNeonQuery("SELECT * FROM app_users ORDER BY id ASC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM payment_sheet ORDER BY id DESC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM rate_approval_periods ORDER BY created_at DESC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM work_distribution ORDER BY sr_no ASC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM distribution_periods ORDER BY created_at DESC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM trash_items ORDER BY deleted_at DESC;").catch(() => null),
+      this.executeNeonQuery("SELECT * FROM final_style_report WHERE report_date = $1::date ORDER BY serial_no ASC;", [currentReportDate]).catch(() => null),
+      this.executeNeonQuery("SELECT * FROM designer_samples ORDER BY id DESC;").catch(() => null)
+    ]);
 
-      // Sync race condition protection: if user deleted or edited records locally while query was in-flight, abort write
-      if (startVersion !== (this._mutationVersion || 0)) {
-        console.log("⚡ [Race Condition Protected] fetchFromNeon aborted: user performed a local mutation while cloud poll was in-flight.");
-        return { success: true, hasChanged: false };
-      }
+    // Sync race condition protection: if user deleted or edited records locally while query was in-flight, abort write
+    if (startVersion !== (this._mutationVersion || 0)) {
+      console.log("⚡ [Race Condition Protected] fetchFromNeon aborted: user performed a local mutation while cloud poll was in-flight.");
+      return { success: true, hasChanged: false };
+    }
 
-      const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
-      const contRows = contRes?.rows || (Array.isArray(contRes) ? contRes : []);
-      const rawRecRows = recRes?.rows || (Array.isArray(recRes) ? recRes : []);
-      const rawDisRows = disRes?.rows || (Array.isArray(disRes) ? disRes : []);
-      const userRows = userRes?.rows || (Array.isArray(userRes) ? userRes : []);
-      const rawPayRows = payRes?.rows || (Array.isArray(payRes) ? payRes : []);
-      const rawPeriodRows = periodRes?.rows || (Array.isArray(periodRes) ? periodRes : []);
-      const rawDistRows = distRes?.rows || (Array.isArray(distRes) ? distRes : []);
-      const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
-      const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
-      const rawFinalRows = finalStyleRes?.rows || (Array.isArray(finalStyleRes) ? finalStyleRes : []);
-      const rawDsRows = dsRes?.rows || (Array.isArray(dsRes) ? dsRes : null);
+    const rawMasterRows = masterRes?.rows || (Array.isArray(masterRes) ? masterRes : []);
+    const contRows = contRes?.rows || (Array.isArray(contRes) ? contRes : []);
+    const rawRecRows = recRes?.rows || (Array.isArray(recRes) ? recRes : []);
+    const rawDisRows = disRes?.rows || (Array.isArray(disRes) ? disRes : []);
+    const userRows = userRes?.rows || (Array.isArray(userRes) ? userRes : []);
+    const rawPayRows = payRes?.rows || (Array.isArray(payRes) ? payRes : []);
+    const rawPeriodRows = periodRes?.rows || (Array.isArray(periodRes) ? periodRes : []);
+    const rawDistRows = distRes?.rows || (Array.isArray(distRes) ? distRes : []);
+    const rawDistPeriodRows = distPeriodRes?.rows || (Array.isArray(distPeriodRes) ? distPeriodRes : []);
+    const rawTrashRows = trashRes?.rows || (Array.isArray(trashRes) ? trashRes : []);
+    const rawFinalRows = finalStyleRes?.rows || (Array.isArray(finalStyleRes) ? finalStyleRes : []);
+    const rawDsRows = dsRes?.rows || (Array.isArray(dsRes) ? dsRes : null);
 
-      // 1. Contractors
-      let cleanContRows = [];
-      if (Array.isArray(contRows) && contRows.length > 0) {
-        const seenNames = new Set();
-        cleanContRows = contRows.filter(c => {
-          if (!c || !c.name) return false;
-          const cName = c.name.trim();
-          if (/[\/\\,+&]/.test(cName)) return false;
-          if (/^all\b/i.test(cName)) return false;
-          const lower = cName.toLowerCase();
-          if (seenNames.has(lower)) return false;
-          seenNames.add(lower);
-          return true;
-        });
-      }
-      this._setCached(DB_KEYS.CONTRACTORS, cleanContRows);
+    // 1. Contractors
+    let cleanContRows = [];
+    if (Array.isArray(contRows) && contRows.length > 0) {
+      const seenNames = new Set();
+      cleanContRows = contRows.filter(c => {
+        if (!c || !c.name) return false;
+        const cName = c.name.trim();
+        if (/[\/\\,+&]/.test(cName)) return false;
+        if (/^all\b/i.test(cName)) return false;
+        const lower = cName.toLowerCase();
+        if (seenNames.has(lower)) return false;
+        seenNames.add(lower);
+        return true;
+      });
+    }
+    this._setCached(DB_KEYS.CONTRACTORS, cleanContRows);
 
-      // 2. Receiving Logs
-      const recRows = rawRecRows.map(r => ({
-        ...r,
-        id: Number(r.id),
-        sr_no: parseInt(r.sr_no, 10) || Number(r.id) || 1,
-        cut_qty: parseInt(r.cut_qty, 10) || 0,
-        received_qty: parseInt(r.received_qty, 10) || 0,
-        style_code: (r.style_code || '').trim(),
-        category: (r.category || 'SHIRT').trim(),
-        contractor_name: (r.contractor_name || '').trim(),
-        challan_rec: (r.challan_rec || '').trim(),
-        date_receive: r.date_receive || '',
-        remarks: r.remarks || ''
-      }));
-      this._setCached(DB_KEYS.RECEIVING_LOG, recRows);
+    // 2. Receiving Logs
+    const recRows = rawRecRows.map(r => ({
+      ...r,
+      id: Number(r.id),
+      sr_no: parseInt(r.sr_no, 10) || Number(r.id) || 1,
+      cut_qty: parseInt(r.cut_qty, 10) || 0,
+      received_qty: parseInt(r.received_qty, 10) || 0,
+      style_code: (r.style_code || '').trim(),
+      category: (r.category || 'SHIRT').trim(),
+      contractor_name: (r.contractor_name || '').trim(),
+      challan_rec: (r.challan_rec || '').trim(),
+      date_receive: r.date_receive || '',
+      remarks: r.remarks || ''
+    }));
+    this._setCached(DB_KEYS.RECEIVING_LOG, recRows);
 
-      // 3. Dispatch Logs
-      const disRows = rawDisRows.map(d => ({
-        ...d,
-        id: Number(d.id),
-        sr_no: parseInt(d.sr_no, 10) || Number(d.id) || 1,
-        dispatch_from_hemb: parseInt(d.dispatch_from_hemb, 10) || 0,
-        style_code: (d.style_code || '').trim(),
-        category: (d.category || 'SHIRT').trim(),
-        contractor_name: (d.contractor_name || '').trim(),
-        challan_dis: (d.challan_dis || '').trim(),
-        date_dispatch: d.date_dispatch || '',
-        remarks: d.remarks || ''
-      }));
-      this._setCached(DB_KEYS.DISPATCH_LOG, disRows);
+    // 3. Dispatch Logs
+    const disRows = rawDisRows.map(d => ({
+      ...d,
+      id: Number(d.id),
+      sr_no: parseInt(d.sr_no, 10) || Number(d.id) || 1,
+      dispatch_from_hemb: parseInt(d.dispatch_from_hemb, 10) || 0,
+      style_code: (d.style_code || '').trim(),
+      category: (d.category || 'SHIRT').trim(),
+      contractor_name: (d.contractor_name || '').trim(),
+      challan_dis: (d.challan_dis || '').trim(),
+      date_dispatch: d.date_dispatch || '',
+      remarks: d.remarks || ''
+    }));
+    this._setCached(DB_KEYS.DISPATCH_LOG, disRows);
 
-      // 4. Master Inventory
-      const cleanMasterRows = rawMasterRows.map(m => ({
-        ...m,
-        id: Number(m.id),
-        sr_no: parseInt(m.sr_no, 10) || Number(m.id) || 1,
-        cut_qty: parseInt(m.cut_qty, 10) || 0,
-        received_qty: parseInt(m.received_qty, 10) || 0,
-        dispatch_from_hemb: parseInt(m.dispatch_from_hemb, 10) || 0,
-        style_code: (m.style_code || '').trim(),
-        category: (m.category || 'SHIRT').trim(),
-        contractor_name: (m.contractor_name || '').trim(),
-        challan_rec: (m.challan_rec || '').trim(),
-        challan_dis: (m.challan_dis || '').trim(),
-        date_receive: m.date_receive || '',
-        date_dispatch: m.date_dispatch || '',
-        remarks: m.remarks || '',
-        ...this.computeRecordBalances(m)
-      }));
-      cleanMasterRows.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
-      this._setCached(DB_KEYS.MASTER_INVENTORY, cleanMasterRows);
+    // 4. Master Inventory
+    const cleanMasterRows = rawMasterRows.map(m => ({
+      ...m,
+      id: Number(m.id),
+      sr_no: parseInt(m.sr_no, 10) || Number(m.id) || 1,
+      cut_qty: parseInt(m.cut_qty, 10) || 0,
+      received_qty: parseInt(m.received_qty, 10) || 0,
+      dispatch_from_hemb: parseInt(m.dispatch_from_hemb, 10) || 0,
+      style_code: (m.style_code || '').trim(),
+      category: (m.category || 'SHIRT').trim(),
+      contractor_name: (m.contractor_name || '').trim(),
+      challan_rec: (m.challan_rec || '').trim(),
+      challan_dis: (m.challan_dis || '').trim(),
+      date_receive: m.date_receive || '',
+      date_dispatch: m.date_dispatch || '',
+      remarks: m.remarks || '',
+      ...this.computeRecordBalances(m)
+    }));
+    cleanMasterRows.sort((a, b) => (parseInt(b.sr_no, 10) || 0) - (parseInt(a.sr_no, 10) || 0));
+    this._setCached(DB_KEYS.MASTER_INVENTORY, cleanMasterRows);
 
-      // 5. Payment Sheet
-      if (Array.isArray(rawPayRows)) {
-        const parsedPay = rawPayRows.map(p => {
-          const cut = p.cut_qty != null ? Number(p.cut_qty) : (Number(p.total_pcs) || 0);
-          const prod = p.prod_pcs_qty != null ? Number(p.prod_pcs_qty) : (Number(p.paid_pcs) || 0);
-          const remarks1 = p.remarks_1 || p.remarks || "";
-          let deduction = Number(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs) || 0;
-          if (deduction === 0 && remarks1) {
-            const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
-            if (match) {
-              deduction = parseInt(match[1], 10) || 0;
-            }
+    // 5. Payment Sheet
+    if (Array.isArray(rawPayRows)) {
+      const parsedPay = rawPayRows.map(p => {
+        const cut = p.cut_qty != null ? Number(p.cut_qty) : (Number(p.total_pcs) || 0);
+        const prod = p.prod_pcs_qty != null ? Number(p.prod_pcs_qty) : (Number(p.paid_pcs) || 0);
+        const remarks1 = p.remarks_1 || p.remarks || "";
+        let deduction = Number(p.deduction_pcs != null ? p.deduction_pcs : p.deducted_pcs) || 0;
+        if (deduction === 0 && remarks1) {
+          const match = remarks1.match(/(\d+)\s*(?:pcs)?\s*(?:deduction|kaat)/i);
+          if (match) {
+            deduction = parseInt(match[1], 10) || 0;
           }
-          const baseProd = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
-            ? Number(p.base_prod_pcs)
-            : (prod + deduction);
-          const totalBal = p.total_balance != null ? Number(p.total_balance) : (Number(p.balance_pcs) || 0);
-          const stockBal = p.balance_from_stock != null ? Number(p.balance_from_stock) : 0;
-          const hembBal = p.balance_from_hemb != null ? Number(p.balance_from_hemb) : 0;
-          const pPeriod = (p.period && String(p.period).trim()) ? String(p.period).trim() : "11-SEP-2026 TO 25-SEP-2026";
+        }
+        const baseProd = (p.base_prod_pcs != null && Number(p.base_prod_pcs) > 0)
+          ? Number(p.base_prod_pcs)
+          : (prod + deduction);
+        const totalBal = p.total_balance != null ? Number(p.total_balance) : (Number(p.balance_pcs) || 0);
+        const stockBal = p.balance_from_stock != null ? Number(p.balance_from_stock) : 0;
+        const hembBal = p.balance_from_hemb != null ? Number(p.balance_from_hemb) : 0;
+        const pPeriod = (p.period && String(p.period).trim()) ? String(p.period).trim() : "11-SEP-2026 TO 25-SEP-2026";
 
-          return {
-            ...p,
-            id: Number(p.id),
-            sr_no: Number(p.sr_no) || 0,
-            period: pPeriod,
-            style_code: (p.style_code || "").trim(),
-            working: (p.category || p.working || "SHIRT").trim(),
-            category: (p.category || p.working || "SHIRT").trim(),
-            ship: (p.ship || "").trim(),
-            contractor_name: (p.contractor_name || "").trim(),
-            cut_qty: cut,
-            total_pcs: cut,
-            deduction_pcs: deduction,
-            deducted_pcs: deduction,
-            base_prod_pcs: baseProd,
-            prod_pcs_qty: prod,
-            paid_pcs: prod,
-            rate_per_pc: Number(p.rate_per_pc) || 0,
-            carigar_rate: Number(p.carigar_rate) || 0,
-            commission: Number(p.commission) || 0,
-            rate_total: Number(p.rate_total) || 0,
-            remarks_1: remarks1,
-            remarks: remarks1,
-            remarks_2: p.remarks_2 || "",
-            balance_from_stock: stockBal,
-            balance_from_hemb: hembBal,
-            total_balance: totalBal,
-            balance_pcs: totalBal,
-            is_flagged: Boolean(p.is_flagged),
-            payment_channel: p.payment_channel || "stock_direct",
-            target_floor: p.target_floor || "",
-            floor_challan_no: p.floor_challan_no || "",
-            floor_received_by: p.floor_received_by || "",
-            image_data: p.image_data || ""
-          };
-        });
-        this._setCached(DB_KEYS.PAYMENT_SHEET, parsedPay);
-      }
+        return {
+          ...p,
+          id: Number(p.id),
+          sr_no: Number(p.sr_no) || 0,
+          period: pPeriod,
+          style_code: (p.style_code || "").trim(),
+          working: (p.category || p.working || "SHIRT").trim(),
+          category: (p.category || p.working || "SHIRT").trim(),
+          ship: (p.ship || "").trim(),
+          contractor_name: (p.contractor_name || "").trim(),
+          cut_qty: cut,
+          total_pcs: cut,
+          deduction_pcs: deduction,
+          deducted_pcs: deduction,
+          base_prod_pcs: baseProd,
+          prod_pcs_qty: prod,
+          paid_pcs: prod,
+          rate_per_pc: Number(p.rate_per_pc) || 0,
+          carigar_rate: Number(p.carigar_rate) || 0,
+          commission: Number(p.commission) || 0,
+          rate_total: Number(p.rate_total) || 0,
+          remarks_1: remarks1,
+          remarks: remarks1,
+          remarks_2: p.remarks_2 || "",
+          balance_from_stock: stockBal,
+          balance_from_hemb: hembBal,
+          total_balance: totalBal,
+          balance_pcs: totalBal,
+          is_flagged: Boolean(p.is_flagged),
+          payment_channel: p.payment_channel || "stock_direct",
+          target_floor: p.target_floor || "",
+          floor_challan_no: p.floor_challan_no || "",
+          floor_received_by: p.floor_received_by || "",
+          image_data: p.image_data || ""
+        };
+      });
+      this._setCached(DB_KEYS.PAYMENT_SHEET, parsedPay);
+    }
 
-      // 6. Rate Approval Periods
-      if (Array.isArray(rawPeriodRows)) {
-        const cloudPeriods = rawPeriodRows.map(p => ({
+    // 6. Rate Approval Periods
+    if (Array.isArray(rawPeriodRows)) {
+      const cloudPeriods = rawPeriodRows.map(p => ({
+        id: p.id,
+        period_name: (p.period_name || "").trim(),
+        start_date: p.start_date || "",
+        end_date: p.end_date || "",
+        department: p.department || "Hand Embroidery Department",
+        status: p.status || "Active",
+        notes: p.notes || "",
+        created_at: p.created_at
+      })).filter(p => !!p.period_name);
+      this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, cloudPeriods);
+    }
+
+    // 7. Work Distribution
+    if (Array.isArray(rawDistRows)) {
+      const finalDistList = rawDistRows.map(w => {
+        let p = (w.period || "").trim();
+        if (p.includes(" TO ")) p = p.split(/\s+TO\s+/i)[0].trim();
+        let d = (w.dist_date || w.date || w.period || "").trim();
+        if (d.includes(" TO ")) d = d.split(/\s+TO\s+/i)[0].trim();
+        return { ...w, period: p, dist_date: d };
+      });
+      this._setCached(DB_KEYS.WORK_DISTRIBUTION, finalDistList);
+    }
+
+    // 8. Distribution Periods
+    if (Array.isArray(rawDistPeriodRows)) {
+      const cloudDistPeriods = rawDistPeriodRows.map(p => {
+        let pName = (p.period_name || "").trim();
+        if (/\s+to\s+/i.test(pName)) pName = pName.split(/\s+to\s+/i)[0].trim();
+        return {
           id: p.id,
-          period_name: (p.period_name || "").trim(),
+          period_name: pName,
           start_date: p.start_date || "",
           end_date: p.end_date || "",
           department: p.department || "Hand Embroidery Department",
           status: p.status || "Active",
           notes: p.notes || "",
           created_at: p.created_at
-        })).filter(p => !!p.period_name);
-        this._setCached(DB_KEYS.RATE_APPROVAL_PERIODS, cloudPeriods);
-      }
-
-      // 7. Work Distribution
-      if (Array.isArray(rawDistRows)) {
-        const finalDistList = rawDistRows.map(w => {
-          let p = (w.period || "").trim();
-          if (p.includes(" TO ")) p = p.split(/\s+TO\s+/i)[0].trim();
-          let d = (w.dist_date || w.date || w.period || "").trim();
-          if (d.includes(" TO ")) d = d.split(/\s+TO\s+/i)[0].trim();
-          return { ...w, period: p, dist_date: d };
-        });
-        this._setCached(DB_KEYS.WORK_DISTRIBUTION, finalDistList);
-      }
-
-      // 8. Distribution Periods
-      if (Array.isArray(rawDistPeriodRows)) {
-        const cloudDistPeriods = rawDistPeriodRows.map(p => {
-          let pName = (p.period_name || "").trim();
-          if (/\s+to\s+/i.test(pName)) pName = pName.split(/\s+to\s+/i)[0].trim();
-          return {
-            id: p.id,
-            period_name: pName,
-            start_date: p.start_date || "",
-            end_date: p.end_date || "",
-            department: p.department || "Hand Embroidery Department",
-            status: p.status || "Active",
-            notes: p.notes || "",
-            created_at: p.created_at
-          };
-        }).filter(p => !!p.period_name);
-        this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, cloudDistPeriods);
-      }
-
-      // 9. Users
-      if (Array.isArray(userRows) && userRows.length > 0) {
-        const parsedUsers = userRows.map(u => ({
-          ...u,
-          permissions: typeof u.permissions === "string" ? JSON.parse(u.permissions) : u.permissions
-        }));
-        this._setCached(DB_KEYS.USERS, parsedUsers);
-        try { localStorage.setItem(DB_KEYS.USERS, JSON.stringify(parsedUsers)); } catch (e) {}
-
-        // Keep current active session permissions in sync with latest Neon database permissions
-        try {
-          const cur = this.getCurrentUser();
-          if (cur && cur.username) {
-            const matched = parsedUsers.find(u => u.username.toLowerCase() === cur.username.toLowerCase());
-            if (matched) {
-              const updatedCur = { ...cur, ...matched };
-              localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(updatedCur));
-            }
-          }
-        } catch (e) {}
-      }
-
-      // 10. Trash Items
-      if (Array.isArray(rawTrashRows)) {
-        const parsedTrash = rawTrashRows.map(t => ({
-          id: t.id,
-          original_id: t.original_id,
-          entity_type: t.entity_type,
-          title: t.title,
-          subtitle: t.subtitle || '',
-          data: typeof t.item_data === "string" ? JSON.parse(t.item_data) : (t.item_data || {}),
-          meta: typeof t.meta === "string" ? JSON.parse(t.meta) : (t.meta || {}),
-          deleted_by: t.deleted_by || 'Admin',
-          deleted_at: t.deleted_at
-        }));
-        this._setCached(DB_KEYS.TRASH, parsedTrash);
-      }
-
-      // 11. Daily Final Styles
-      if (Array.isArray(rawFinalRows)) {
-        const seenFinal = new Set();
-        const mappedFinal = [];
-        for (let idx = 0; idx < rawFinalRows.length; idx++) {
-          const r = rawFinalRows[idx];
-          const code = (r.style_code || "").trim().toUpperCase();
-          const cat = (r.category || "Shirt").trim();
-          if (!code) continue;
-          const key = `${code}:::${cat.toUpperCase()}`;
-          if (seenFinal.has(key)) continue;
-          seenFinal.add(key);
-
-          mappedFinal.push({
-            s_no: mappedFinal.length + 1,
-            style_code: code,
-            category: cat,
-            dispatch_from_hemb: 0,
-            time_remarks: (r.time_remarks || "").trim()
-          });
-        }
-        this._setCached(DB_KEYS.FINAL_STYLES, mappedFinal);
-      }
-
-      // 12. Designer Samples / Pcs Stock Transfer
-      if (Array.isArray(rawDsRows)) {
-        const dsRows = rawDsRows.map(d => ({
-          ...d,
-          id: Number(d.id),
-          sr_no: parseInt(d.sr_no, 10) || Number(d.id) || 1,
-          entry_date: d.entry_date || '',
-          challan_no: (d.challan_no || '').trim(),
-          style_code: (d.style_code || '').trim(),
-          item_type: (d.item_type || 'Shirt').trim(),
-          qty: parseInt(d.qty, 10) || 1,
-          moved_to_stock: Boolean(d.moved_to_stock),
-          moved_date: d.moved_date || '',
-          remarks: d.remarks || ''
-        }));
-        this._setCached(DB_KEYS.DESIGNER_SAMPLES, dsRows);
-      }
-
-      // Rebuild master aggregations silently without falsely bumping local mutation counters
-      this.rebuildAllMastersFromLogs({ skipBump: true });
-      this.syncAllDistributionContractorsToLogsAndMaster({ skipBump: true });
-
-      const cfg = this.getConfig();
-      cfg.lastSyncTime = new Date().toISOString();
-      this.saveConfig(cfg);
-
-      return {
-        success: true,
-        hasChanged: true,
-        count: (this._memCache[DB_KEYS.MASTER_INVENTORY] || []).length,
-        recCount: (this._memCache[DB_KEYS.RECEIVING_LOG] || []).length,
-        disCount: (this._memCache[DB_KEYS.DISPATCH_LOG] || []).length,
-        paymentCount: (this._memCache[DB_KEYS.PAYMENT_SHEET] || []).length,
-        userCount: (this._memCache[DB_KEYS.USERS] || []).length
-      };
-    } catch (err) {
-      return { success: false, error: err.message };
+        };
+      }).filter(p => !!p.period_name);
+      this._setCached(DB_KEYS.DISTRIBUTION_PERIODS, cloudDistPeriods);
     }
+
+    // 9. Users
+    if (Array.isArray(userRows) && userRows.length > 0) {
+      const parsedUsers = userRows.map(u => ({
+        ...u,
+        permissions: typeof u.permissions === "string" ? JSON.parse(u.permissions) : u.permissions
+      }));
+      this._setCached(DB_KEYS.USERS, parsedUsers);
+      try { localStorage.setItem(DB_KEYS.USERS, JSON.stringify(parsedUsers)); } catch (e) { }
+
+      // Keep current active session permissions in sync with latest Neon database permissions
+      try {
+        const cur = this.getCurrentUser();
+        if (cur && cur.username) {
+          const matched = parsedUsers.find(u => u.username.toLowerCase() === cur.username.toLowerCase());
+          if (matched) {
+            const updatedCur = { ...cur, ...matched };
+            localStorage.setItem(DB_KEYS.CURRENT_USER, JSON.stringify(updatedCur));
+          }
+        }
+      } catch (e) { }
+    }
+
+    // 10. Trash Items
+    if (Array.isArray(rawTrashRows)) {
+      const parsedTrash = rawTrashRows.map(t => ({
+        id: t.id,
+        original_id: t.original_id,
+        entity_type: t.entity_type,
+        title: t.title,
+        subtitle: t.subtitle || '',
+        data: typeof t.item_data === "string" ? JSON.parse(t.item_data) : (t.item_data || {}),
+        meta: typeof t.meta === "string" ? JSON.parse(t.meta) : (t.meta || {}),
+        deleted_by: t.deleted_by || 'Admin',
+        deleted_at: t.deleted_at
+      }));
+      this._setCached(DB_KEYS.TRASH, parsedTrash);
+    }
+
+    // 11. Daily Final Styles
+    if (Array.isArray(rawFinalRows)) {
+      const seenFinal = new Set();
+      const mappedFinal = [];
+      for (let idx = 0; idx < rawFinalRows.length; idx++) {
+        const r = rawFinalRows[idx];
+        const code = (r.style_code || "").trim().toUpperCase();
+        const cat = (r.category || "Shirt").trim();
+        if (!code) continue;
+        const key = `${code}:::${cat.toUpperCase()}`;
+        if (seenFinal.has(key)) continue;
+        seenFinal.add(key);
+
+        mappedFinal.push({
+          s_no: mappedFinal.length + 1,
+          style_code: code,
+          category: cat,
+          dispatch_from_hemb: 0,
+          time_remarks: (r.time_remarks || "").trim()
+        });
+      }
+      this._setCached(DB_KEYS.FINAL_STYLES, mappedFinal);
+    }
+
+    // 12. Designer Samples / Pcs Stock Transfer
+    if (Array.isArray(rawDsRows)) {
+      const dsRows = rawDsRows.map(d => ({
+        ...d,
+        id: Number(d.id),
+        sr_no: parseInt(d.sr_no, 10) || Number(d.id) || 1,
+        entry_date: d.entry_date || '',
+        challan_no: (d.challan_no || '').trim(),
+        style_code: (d.style_code || '').trim(),
+        item_type: (d.item_type || 'Shirt').trim(),
+        qty: parseInt(d.qty, 10) || 1,
+        moved_to_stock: Boolean(d.moved_to_stock),
+        moved_date: d.moved_date || '',
+        remarks: d.remarks || ''
+      }));
+      this._setCached(DB_KEYS.DESIGNER_SAMPLES, dsRows);
+    }
+
+    // Rebuild master aggregations silently without falsely bumping local mutation counters
+    this.rebuildAllMastersFromLogs({ skipBump: true });
+    this.syncAllDistributionContractorsToLogsAndMaster({ skipBump: true });
+
+    const cfg = this.getConfig();
+    cfg.lastSyncTime = new Date().toISOString();
+    this.saveConfig(cfg);
+
+    return {
+      success: true,
+      hasChanged: true,
+      count: (this._memCache[DB_KEYS.MASTER_INVENTORY] || []).length,
+      recCount: (this._memCache[DB_KEYS.RECEIVING_LOG] || []).length,
+      disCount: (this._memCache[DB_KEYS.DISPATCH_LOG] || []).length,
+      paymentCount: (this._memCache[DB_KEYS.PAYMENT_SHEET] || []).length,
+      userCount: (this._memCache[DB_KEYS.USERS] || []).length
+    };
+  } catch (err) {
+    return { success: false, error: err.message };
   }
+}
 }
 
 // Global DB Singleton
